@@ -1,4 +1,4 @@
-import Card from "./Card";
+import Card from "./card";
 import { formatCurrency } from "@/lib/formatCurrency";
 
 type Props = {
