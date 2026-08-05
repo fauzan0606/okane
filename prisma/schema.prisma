@@ -4,5 +4,79 @@ generator client {
 
 datasource db {
   provider = "sqlite"
- 
+}
+
+enum WalletType {
+  CASH
+  BANK_ACCOUNT
+  CREDIT_CARD
+  DEBIT_CARD
+  E_WALLET
+  FOREIGN_CASH
+  INVESTMENT
+}
+
+model Currency {
+  id            String  @id @default(uuid())
+  code          String  @unique
+  name          String
+  symbol        String
+  decimalPlaces Int
+  isActive      Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallets Wallet[]
+}
+
+model Wallet {
+  id         String     @id @default(uuid())
+  name       String
+  walletType WalletType
+
+  currencyId     String
+  currentBalance Decimal @default(0)
+
+  bank  String?
+  color String?
+  icon  String?
+  note  String?
+
+  sortOrder Int     @default(0)
+  isActive  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  currency Currency @relation(fields: [currencyId], references: [id])
+
+  creditCard CreditCardProfile?
+
+  @@index([currencyId])
+}
+
+model CreditCardProfile {
+  id String @id @default(uuid())
+
+  walletId String @unique
+
+  creditLimit Decimal @default(0)
+
+  billingDate Int
+
+  dueDate Int
+
+  rewardProgram String?
+
+  rewardPoint Decimal @default(0)
+
+  annualFee Decimal?
+
+  annualFeeDate Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 }
