@@ -1,8 +1,9 @@
 import Card from "./Card";
+import { formatCurrency } from "@/lib/formatCurrency";
 
 type Props = {
   title: string;
-  value: string;
+  value: number;
 };
 
 export default function StatCard({
@@ -16,8 +17,8 @@ export default function StatCard({
         {title}
       </p>
 
-      <h2 className="mt-2 text-3xl font-bold text-white">
-        {value}
+      <h2 className="mt-3 text-4xl font-bold text-white">
+        {formatCurrency(value)}
       </h2>
 
     </Card>
