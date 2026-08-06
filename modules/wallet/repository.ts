@@ -2,20 +2,18 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
-export type WalletWithRelations =
-  Prisma.WalletGetPayload<{
-    include: {
-      currency: true;
-      creditCard: true;
-    };
-  }>;
+export const walletInclude = {
+  currency: true,
+  creditCard: true,
+} satisfies Prisma.WalletInclude;
+
+export type WalletWithRelations = Prisma.WalletGetPayload<{
+  include: typeof walletInclude;
+}>;
 
 export async function getWallets(): Promise<WalletWithRelations[]> {
   return prisma.wallet.findMany({
-    include: {
-      currency: true,
-      creditCard: true,
-    },
+    include: walletInclude,
     where: {
       isActive: true,
     },
@@ -37,20 +35,14 @@ export async function getWalletById(
     where: {
       id,
     },
-    include: {
-      currency: true,
-      creditCard: true,
-    },
+    include: walletInclude,
   });
 }
 
 export async function createWallet(data: Prisma.WalletCreateInput) {
   return prisma.wallet.create({
     data,
-    include: {
-      currency: true,
-      creditCard: true,
-    },
+    include: walletInclude,
   });
 }
 
@@ -63,10 +55,7 @@ export async function updateWallet(
       id,
     },
     data,
-    include: {
-      currency: true,
-      creditCard: true,
-    },
+    include: walletInclude,
   });
 }
 
@@ -88,6 +77,14 @@ export async function getActiveCurrencies() {
     },
     orderBy: {
       code: "asc",
+    },
+  });
+}
+
+export async function findCurrencyByCode(code: string) {
+  return prisma.currency.findUnique({
+    where: {
+      code,
     },
   });
 }

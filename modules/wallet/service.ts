@@ -1,7 +1,5 @@
 import { WalletType } from "@prisma/client";
 
-import { prisma } from "@/lib/prisma";
-
 import {
   createWallet,
   updateWallet,
@@ -9,6 +7,7 @@ import {
   getWalletById,
   getWallets,
   getActiveCurrencies,
+  findCurrencyByCode,
 } from "./repository";
 
 import { CreateWalletInput } from "./types";
@@ -25,18 +24,20 @@ export async function findWallet(id: string) {
   return getWalletById(id);
 }
 
-export async function createWalletService(
-  input: CreateWalletInput
-) {
-  const currency = await prisma.currency.findUnique({
-    where: {
-      code: input.currencyCode,
-    },
-  });
+async function getRequiredCurrency(code: string) {
+  const currency = await findCurrencyByCode(code);
 
   if (!currency) {
     throw new Error("Currency not found.");
   }
+
+  return currency;
+}
+
+export async function createWalletService(
+  input: CreateWalletInput
+) {
+  const currency = await getRequiredCurrency(input.currencyCode);
 
   return createWallet({
     name: input.name,
@@ -48,8 +49,8 @@ export async function createWalletService(
       },
     },
 
-    bank: input.bank || null,
-    note: input.note || null,
+    bank: input.bank ?? null,
+    note: input.note ?? null,
 
     currentBalance: 0,
     sortOrder: 0,
@@ -79,16 +80,8 @@ export async function updateWalletService(
     data.note = input.note;
   }
 
-  if (input.currencyCode) {
-    const currency = await prisma.currency.findUnique({
-      where: {
-        code: input.currencyCode,
-      },
-    });
-
-    if (!currency) {
-      throw new Error("Currency not found.");
-    }
+  if (input.currencyCode !== undefined) {
+    const currency = await getRequiredCurrency(input.currencyCode);
 
     data.currency = {
       connect: {

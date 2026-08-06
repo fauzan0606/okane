@@ -3,17 +3,24 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint",
-    "typecheck": "tsc --noEmit",
-    "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:push": "prisma db push",
-    "db:studio": "prisma studio",
-    "db:seed": "tsx prisma/seed.ts",
-    "db:reset": "prisma migrate reset"
+  "dev": "next dev",
+  "build": "next build",
+  "start": "next start",
+
+  "lint": "eslint .",
+  "lint:fix": "eslint . --fix",
+
+  "typecheck": "tsc --noEmit",
+
+  "check": "npm run lint && npm run typecheck && npm run build",
+
+  "db:generate": "prisma generate",
+  "db:migrate": "prisma migrate dev",
+  "db:push": "prisma db push",
+  "db:studio": "prisma studio",
+  "db:seed": "tsx prisma/seed.ts",
+  "db:reset": "prisma migrate reset"
+
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

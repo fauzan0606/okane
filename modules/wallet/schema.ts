@@ -18,12 +18,14 @@ export const walletSchema = z.object({
   bank: z
     .string()
     .trim()
+    .max(100)
     .optional()
     .transform((value) => value || undefined),
 
   note: z
     .string()
     .trim()
+    .max(500)
     .optional()
     .transform((value) => value || undefined),
 });
