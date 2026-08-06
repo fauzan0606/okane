@@ -1,13 +1,18 @@
 import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
+import { Button } from "@/components/ui/button";
 
 import WalletList from "@/modules/wallet/components/WalletList";
+import WalletForm from "@/modules/wallet/components/WalletForm";
 
-import { listWallets } from "@/modules/wallet/service";
+import { listWallets, listCurrencies } from "@/modules/wallet/service";
 
 export default async function WalletPage() {
-  const wallets = await listWallets();
+  const [wallets, currencies] = await Promise.all([
+    listWallets(),
+    listCurrencies(),
+  ]);
 
   return (
     <AppShell
@@ -27,15 +32,18 @@ export default async function WalletPage() {
             </p>
           </div>
 
-          <button
-            className="rounded-xl bg-blue-600 px-5 py-3 font-medium text-white transition hover:bg-blue-700"
-            disabled
-          >
-            + Add Wallet
-          </button>
+          <WalletForm
+            mode="create"
+            currencies={currencies}
+            trigger={
+              <Button size="lg">
+                + Add Wallet
+              </Button>
+            }
+          />
         </div>
 
-        <WalletList wallets={wallets} />
+        <WalletList wallets={wallets} currencies={currencies} />
       </div>
     </AppShell>
   );

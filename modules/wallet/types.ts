@@ -17,3 +17,9 @@ export interface UpdateWalletInput {
   bank?: string;
   note?: string;
 }
+
+export type WalletActionState = {
+  success: boolean;
+  message?: string;
+  fieldErrors?: Record<string, string[] | undefined>;
+};

@@ -7,7 +7,7 @@ const adapter = new PrismaBetterSqlite3({
   url: connectionString,
 });
 
-const globalForPrisma = globalThis as unknown as {
+const globalForPrisma = globalThis as {
   prisma?: PrismaClient;
 };
 

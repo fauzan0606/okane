@@ -8,12 +8,17 @@ import {
   deleteWallet,
   getWalletById,
   getWallets,
+  getActiveCurrencies,
 } from "./repository";
 
 import { CreateWalletInput } from "./types";
 
 export async function listWallets() {
   return getWallets();
+}
+
+export async function listCurrencies() {
+  return getActiveCurrencies();
 }
 
 export async function findWallet(id: string) {

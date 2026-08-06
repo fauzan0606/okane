@@ -80,3 +80,14 @@ export async function deleteWallet(id: string) {
     },
   });
 }
+
+export async function getActiveCurrencies() {
+  return prisma.currency.findMany({
+    where: {
+      isActive: true,
+    },
+    orderBy: {
+      code: "asc",
+    },
+  });
+}

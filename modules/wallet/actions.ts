@@ -9,8 +9,12 @@ import {
 } from "./service";
 
 import { walletSchema } from "./schema";
+import type { WalletActionState } from "./types";
 
-export async function createWalletAction(formData: FormData) {
+export async function createWalletAction(
+  _prevState: WalletActionState,
+  formData: FormData
+): Promise<WalletActionState> {
   const parsed = walletSchema.safeParse({
     name: formData.get("name"),
     walletType: formData.get("walletType"),
@@ -22,11 +26,19 @@ export async function createWalletAction(formData: FormData) {
   if (!parsed.success) {
     return {
       success: false,
-      errors: parsed.error.flatten(),
+      fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
 
-  await createWalletService(parsed.data);
+  try {
+    await createWalletService(parsed.data);
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to create wallet.",
+    };
+  }
 
   revalidatePath("/wallet");
 
@@ -36,9 +48,18 @@ export async function createWalletAction(formData: FormData) {
 }
 
 export async function updateWalletAction(
-  id: string,
+  _prevState: WalletActionState,
   formData: FormData
-) {
+): Promise<WalletActionState> {
+  const id = formData.get("id");
+
+  if (typeof id !== "string" || id.length === 0) {
+    return {
+      success: false,
+      message: "Missing wallet id.",
+    };
+  }
+
   const parsed = walletSchema.partial().safeParse({
     name: formData.get("name"),
     walletType: formData.get("walletType"),
@@ -50,11 +71,19 @@ export async function updateWalletAction(
   if (!parsed.success) {
     return {
       success: false,
-      errors: parsed.error.flatten(),
+      fieldErrors: parsed.error.flatten().fieldErrors,
     };
   }
 
-  await updateWalletService(id, parsed.data);
+  try {
+    await updateWalletService(id, parsed.data);
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to update wallet.",
+    };
+  }
 
   revalidatePath("/wallet");
 
@@ -63,8 +92,28 @@ export async function updateWalletAction(
   };
 }
 
-export async function deleteWalletAction(id: string) {
-  await deleteWalletService(id);
+export async function deleteWalletAction(
+  _prevState: WalletActionState,
+  formData: FormData
+): Promise<WalletActionState> {
+  const id = formData.get("id");
+
+  if (typeof id !== "string" || id.length === 0) {
+    return {
+      success: false,
+      message: "Missing wallet id.",
+    };
+  }
+
+  try {
+    await deleteWalletService(id);
+  } catch (error) {
+    return {
+      success: false,
+      message:
+        error instanceof Error ? error.message : "Failed to delete wallet.",
+    };
+  }
 
   revalidatePath("/wallet");
 

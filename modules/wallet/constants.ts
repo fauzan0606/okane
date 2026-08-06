@@ -9,3 +9,7 @@ export const WALLET_TYPES = [
   WalletType.FOREIGN_CASH,
   WalletType.INVESTMENT,
 ] as const;
+
+export function formatWalletType(walletType: WalletType): string {
+  return walletType.replaceAll("_", " ");
+}

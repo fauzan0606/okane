@@ -1,15 +1,17 @@
-import { Currency, Wallet } from "@prisma/client";
+import type { Currency } from "@prisma/client";
+
+import type { WalletWithRelations } from "../repository";
 
 import WalletCard from "./WalletCard";
 
 type WalletListProps = {
-  wallets: (Wallet & {
-    currency: Currency;
-  })[];
+  wallets: WalletWithRelations[];
+  currencies: Currency[];
 };
 
 export default function WalletList({
   wallets,
+  currencies,
 }: WalletListProps) {
   if (wallets.length === 0) {
     return (
@@ -31,6 +33,7 @@ export default function WalletList({
         <WalletCard
           key={wallet.id}
           wallet={wallet}
+          currencies={currencies}
         />
       ))}
     </div>
