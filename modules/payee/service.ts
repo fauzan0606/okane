@@ -52,3 +52,35 @@ export async function updatePayeeService(
 export async function deletePayeeService(id: string) {
   return deletePayee(id);
 }
+import { prisma } from "@/lib/prisma";
+
+export async function findOrCreatePayeeByName(
+  name: string
+) {
+  const merchant = name.trim();
+
+  if (!merchant) {
+    return null;
+  }
+
+  const existing = await prisma.payee.findFirst({
+    where: {
+      name: {
+        equals: merchant,
+        mode: "insensitive",
+      },
+      isActive: true,
+    },
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  return prisma.payee.create({
+    data: {
+      name: merchant,
+      isActive: true,
+    },
+  });
+}
