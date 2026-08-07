@@ -13,7 +13,6 @@ import {
   Target,
   Landmark,
   PiggyBank,
-  HandCoins,
   BarChart3,
   Settings,
 } from "lucide-react";
@@ -54,11 +53,6 @@ const menus: MenuGroup[] = [
         href: "/category",
       },  
       {
-        icon: HandCoins,
-        label: "Payee",
-        href: "/payee",
-      },
-      {
         icon: Receipt,
         label: "Transactions",
         href: "/transactions",
@@ -92,11 +86,6 @@ const menus: MenuGroup[] = [
         icon: Landmark,
         label: "Assets",
         href: "/assets",
-      },
-      {
-        icon: HandCoins,
-        label: "Debt",
-        href: "/debt",
       },
     ],
   },
