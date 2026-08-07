@@ -65,6 +65,16 @@ model Category {
   updatedAt DateTime @updatedAt
 }
 
+model Payee {
+  id String @id @default(uuid())
+  name String
+  note String?
+  sortOrder Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum WalletType {
   CASH
   BANK_ACCOUNT

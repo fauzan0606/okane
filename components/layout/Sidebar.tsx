@@ -54,6 +54,11 @@ const menus: MenuGroup[] = [
         href: "/category",
       },  
       {
+        icon: HandCoins,
+        label: "Payee",
+        href: "/payee",
+      },
+      {
         icon: Receipt,
         label: "Transactions",
         href: "/transactions",
