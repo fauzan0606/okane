@@ -1,6 +1,11 @@
 "use client";
 
-import { useActionState, useState, type ReactElement } from "react";
+import {
+  useActionState,
+  useState,
+  type ReactElement,
+} from "react";
+import { toast } from "sonner";
 import type { Currency } from "@prisma/client";
 
 import {
@@ -45,7 +50,7 @@ export default function WalletForm({
   trigger,
 }: WalletFormProps) {
   const [open, setOpen] = useState(false);
-
+  const [formKey, setFormKey] = useState(0);
   const baseAction = mode === "create" ? createWalletAction : updateWalletAction;
 
   // Close the dialog once a submission succeeds. This runs inside the
@@ -53,21 +58,47 @@ export default function WalletForm({
   // transition React already starts for us via useActionState/form action —
   // not during render (react-hooks/refs) and not inside a useEffect
   // (react-hooks/set-state-in-effect), so it's safe on both counts.
-  const [state, formAction, isPending] = useActionState(
-    async (prevState: WalletActionState, formData: FormData) => {
-      const result = await baseAction(prevState, formData);
+ const [state, formAction, isPending] = useActionState(
+  async (prevState: WalletActionState, formData: FormData) => {
+    const result = await baseAction(prevState, formData);
 
-      if (result.success) {
-        setOpen(false);
+    if (result.success) {
+      toast.success(
+        mode === "create"
+          ? "Wallet created successfully."
+          : "Wallet updated successfully."
+      );
+
+      if (mode === "create") {
+        setFormKey((k) => k + 1);
       }
 
-      return result;
-    },
-    initialState
-  );
+      setOpen(false);
+    } else if (result.message) {
+      toast.error(result.message);
+    }
+
+    return result;
+  },
+  initialState
+);
+
+const defaultCurrencyCode =
+  wallet?.currency.code ??
+  currencies.find((currency) => currency.code === "IDR")?.code ??
+  currencies[0]?.code;
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog
+  open={open}
+  onOpenChange={(isOpen) => {
+  if (!isOpen && mode === "create") {
+    setFormKey((k) => k + 1);
+  }
+
+  setOpen(isOpen);
+}}
+>
       <DialogTrigger render={trigger} />
 
       <DialogContent>
@@ -83,7 +114,11 @@ export default function WalletForm({
           </DialogDescription>
         </DialogHeader>
 
-        <form action={formAction} className="space-y-4">
+        <form
+          key={formKey}
+          action={formAction}
+          className="space-y-4"
+        >
           {mode === "edit" && wallet && (
             <input type="hidden" name="id" value={wallet.id} />
           )}
@@ -132,7 +167,7 @@ export default function WalletForm({
             <Label htmlFor="currencyCode">Currency</Label>
             <Select
               name="currencyCode"
-              defaultValue={wallet?.currency.code ?? currencies[0]?.code}
+              defaultValue={defaultCurrencyCode}
             >
               <SelectTrigger id="currencyCode" className="w-full">
                 <SelectValue placeholder="Select a currency" />
@@ -177,14 +212,26 @@ export default function WalletForm({
           )}
 
           <DialogFooter>
-            <Button type="submit" disabled={isPending}>
-              {isPending
-                ? "Saving..."
-                : mode === "create"
-                  ? "Create Wallet"
-                  : "Save Changes"}
-            </Button>
-          </DialogFooter>
+  <Button
+  type="button"
+  variant="outline"
+  onClick={() => {
+  setFormKey((k) => k + 1);
+  setOpen(false);
+}}
+  disabled={isPending}
+>
+  Cancel
+</Button>
+
+  <Button type="submit" disabled={isPending}>
+    {isPending
+      ? "Saving..."
+      : mode === "create"
+        ? "Create Wallet"
+        : "Save Changes"}
+  </Button>
+</DialogFooter>
         </form>
       </DialogContent>
     </Dialog>

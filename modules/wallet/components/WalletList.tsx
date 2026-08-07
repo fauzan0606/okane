@@ -4,6 +4,8 @@ import type { WalletWithRelations } from "../repository";
 
 import WalletCard from "./WalletCard";
 
+import { CrudEmptyState } from "@/components/crud";
+
 type WalletListProps = {
   wallets: WalletWithRelations[];
   currencies: Currency[];
@@ -14,18 +16,13 @@ export default function WalletList({
   currencies,
 }: WalletListProps) {
   if (wallets.length === 0) {
-    return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
-        <h2 className="text-xl font-semibold">
-          No wallet yet
-        </h2>
-
-        <p className="mt-2 text-zinc-500">
-          Start by creating your first wallet.
-        </p>
-      </div>
-    );
-  }
+  return (
+    <CrudEmptyState
+      title="No wallet yet"
+      description="Start by creating your first wallet."
+    />
+  );
+}
 
   return (
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">

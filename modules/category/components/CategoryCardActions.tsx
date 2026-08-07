@@ -2,7 +2,6 @@
 
 import { useActionState } from "react";
 import { toast } from "sonner";
-import type { Currency } from "@prisma/client";
 import { Pencil, Trash2 } from "lucide-react";
 
 import {
@@ -14,36 +13,38 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+
 import { Button } from "@/components/ui/button";
 
-import { deleteWalletAction } from "../actions";
-import type { WalletActionState } from "../types";
-import type { WalletWithRelations } from "../repository";
+import { deleteCategoryAction } from "../actions";
+import type { CategoryActionState } from "../types";
+import type { CategoryWithRelations } from "../repository";
 
-import WalletForm from "./WalletForm";
+import CategoryForm from "./CategoryForm";
 
-const initialState: WalletActionState = {
+const initialState: CategoryActionState = {
   success: false,
 };
 
-type WalletCardActionsProps = {
-  wallet: WalletWithRelations;
-  currencies: Currency[];
+type CategoryCardActionsProps = {
+  category: CategoryWithRelations;
 };
 
-export default function WalletCardActions({
-  wallet,
-  currencies,
-}: WalletCardActionsProps) {
+export default function CategoryCardActions({
+  category,
+}: CategoryCardActionsProps) {
   const [state, formAction, isPending] = useActionState(
     async (
-      prevState: WalletActionState,
+      prevState: CategoryActionState,
       formData: FormData
-    ): Promise<WalletActionState> => {
-      const result = await deleteWalletAction(prevState, formData);
+    ) => {
+      const result = await deleteCategoryAction(
+        prevState,
+        formData
+      );
 
       if (result.success) {
-        toast.success("Wallet archived successfully.");
+        toast.success("Category deleted successfully.");
       } else if (result.message) {
         toast.error(result.message);
       }
@@ -55,15 +56,14 @@ export default function WalletCardActions({
 
   return (
     <div className="flex items-center gap-1">
-      <WalletForm
+      <CategoryForm
         mode="edit"
-        wallet={wallet}
-        currencies={currencies}
+        category={category}
         trigger={
           <Button
             variant="ghost"
             size="icon-sm"
-            aria-label={`Edit ${wallet.name}`}
+            aria-label={`Edit ${category.name}`}
           >
             <Pencil />
           </Button>
@@ -76,7 +76,7 @@ export default function WalletCardActions({
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={`Archive ${wallet.name}`}
+              aria-label={`Delete ${category.name}`}
             >
               <Trash2 />
             </Button>
@@ -85,10 +85,12 @@ export default function WalletCardActions({
 
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Archive wallet?</DialogTitle>
+            <DialogTitle>
+              Delete category?
+            </DialogTitle>
 
             <DialogDescription>
-              {`"${wallet.name}" will be archived and hidden from your wallet list. This does not delete its transaction history.`}
+              {`"${category.name}" will be archived and hidden from your category list.`}
             </DialogDescription>
           </DialogHeader>
 
@@ -96,7 +98,7 @@ export default function WalletCardActions({
             <input
               type="hidden"
               name="id"
-              value={wallet.id}
+              value={category.id}
             />
 
             {state.message && (
@@ -111,7 +113,9 @@ export default function WalletCardActions({
                 variant="destructive"
                 disabled={isPending}
               >
-                {isPending ? "Archiving..." : "Archive"}
+                {isPending
+                  ? "Deleting..."
+                  : "Delete"}
               </Button>
             </DialogFooter>
           </form>

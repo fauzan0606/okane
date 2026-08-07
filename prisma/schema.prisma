@@ -53,6 +53,18 @@ model CreditCardProfile {
   wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
 }
 
+model Category {
+  id String @id @default(uuid())
+  name String
+  type CategoryType
+  icon String?
+  color String?
+  sortOrder Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 enum WalletType {
   CASH
   BANK_ACCOUNT
@@ -61,4 +73,9 @@ enum WalletType {
   E_WALLET
   FOREIGN_CASH
   INVESTMENT
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
 }

@@ -7,6 +7,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   LayoutDashboard,
   Wallet,
+  Tags,
   ArrowLeftRight,
   Receipt,
   Target,
@@ -47,6 +48,11 @@ const menus: MenuGroup[] = [
         label: "Wallet",
         href: "/wallet",
       },
+      {
+        icon: Tags,
+        label: "Category",
+        href: "/category",
+      },  
       {
         icon: Receipt,
         label: "Transactions",
