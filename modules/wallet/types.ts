@@ -6,6 +6,10 @@ export interface CreateWalletInput {
   currencyCode: string;
   currentBalance: string;
 
+  creditLimit?: string;
+  billingDate?: number;
+  dueDate?: number;
+
   bank?: string;
   note?: string;
 }
@@ -15,6 +19,10 @@ export interface UpdateWalletInput {
   walletType?: WalletType;
   currencyCode?: string;
   currentBalance?: string;
+
+  creditLimit?: string;
+  billingDate?: number;
+  dueDate?: number;
 
   bank?: string;
   note?: string;
