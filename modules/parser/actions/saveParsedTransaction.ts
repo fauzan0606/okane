@@ -21,6 +21,12 @@ export async function saveParsedTransactionAction(
   revalidatePath(
     "/transactions"
   );
+  revalidatePath(
+    "/wallet"
+  );
+  revalidatePath(
+    "/"
+  );
 
   return transaction;
 }
