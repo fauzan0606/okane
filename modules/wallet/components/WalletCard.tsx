@@ -1,24 +1,19 @@
 import type { Currency } from "@prisma/client";
 
-import type { WalletWithRelations } from "../repository";
+import type { WalletClientData } from "../repository";
 import { formatWalletType } from "../constants";
-
 import WalletCardActions from "./WalletCardActions";
 
 type WalletCardProps = {
-  wallet: WalletWithRelations;
+  wallet: WalletClientData;
   currencies: Currency[];
 };
 
-export default function WalletCard({
-  wallet,
-  currencies,
-}: WalletCardProps) {
+export default function WalletCard({ wallet, currencies }: WalletCardProps) {
   const formatter = new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: wallet.currency.decimalPlaces,
     maximumFractionDigits: wallet.currency.decimalPlaces,
   });
-
   const creditCard = wallet.creditCard;
   const isCreditCard = wallet.walletType === "CREDIT_CARD" && creditCard;
 
@@ -29,7 +24,6 @@ export default function WalletCard({
           <h3 className="text-lg font-semibold text-white">{wallet.name}</h3>
           <p className="mt-1 text-sm text-slate-500">{formatWalletType(wallet.walletType)}</p>
         </div>
-
         <div className="flex items-center gap-2">
           <span className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium text-slate-300">
             {wallet.currency.name} ({wallet.currency.code})
@@ -39,9 +33,7 @@ export default function WalletCard({
       </div>
 
       <div className="mt-6">
-        <p className="text-sm text-slate-500">
-          {isCreditCard ? "Outstanding" : "Current Balance"}
-        </p>
+        <p className="text-sm text-slate-500">{isCreditCard ? "Outstanding" : "Current Balance"}</p>
         <p className="mt-1 text-2xl font-bold tracking-tight text-white">
           {wallet.currency.symbol}{formatter.format(Number(wallet.currentBalance))}
         </p>
@@ -51,18 +43,10 @@ export default function WalletCard({
         <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
           <div className="flex items-center justify-between text-sm">
             <span className="text-slate-500">Credit Limit</span>
-            <span className="font-medium text-slate-200">
-              {wallet.currency.symbol}{formatter.format(Number(creditCard.creditLimit))}
-            </span>
+            <span className="font-medium text-slate-200">{wallet.currency.symbol}{formatter.format(Number(creditCard.creditLimit))}</span>
           </div>
-          <div className="mt-2 flex items-center justify-between text-sm">
-            <span className="text-slate-500">Billing Day</span>
-            <span className="text-slate-300">{creditCard.billingDate}</span>
-          </div>
-          <div className="mt-1 flex items-center justify-between text-sm">
-            <span className="text-slate-500">Due Day</span>
-            <span className="text-slate-300">{creditCard.dueDate}</span>
-          </div>
+          <div className="mt-2 flex items-center justify-between text-sm"><span className="text-slate-500">Billing Day</span><span className="text-slate-300">{creditCard.billingDate}</span></div>
+          <div className="mt-1 flex items-center justify-between text-sm"><span className="text-slate-500">Due Day</span><span className="text-slate-300">{creditCard.dueDate}</span></div>
         </div>
       )}
 
