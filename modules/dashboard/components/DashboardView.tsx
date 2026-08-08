@@ -31,199 +31,151 @@ export default function DashboardView({ data }: { data: DashboardData }) {
   const { summary } = data;
 
   return (
-    <div className="space-y-8 pb-10">
-      <section className="relative overflow-hidden rounded-[2rem] border border-zinc-800 bg-gradient-to-br from-zinc-900 via-zinc-950 to-black p-7 shadow-2xl md:p-9">
-        <div className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-emerald-400/10 blur-3xl" />
-        <div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <p className="text-sm font-medium tracking-wide text-emerald-400">YOUR MONEY AT A GLANCE</p>
-            <h1 className="mt-2 text-3xl font-semibold tracking-tight text-white md:text-4xl">Good to see you.</h1>
-            <p className="mt-2 max-w-xl text-sm leading-6 text-zinc-400">
-              A simple view of your financial position, cash flow, and latest activity.
-            </p>
-          </div>
+    <div className="pb-12">
+      <header className="mb-10 flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-400">Overview</p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-[-0.03em] text-white">Your money</h1>
+          <p className="mt-2 text-sm text-zinc-500">A clear picture of where you stand.</p>
+        </div>
 
-          <div className="flex w-fit rounded-xl border border-zinc-800 bg-black/40 p-1 backdrop-blur">
-            {periods.map((period) => (
-              <a
-                key={period.value}
-                href={periodHref(period.value, summary.currencyCode)}
-                className={`rounded-lg px-3 py-2 text-xs font-medium transition md:text-sm ${
-                  data.period === period.value
-                    ? "bg-white text-black shadow-sm"
-                    : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                {period.label}
-              </a>
-            ))}
-          </div>
+        <nav className="flex items-center gap-1 rounded-full bg-zinc-900/80 p-1">
+          {periods.map((period) => (
+            <a
+              key={period.value}
+              href={periodHref(period.value, summary.currencyCode)}
+              className={`rounded-full px-4 py-2 text-xs font-medium transition ${
+                data.period === period.value
+                  ? "bg-zinc-100 text-zinc-950"
+                  : "text-zinc-500 hover:text-zinc-200"
+              }`}
+            >
+              {period.label}
+            </a>
+          ))}
+        </nav>
+      </header>
+
+      <section className="mb-12">
+        <p className="text-xs font-medium uppercase tracking-[0.18em] text-zinc-600">Net worth</p>
+        <div className="mt-2 flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
+          <p className="text-5xl font-semibold tracking-[-0.04em] text-white md:text-6xl">
+            {formatCurrency(summary.netWorth, summary.currencyCode)}
+          </p>
+          <p className={`text-sm font-medium ${summary.netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}`}>
+            {summary.netCashFlow >= 0 ? "↑" : "↓"} {formatCurrency(Math.abs(summary.netCashFlow), summary.currencyCode)} net cash flow
+          </p>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Metric title="Net worth" value={formatCurrency(summary.netWorth, summary.currencyCode)} featured />
-        <Metric title="Income" value={formatCurrency(summary.income, summary.currencyCode)} valueClass="text-emerald-400" />
-        <Metric title="Expense" value={formatCurrency(summary.expense, summary.currencyCode)} valueClass="text-rose-400" />
-        <Metric
-          title="Net cash flow"
-          value={`${summary.netCashFlow >= 0 ? "+" : ""}${formatCurrency(summary.netCashFlow, summary.currencyCode)}`}
-          valueClass={summary.netCashFlow >= 0 ? "text-emerald-400" : "text-rose-400"}
-        />
+      <section className="mb-14 grid grid-cols-2 gap-y-8 border-y border-zinc-900 py-7 md:grid-cols-4 md:gap-0">
+        <Stat label="Income" value={formatCurrency(summary.income, summary.currencyCode)} valueClass="text-emerald-400" />
+        <Stat label="Expense" value={formatCurrency(summary.expense, summary.currencyCode)} valueClass="text-rose-400" />
+        <Stat label="Net cash flow" value={formatCurrency(summary.netCashFlow, summary.currencyCode)} />
+        <Stat label="Currency" value={summary.currencyCode} />
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1.05fr_0.95fr]">
-        <Panel title="Wallets" eyebrow="CURRENT BALANCES">
-          <div className="space-y-2">
+      <section className="mb-14 grid gap-12 lg:grid-cols-[0.9fr_1.1fr]">
+        <div>
+          <SectionHeading eyebrow="Accounts" title="Where your money lives" />
+          <div className="mt-6">
             {data.wallets.length === 0 ? (
               <EmptyState message="No active wallets." />
             ) : (
               data.wallets.map((wallet) => (
-                <div
-                  key={wallet.id}
-                  className="group flex items-center justify-between rounded-2xl px-3 py-3 transition hover:bg-zinc-900/80"
-                >
+                <div key={wallet.id} className="group flex items-center justify-between border-b border-zinc-900 py-4 first:border-t">
                   <div className="flex min-w-0 items-center gap-3">
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-zinc-900 text-sm text-zinc-300 ring-1 ring-zinc-800">
+                    <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-xs font-semibold text-zinc-400">
                       {wallet.name.slice(0, 1).toUpperCase()}
                     </div>
                     <div className="min-w-0">
-                      <p className="truncate font-medium text-zinc-100">{wallet.name}</p>
-                      <p className="mt-0.5 text-xs capitalize text-zinc-500">{wallet.walletType.replaceAll("_", " ").toLowerCase()}</p>
+                      <p className="truncate text-sm font-medium text-zinc-200">{wallet.name}</p>
+                      <p className="mt-0.5 text-xs capitalize text-zinc-600">{wallet.walletType.replaceAll("_", " ").toLowerCase()}</p>
                     </div>
                   </div>
-                  <p className="ml-4 font-semibold text-zinc-100">
-                    {formatCurrency(wallet.balance, wallet.currencyCode)}
-                  </p>
+                  <p className="ml-4 text-sm font-medium text-zinc-200">{formatCurrency(wallet.balance, wallet.currencyCode)}</p>
                 </div>
               ))
             )}
           </div>
-        </Panel>
+        </div>
 
-        <Panel title="Spending by category" eyebrow={data.periodLabel.toUpperCase()}>
-          <div className="space-y-5">
+        <div>
+          <SectionHeading eyebrow="Spending" title={`By category · ${data.periodLabel}`} />
+          <div className="mt-6 space-y-5">
             {data.spendingByCategory.length === 0 ? (
               <EmptyState message="No expenses in this period." />
             ) : (
               data.spendingByCategory.slice(0, 6).map((category) => (
                 <div key={category.id}>
-                  <div className="flex items-end justify-between gap-4 text-sm">
-                    <div>
-                      <p className="font-medium text-zinc-200">{category.name}</p>
-                      <p className="mt-0.5 text-xs text-zinc-500">{category.percentage.toFixed(0)}% of spending</p>
-                    </div>
-                    <span className="font-medium text-zinc-200">{formatCurrency(category.amount, summary.currencyCode)}</span>
+                  <div className="flex items-center justify-between gap-4">
+                    <span className="text-sm text-zinc-300">{category.name}</span>
+                    <span className="text-sm font-medium text-zinc-400">{formatCurrency(category.amount, summary.currencyCode)}</span>
                   </div>
-                  <div className="mt-2.5 h-1.5 overflow-hidden rounded-full bg-zinc-900">
-                    <div
-                      className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-teal-300 transition-all"
-                      style={{ width: `${Math.min(category.percentage, 100)}%` }}
-                    />
+                  <div className="mt-2 flex items-center gap-3">
+                    <div className="h-1 flex-1 overflow-hidden rounded-full bg-zinc-900">
+                      <div className="h-full rounded-full bg-emerald-400" style={{ width: `${Math.min(category.percentage, 100)}%` }} />
+                    </div>
+                    <span className="w-10 text-right text-xs text-zinc-600">{category.percentage.toFixed(0)}%</span>
                   </div>
                 </div>
               ))
             )}
           </div>
-        </Panel>
+        </div>
       </section>
 
-      <Panel
-        title="Recent transactions"
-        eyebrow="LATEST ACTIVITY"
-        action={
-          <a href="/transactions" className="rounded-lg px-3 py-2 text-xs font-medium text-zinc-400 transition hover:bg-zinc-900 hover:text-white">
-            View all →
-          </a>
-        }
-      >
-        <div className="divide-y divide-zinc-900">
+      <section>
+        <div className="flex items-end justify-between gap-4 border-b border-zinc-900 pb-4">
+          <SectionHeading eyebrow="Activity" title="Recent transactions" />
+          <a href="/transactions" className="text-xs font-medium text-zinc-500 transition hover:text-white">View all →</a>
+        </div>
+
+        <div>
           {data.recentTransactions.length === 0 ? (
             <EmptyState message="No transactions yet." />
           ) : (
             data.recentTransactions.map((transaction) => (
-              <div key={transaction.id} className="flex items-center justify-between gap-4 py-4 first:pt-1 last:pb-1">
+              <div key={transaction.id} className="flex items-center justify-between gap-4 border-b border-zinc-900 py-4">
                 <div className="flex min-w-0 items-center gap-3">
-                  <div
-                    className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-sm font-semibold ${
-                      transaction.type === "INCOME"
-                        ? "bg-emerald-400/10 text-emerald-400"
-                        : "bg-rose-400/10 text-rose-400"
-                    }`}
-                  >
+                  <span className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs ${transaction.type === "INCOME" ? "bg-emerald-400/10 text-emerald-400" : "bg-zinc-900 text-zinc-500"}`}>
                     {transaction.type === "INCOME" ? "↓" : "↑"}
-                  </div>
+                  </span>
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-zinc-100">{transaction.payeeName}</p>
-                    <p className="truncate text-xs text-zinc-500">
-                      {transaction.categoryName} · {transaction.walletName} · {formatDate(transaction.transactionDate)}
-                    </p>
+                    <p className="truncate text-sm font-medium text-zinc-200">{transaction.payeeName}</p>
+                    <p className="truncate text-xs text-zinc-600">{transaction.categoryName} · {transaction.walletName} · {formatDate(transaction.transactionDate)}</p>
                   </div>
                 </div>
-                <p className={`shrink-0 text-sm font-semibold ${transaction.type === "INCOME" ? "text-emerald-400" : "text-zinc-200"}`}>
-                  {transaction.type === "INCOME" ? "+" : "−"}
-                  {formatCurrency(transaction.amount, summary.currencyCode)}
+                <p className={`shrink-0 text-sm font-medium ${transaction.type === "INCOME" ? "text-emerald-400" : "text-zinc-300"}`}>
+                  {transaction.type === "INCOME" ? "+" : "−"}{formatCurrency(transaction.amount, summary.currencyCode)}
                 </p>
               </div>
             ))
           )}
         </div>
-      </Panel>
+      </section>
     </div>
   );
 }
 
-function Panel({
-  title,
-  eyebrow,
-  action,
-  children,
-}: {
-  title: string;
-  eyebrow: string;
-  action?: React.ReactNode;
-  children: React.ReactNode;
-}) {
+function SectionHeading({ eyebrow, title }: { eyebrow: string; title: string }) {
   return (
-    <section className="rounded-[1.75rem] border border-zinc-800 bg-zinc-950/70 p-5 shadow-sm md:p-6">
-      <div className="mb-5 flex items-start justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-semibold tracking-[0.18em] text-zinc-600">{eyebrow}</p>
-          <h2 className="mt-1 text-lg font-semibold tracking-tight text-zinc-100">{title}</h2>
-        </div>
-        {action}
-      </div>
-      {children}
-    </section>
+    <div>
+      <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-600">{eyebrow}</p>
+      <h2 className="mt-1 text-xl font-semibold tracking-tight text-zinc-100">{title}</h2>
+    </div>
   );
 }
 
-function Metric({
-  title,
-  value,
-  valueClass = "text-zinc-100",
-  featured = false,
-}: {
-  title: string;
-  value: string;
-  valueClass?: string;
-  featured?: boolean;
-}) {
+function Stat({ label, value, valueClass = "text-zinc-200" }: { label: string; value: string; valueClass?: string }) {
   return (
-    <div
-      className={`relative overflow-hidden rounded-[1.5rem] border p-5 transition hover:-translate-y-0.5 ${
-        featured
-          ? "border-emerald-400/20 bg-gradient-to-br from-emerald-400/10 via-zinc-950 to-zinc-950"
-          : "border-zinc-800 bg-zinc-950/70 hover:border-zinc-700"
-      }`}
-    >
-      {featured && <div className="absolute -right-8 -top-8 h-24 w-24 rounded-full bg-emerald-400/10 blur-2xl" />}
-      <p className="relative text-xs font-medium text-zinc-500">{title}</p>
-      <p className={`relative mt-3 truncate text-xl font-semibold tracking-tight md:text-2xl ${valueClass}`}>{value}</p>
+    <div className="md:border-l md:border-zinc-900 md:pl-6 first:md:border-l-0 first:md:pl-0">
+      <p className="text-xs text-zinc-600">{label}</p>
+      <p className={`mt-2 text-lg font-semibold tracking-tight ${valueClass}`}>{value}</p>
     </div>
   );
 }
 
 function EmptyState({ message }: { message: string }) {
-  return <p className="rounded-xl bg-zinc-900/50 px-4 py-5 text-sm text-zinc-500">{message}</p>;
+  return <p className="py-5 text-sm text-zinc-600">{message}</p>;
 }
