@@ -1,33 +1,31 @@
+import {
+  CrudEmptyState,
+} from "@/components/crud";
+
 import type {
   TransactionWithRelations,
 } from "../repository";
 
 import TransactionCard from "./TransactionCard";
 
-type Props = {
+type TransactionListProps = {
   transactions: TransactionWithRelations[];
 };
 
 export default function TransactionList({
   transactions,
-}: Props) {
+}: TransactionListProps) {
   if (transactions.length === 0) {
     return (
-      <div className="rounded-2xl border border-dashed border-zinc-300 bg-white p-12 text-center dark:border-zinc-700 dark:bg-zinc-900">
-        <h2 className="text-xl font-semibold">
-          No transaction yet
-        </h2>
-
-        <p className="mt-2 text-zinc-500">
-          Start by creating your first
-          transaction.
-        </p>
-      </div>
+      <CrudEmptyState
+        title="No transaction yet"
+        description="Start by creating your first transaction."
+      />
     );
   }
 
   return (
-    <div className="grid gap-4">
+    <div className="space-y-4">
       {transactions.map((transaction) => (
         <TransactionCard
           key={transaction.id}

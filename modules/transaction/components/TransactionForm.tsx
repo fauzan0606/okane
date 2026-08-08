@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import type {
   Category,
   Payee,
+
   Wallet,
 } from "@prisma/client";
 
@@ -319,36 +320,29 @@ export default function TransactionForm({
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor="payeeId">
-                Payee
-              </Label>
+  <Label htmlFor="merchant">
+    Merchant
+  </Label>
 
-              <Select
-                name="payeeId"
-                defaultValue={
-                  transaction?.payeeId ??
-                  ""
-                }
-              >
-                <SelectTrigger
-                  id="payeeId"
-                  className="w-full"
-                >
-                  <SelectValue placeholder="Optional" />
-                </SelectTrigger>
+  <Input
+    id="merchant"
+    name="merchant"
+    list="merchant-list"
+    defaultValue={
+      transaction?.payee?.name ?? ""
+    }
+    placeholder="Merchant"
+  />
 
-                <SelectContent>
-                  {payees.map((payee) => (
-                    <SelectItem
-                      key={payee.id}
-                      value={payee.id}
-                    >
-                      {payee.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+  <datalist id="merchant-list">
+    {payees.map((payee) => (
+      <option
+        key={payee.id}
+        value={payee.name}
+      />
+    ))}
+  </datalist>
+</div>
           </div>
 
           <div className="space-y-1.5">

@@ -1,3 +1,5 @@
+import { prisma } from "@/lib/prisma";
+
 import {
   createPayee,
   deletePayee,
@@ -6,7 +8,7 @@ import {
   updatePayee,
 } from "./repository";
 
-import {
+import type {
   CreatePayeeInput,
   UpdatePayeeInput,
 } from "./types";
@@ -24,9 +26,7 @@ export async function createPayeeService(
 ) {
   return createPayee({
     name: input.name,
-
-    note: input.note || null,
-
+    note: input.note ?? null,
     sortOrder: 0,
     isActive: true,
   });
@@ -36,51 +36,55 @@ export async function updatePayeeService(
   id: string,
   input: UpdatePayeeInput
 ) {
-  const data: Record<string, unknown> = {};
+  return updatePayee(id, {
+    ...(input.name !== undefined && {
+      name: input.name,
+    }),
 
-  if (input.name !== undefined) {
-    data.name = input.name;
-  }
-
-  if (input.note !== undefined) {
-    data.note = input.note;
-  }
-
-  return updatePayee(id, data);
+    ...(input.note !== undefined && {
+      note: input.note,
+    }),
+  });
 }
 
 export async function deletePayeeService(id: string) {
   return deletePayee(id);
 }
-import { prisma } from "@/lib/prisma";
 
+/**
+ * Used internally by Transaction.
+ * Returns an existing Payee (case-insensitive)
+ * or creates a new one automatically.
+ */
 export async function findOrCreatePayeeByName(
-  name: string
+  name?: string | null
 ) {
-  const merchant = name.trim();
+  const merchant = name?.trim();
 
   if (!merchant) {
     return null;
   }
 
-  const existing = await prisma.payee.findFirst({
+  const payees = await prisma.payee.findMany({
     where: {
-      name: {
-        equals: merchant,
-        mode: "insensitive",
-      },
       isActive: true,
     },
   });
+
+  const existing = payees.find(
+    (payee) =>
+      payee.name.toLowerCase() ===
+      merchant.toLowerCase()
+  );
 
   if (existing) {
     return existing;
   }
 
-  return prisma.payee.create({
-    data: {
-      name: merchant,
-      isActive: true,
-    },
+  return createPayee({
+    name: merchant,
+    note: null,
+    sortOrder: 0,
+    isActive: true,
   });
 }

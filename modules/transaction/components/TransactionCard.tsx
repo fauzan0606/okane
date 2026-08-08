@@ -13,11 +13,18 @@ type TransactionCardProps = {
 export default function TransactionCard({
   transaction,
 }: TransactionCardProps) {
+  const amount = Number(transaction.amount);
+
+  const amountColor =
+    transaction.type === "EXPENSE"
+      ? "text-red-600"
+      : "text-emerald-600";
+
   return (
-    <div className="rounded-2xl border border-zinc-200 bg-white p-6 shadow-sm transition hover:shadow-md dark:border-zinc-800 dark:bg-zinc-900">
+    <div className="rounded-2xl border bg-white p-5 shadow-sm dark:bg-zinc-900">
       <div className="flex items-start justify-between">
         <div>
-          <h3 className="text-lg font-semibold">
+          <h3 className="font-semibold">
             {transaction.category?.name ??
               "Uncategorized"}
           </h3>
@@ -34,23 +41,35 @@ export default function TransactionCard({
         />
       </div>
 
-      <div className="mt-6 space-y-1">
-        <p className="text-2xl font-bold">
+      <div className="mt-6">
+        <p
+          className={`text-2xl font-bold ${amountColor}`}
+        >
           {transaction.wallet.currency.code}{" "}
-          {Number(
-            transaction.amount
-          ).toLocaleString("id-ID")}
+          {amount.toLocaleString("id-ID")}
         </p>
 
-        <p className="text-sm text-zinc-500">
-          {transaction.wallet.name}
-        </p>
-
-        {transaction.payee && (
-          <p className="text-sm text-zinc-500">
-            {transaction.payee.name}
+        <div className="mt-2 space-y-1 text-sm text-zinc-500">
+          <p>
+            Wallet: {transaction.wallet.name}
           </p>
-        )}
+
+          {transaction.payee && (
+            <p>
+              Merchant: {transaction.payee.name}
+            </p>
+          )}
+
+          <p>
+            {new Date(
+              transaction.transactionDate
+            ).toLocaleDateString("id-ID", {
+              day: "2-digit",
+              month: "short",
+              year: "numeric",
+            })}
+          </p>
+        </div>
       </div>
     </div>
   );

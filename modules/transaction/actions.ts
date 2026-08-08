@@ -22,7 +22,7 @@ export async function createTransactionAction(
     amount: formData.get("amount"),
     walletId: formData.get("walletId"),
     categoryId: formData.get("categoryId"),
-    payeeId: formData.get("payeeId"),
+    merchant: formData.get("merchant"),
     note: formData.get("note"),
   });
 
@@ -71,7 +71,7 @@ export async function updateTransactionAction(
     amount: formData.get("amount"),
     walletId: formData.get("walletId"),
     categoryId: formData.get("categoryId"),
-    payeeId: formData.get("payeeId"),
+    merchant: formData.get("merchant"),
     note: formData.get("note"),
   });
 

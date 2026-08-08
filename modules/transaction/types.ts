@@ -4,9 +4,17 @@ export interface CreateTransactionInput {
   transactionDate: Date;
   type: TransactionType;
   amount: number;
+
   walletId: string;
+
   categoryId?: string;
-  payeeId?: string;
+
+  /**
+   * Merchant typed by the user.
+   * It will be converted into a Payee internally.
+   */
+  merchant?: string;
+
   note?: string;
 }
 

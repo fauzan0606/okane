@@ -8,6 +8,8 @@ import {
   updateTransaction,
 } from "./repository";
 
+import { findOrCreatePayeeByName } from "@/modules/payee/service";
+
 import type {
   CreateTransactionInput,
   UpdateTransactionInput,
@@ -24,6 +26,10 @@ export async function findTransaction(id: string) {
 export async function createTransactionService(
   input: CreateTransactionInput
 ) {
+  const payee = await findOrCreatePayeeByName(
+    input.merchant
+  );
+
   return createTransaction({
     transactionDate: input.transactionDate,
     type: input.type,
@@ -45,10 +51,10 @@ export async function createTransactionService(
       },
     }),
 
-    ...(input.payeeId && {
+    ...(payee && {
       payee: {
         connect: {
-          id: input.payeeId,
+          id: payee.id,
         },
       },
     }),
@@ -59,6 +65,10 @@ export async function updateTransactionService(
   id: string,
   input: UpdateTransactionInput
 ) {
+  const payee = await findOrCreatePayeeByName(
+    input.merchant
+  );
+
   return updateTransaction(id, {
     ...(input.transactionDate && {
       transactionDate: input.transactionDate,
@@ -92,35 +102,52 @@ export async function updateTransactionService(
       },
     }),
 
-    ...(input.payeeId && {
+    ...(payee && {
       payee: {
         connect: {
-          id: input.payeeId,
+          id: payee.id,
         },
       },
     }),
   });
 }
 
-export async function deleteTransactionService(id: string) {
+export async function deleteTransactionService(
+  id: string
+) {
   return deleteTransaction(id);
 }
 
 export async function transactionFormData() {
-  const [wallets, categories, payees] = await Promise.all([
-    prisma.wallet.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.category.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-    prisma.payee.findMany({
-      where: { isActive: true },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+  const [wallets, categories, payees] =
+    await Promise.all([
+      prisma.wallet.findMany({
+        where: {
+          isActive: true,
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
+
+      prisma.category.findMany({
+        where: {
+          isActive: true,
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
+
+      prisma.payee.findMany({
+        where: {
+          isActive: true,
+        },
+        orderBy: {
+          name: "asc",
+        },
+      }),
+    ]);
 
   return {
     wallets,
