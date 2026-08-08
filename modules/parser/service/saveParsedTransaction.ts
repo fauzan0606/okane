@@ -59,6 +59,14 @@ export async function saveParsedTransaction(
         },
       },
 
+      ...(parsed.category && {
+        category: {
+          connect: {
+            id: parsed.category.id,
+          },
+        },
+      }),
+
       ...(payee && {
         payee: {
           connect: {

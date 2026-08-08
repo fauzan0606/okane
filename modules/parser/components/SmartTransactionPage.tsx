@@ -11,13 +11,28 @@ import {
   parseTransactionAction,
 } from "../actions";
 
-import ParserPreview from "./ParserPreview";
+import EditablePreview from "./EditablePreview";
 
 import type {
-  ParsedTransaction,
+  SmartTransactionResult,
 } from "../types";
 
-export default function SmartTransactionPage() {
+type SmartTransactionPageProps = {
+  wallets: {
+    id: string;
+    name: string;
+  }[];
+
+  categories: {
+    id: string;
+    name: string;
+  }[];
+};
+
+export default function SmartTransactionPage({
+  wallets,
+  categories,
+}: SmartTransactionPageProps) {
   const [text, setText] =
     useState("");
 
@@ -26,7 +41,7 @@ export default function SmartTransactionPage() {
 
   const [result, setResult] =
     useState<
-      ParsedTransaction | undefined
+      SmartTransactionResult | undefined
     >(undefined);
 
   useEffect(() => {
@@ -56,19 +71,31 @@ export default function SmartTransactionPage() {
   }, [text]);
 
   return (
-    <div className="mx-auto max-w-3xl space-y-8">
+    <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
       <div>
-        <h1 className="text-3xl font-bold">
+        <p className="text-sm font-medium text-blue-600">
+          SMART TRANSACTION
+        </p>
+
+        <h1 className="mt-1 text-3xl font-bold text-slate-950">
           Smart Transaction
         </h1>
 
-        <p className="mt-2 text-zinc-500">
-          Describe your transaction naturally.
+        <p className="mt-2 text-slate-500">
+          Tulis transaksi dengan bahasa natural, lalu periksa sebelum menyimpan.
         </p>
       </div>
 
-      <div className="space-y-2 rounded-3xl border p-6">
+      <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <label
+          className="text-sm font-medium text-slate-700"
+          htmlFor="transaction-input"
+        >
+          Deskripsi transaksi
+        </label>
+
         <Input
+          id="transaction-input"
           value={text}
           onChange={(e) => {
             const value = e.target.value;
@@ -79,20 +106,23 @@ export default function SmartTransactionPage() {
               setResult(undefined);
             }
           }}
-          placeholder="Starbucks 50rb cc bca"
+          placeholder="Contoh: Starbucks 50rb BCA"
           autoFocus
         />
 
         {loading && (
-          <p className="text-sm text-zinc-500">
-            Parsing...
+          <p className="text-sm text-slate-500">
+            Membaca transaksi...
           </p>
         )}
       </div>
 
       {result && (
-        <ParserPreview
-          result={result}
+        <EditablePreview
+          key={text}
+          result={result.parsed}
+          wallets={wallets}
+          categories={categories}
         />
       )}
     </div>
