@@ -51,18 +51,18 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="hidden w-[220px] shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+    <aside className="sticky top-0 flex h-screen w-[248px] shrink-0 flex-col border-r border-slate-200 bg-white">
       <div className="px-7 pb-5 pt-7">
         <div className="flex items-center gap-3">
-          <Image src="/okane-mascot.svg" alt="OKANE" width={46} height={46} />
+          <Image src="/okane-mascot.svg" alt="OKANE" width={48} height={48} priority />
           <div>
-            <div className="text-[28px] font-black leading-none tracking-[-0.06em] text-slate-900">OKANE</div>
+            <div className="text-[29px] font-black leading-none tracking-[-0.06em] text-slate-900">OKANE</div>
             <div className="mt-1 text-[9px] font-semibold tracking-wide text-emerald-600">Your Money, Your Freedom</div>
           </div>
         </div>
       </div>
 
-      <nav className="flex-1 overflow-y-auto px-4 py-3">
+      <nav className="min-h-0 flex-1 overflow-y-auto px-4 py-3">
         {menus.map((group) => (
           <div key={group.title} className="mb-6">
             <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">{group.title}</p>
@@ -82,6 +82,7 @@ export default function Sidebar() {
                   >
                     <Icon size={17} strokeWidth={1.9} className={isActive ? "text-amber-500" : "text-slate-400"} />
                     <span>{item.label}</span>
+                    {isActive && <span className="ml-auto h-1.5 w-1.5 rounded-full bg-amber-400" />}
                   </Link>
                 );
               })}
