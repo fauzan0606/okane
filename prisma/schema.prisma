@@ -24,6 +24,7 @@ model Wallet {
   walletType     WalletType
   currencyId     String
   currentBalance Decimal            @default(0)
+  balanceAsOf    DateTime?
   bank           String?
   color          String?
   icon           String?
