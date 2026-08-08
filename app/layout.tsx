@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
 
@@ -19,15 +20,13 @@ export const metadata: Metadata = {
   description: "Personal Financial Dashboard",
 };
 
-export default function RootLayout({
-  children,
-}: LayoutProps<"/">) {
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
       lang="id"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
-      <body className="min-h-screen bg-[#0F172A] text-white antialiased">
+      <body className="min-h-screen bg-[#070C12] text-white antialiased">
         {children}
 
         <Toaster
