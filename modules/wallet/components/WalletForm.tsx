@@ -53,52 +53,49 @@ export default function WalletForm({
   const [formKey, setFormKey] = useState(0);
   const baseAction = mode === "create" ? createWalletAction : updateWalletAction;
 
-  // Close the dialog once a submission succeeds. This runs inside the
-  // action itself (after awaiting the real server action), i.e. inside the
-  // transition React already starts for us via useActionState/form action —
-  // not during render (react-hooks/refs) and not inside a useEffect
-  // (react-hooks/set-state-in-effect), so it's safe on both counts.
- const [state, formAction, isPending] = useActionState(
-  async (prevState: WalletActionState, formData: FormData) => {
-    const result = await baseAction(prevState, formData);
+  const [state, formAction, isPending] = useActionState(
+    async (prevState: WalletActionState, formData: FormData) => {
+      const result = await baseAction(prevState, formData);
 
-    if (result.success) {
-      toast.success(
-        mode === "create"
-          ? "Wallet created successfully."
-          : "Wallet updated successfully."
-      );
+      if (result.success) {
+        toast.success(
+          mode === "create"
+            ? "Wallet created successfully."
+            : "Wallet updated successfully."
+        );
 
-      if (mode === "create") {
-        setFormKey((k) => k + 1);
+        if (mode === "create") {
+          setFormKey((k) => k + 1);
+        }
+
+        setOpen(false);
+      } else if (result.message) {
+        toast.error(result.message);
       }
 
-      setOpen(false);
-    } else if (result.message) {
-      toast.error(result.message);
-    }
+      return result;
+    },
+    initialState
+  );
 
-    return result;
-  },
-  initialState
-);
+  const defaultCurrencyCode =
+    wallet?.currency.code ??
+    currencies.find((currency) => currency.code === "IDR")?.code ??
+    currencies[0]?.code;
 
-const defaultCurrencyCode =
-  wallet?.currency.code ??
-  currencies.find((currency) => currency.code === "IDR")?.code ??
-  currencies[0]?.code;
+  const defaultBalance = wallet?.currentBalance?.toString() ?? "0";
 
   return (
     <Dialog
-  open={open}
-  onOpenChange={(isOpen) => {
-  if (!isOpen && mode === "create") {
-    setFormKey((k) => k + 1);
-  }
+      open={open}
+      onOpenChange={(isOpen) => {
+        if (!isOpen && mode === "create") {
+          setFormKey((k) => k + 1);
+        }
 
-  setOpen(isOpen);
-}}
->
+        setOpen(isOpen);
+      }}
+    >
       <DialogTrigger render={trigger} />
 
       <DialogContent>
@@ -110,15 +107,11 @@ const defaultCurrencyCode =
           <DialogDescription>
             {mode === "create"
               ? "Create a new cash, bank account, credit card, or e-wallet."
-              : "Update this wallet's details."}
+              : "Update this wallet's details and current balance."}
           </DialogDescription>
         </DialogHeader>
 
-        <form
-          key={formKey}
-          action={formAction}
-          className="space-y-4"
-        >
+        <form key={formKey} action={formAction} className="space-y-4">
           {mode === "edit" && wallet && (
             <input type="hidden" name="id" value={wallet.id} />
           )}
@@ -165,10 +158,7 @@ const defaultCurrencyCode =
 
           <div className="space-y-1.5">
             <Label htmlFor="currencyCode">Currency</Label>
-            <Select
-              name="currencyCode"
-              defaultValue={defaultCurrencyCode}
-            >
+            <Select name="currencyCode" defaultValue={defaultCurrencyCode}>
               <SelectTrigger id="currencyCode" className="w-full">
                 <SelectValue placeholder="Select a currency" />
               </SelectTrigger>
@@ -183,6 +173,32 @@ const defaultCurrencyCode =
             {state.fieldErrors?.currencyCode && (
               <p className="text-xs text-destructive">
                 {state.fieldErrors.currencyCode[0]}
+              </p>
+            )}
+          </div>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="currentBalance">
+              {mode === "create" ? "Opening Balance" : "Current Balance"}
+            </Label>
+            <Input
+              id="currentBalance"
+              name="currentBalance"
+              type="number"
+              inputMode="decimal"
+              step="any"
+              defaultValue={defaultBalance}
+              placeholder="0"
+              required
+            />
+            <p className="text-xs text-slate-500">
+              {mode === "create"
+                ? "Starting balance for this wallet."
+                : "Set the wallet's current balance manually."}
+            </p>
+            {state.fieldErrors?.currentBalance && (
+              <p className="text-xs text-destructive">
+                {state.fieldErrors.currentBalance[0]}
               </p>
             )}
           </div>
@@ -212,26 +228,26 @@ const defaultCurrencyCode =
           )}
 
           <DialogFooter>
-  <Button
-  type="button"
-  variant="outline"
-  onClick={() => {
-  setFormKey((k) => k + 1);
-  setOpen(false);
-}}
-  disabled={isPending}
->
-  Cancel
-</Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => {
+                setFormKey((k) => k + 1);
+                setOpen(false);
+              }}
+              disabled={isPending}
+            >
+              Cancel
+            </Button>
 
-  <Button type="submit" disabled={isPending}>
-    {isPending
-      ? "Saving..."
-      : mode === "create"
-        ? "Create Wallet"
-        : "Save Changes"}
-  </Button>
-</DialogFooter>
+            <Button type="submit" disabled={isPending}>
+              {isPending
+                ? "Saving..."
+                : mode === "create"
+                  ? "Create Wallet"
+                  : "Save Changes"}
+            </Button>
+          </DialogFooter>
         </form>
       </DialogContent>
     </Dialog>
