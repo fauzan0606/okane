@@ -11,8 +11,14 @@ export async function saveParsedTransaction(parsed: ParsedTransaction) {
     throw new Error("Amount could not be detected.");
   }
 
+  const transactionDate = new Date(`${parsed.transactionDate}T00:00:00`);
+
+  if (Number.isNaN(transactionDate.getTime())) {
+    throw new Error("Transaction date is invalid.");
+  }
+
   return createTransactionService({
-    transactionDate: new Date(),
+    transactionDate,
     type: parsed.type,
     amount: parsed.amount,
     walletId: parsed.wallet.id,
