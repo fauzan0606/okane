@@ -37,6 +37,9 @@ type EditablePreviewProps = {
   onSaved: () => void;
 };
 
+const fieldClassName =
+  "border-white/10 bg-[#0E151E] text-white placeholder:text-slate-500 focus-visible:border-white/20 focus-visible:ring-white/10";
+
 export default function EditablePreview({
   result,
   wallets,
@@ -97,7 +100,7 @@ export default function EditablePreview({
   }
 
   return (
-    <Card className="border-slate-700 bg-[#182335] shadow-xl">
+    <Card className="border-white/10 bg-[#182335] shadow-xl">
       <div className="space-y-6 text-white">
         <div>
           <p className="text-sm font-medium text-blue-300">
@@ -117,6 +120,29 @@ export default function EditablePreview({
           <div className="space-y-1.5">
             <Label
               className="text-slate-200"
+              htmlFor="transaction-date"
+            >
+              Date
+            </Label>
+
+            <Input
+              id="transaction-date"
+              name="transactionDate"
+              className={fieldClassName}
+              type="date"
+              value={parsed.transactionDate}
+              onChange={(event) => {
+                setParsed((current) => ({
+                  ...current,
+                  transactionDate: event.target.value,
+                }));
+              }}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label
+              className="text-slate-200"
               htmlFor="merchant"
             >
               Merchant
@@ -124,7 +150,7 @@ export default function EditablePreview({
 
             <Input
               id="merchant"
-              className="border-slate-600 bg-white text-slate-950 placeholder:text-slate-400"
+              className={fieldClassName}
               value={parsed.merchant ?? ""}
               onChange={(event) => {
                 const merchant = event.target.value.trim();
@@ -148,7 +174,7 @@ export default function EditablePreview({
 
             <Input
               id="amount"
-              className="border-slate-600 bg-white text-slate-950 placeholder:text-slate-400"
+              className={fieldClassName}
               type="number"
               min="1"
               step="1"
@@ -188,12 +214,12 @@ export default function EditablePreview({
             >
               <SelectTrigger
                 id="type"
-                className="w-full border-slate-600 bg-white text-slate-950"
+                className={`w-full ${fieldClassName}`}
               >
                 <SelectValue />
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent className="border-white/10 bg-[#182335] text-white">
                 <SelectItem value="EXPENSE">
                   Expense
                 </SelectItem>
@@ -219,7 +245,7 @@ export default function EditablePreview({
             >
               <SelectTrigger
                 id="wallet"
-                className="w-full border-slate-600 bg-white text-slate-950"
+                className={`w-full ${fieldClassName}`}
               >
                 <SelectValue placeholder="Pilih wallet">
                   {(walletId: string | null) =>
@@ -229,7 +255,7 @@ export default function EditablePreview({
                 </SelectValue>
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent className="border-white/10 bg-[#182335] text-white">
                 {wallets.map((wallet) => (
                   <SelectItem
                     key={wallet.id}
@@ -256,7 +282,7 @@ export default function EditablePreview({
             >
               <SelectTrigger
                 id="category"
-                className="w-full border-slate-600 bg-white text-slate-950"
+                className={`w-full ${fieldClassName}`}
               >
                 <SelectValue placeholder="Pilih category">
                   {(categoryId: string | null) =>
@@ -266,7 +292,7 @@ export default function EditablePreview({
                 </SelectValue>
               </SelectTrigger>
 
-              <SelectContent>
+              <SelectContent className="border-white/10 bg-[#182335] text-white">
                 {categories.map((category) => (
                   <SelectItem
                     key={category.id}
