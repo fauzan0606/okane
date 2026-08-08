@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { DashboardPeriod } from "./types";
 
-function getPeriodRange(period: DashboardPeriod, now = new Date()) {
+export function getPeriodRange(period: DashboardPeriod, now = new Date()) {
   const year = now.getFullYear();
   const month = now.getMonth();
 
@@ -25,10 +25,7 @@ function getPeriodRange(period: DashboardPeriod, now = new Date()) {
   };
 }
 
-export async function getDashboardSummary(
-  period: DashboardPeriod,
-  currencyCode: string
-) {
+export async function getDashboardSummary(period: DashboardPeriod, currencyCode: string) {
   const { start, end } = getPeriodRange(period);
 
   const [currency, wallets, income, expense] = await Promise.all([
@@ -77,10 +74,7 @@ export async function getDashboardWallets(currencyCode: string) {
   });
 }
 
-export async function getDashboardSpending(
-  period: DashboardPeriod,
-  currencyCode: string
-) {
+export async function getDashboardSpending(period: DashboardPeriod, currencyCode: string) {
   const { start, end } = getPeriodRange(period);
 
   return prisma.transaction.groupBy({
@@ -105,9 +99,21 @@ export async function getDashboardCategories(categoryIds: string[]) {
   });
 }
 
-export async function getDashboardRecentTransactions(
-  currencyCode: string
-) {
+export async function getDashboardCashflow(period: DashboardPeriod, currencyCode: string) {
+  const { start, end } = getPeriodRange(period);
+
+  return prisma.transaction.findMany({
+    where: {
+      transactionDate: { gte: start, lt: end },
+      wallet: { currency: { code: currencyCode } },
+      type: { in: ["INCOME", "EXPENSE"] },
+    },
+    select: { transactionDate: true, type: true, amount: true },
+    orderBy: { transactionDate: "asc" },
+  });
+}
+
+export async function getDashboardRecentTransactions(currencyCode: string) {
   return prisma.transaction.findMany({
     where: { wallet: { currency: { code: currencyCode } } },
     take: 10,
