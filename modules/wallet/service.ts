@@ -30,11 +30,7 @@ async function getRequiredCurrency(code: string) {
 function cardProfile(input: Partial<CreateWalletInput>) {
   if (input.walletType !== WalletType.CREDIT_CARD) return null;
   if (!input.creditLimit || input.billingDate === undefined || input.dueDate === undefined) throw new Error("Credit card settings are incomplete.");
-  return {
-    creditLimit: input.creditLimit,
-    billingDate: input.billingDate,
-    dueDate: input.dueDate,
-  };
+  return { creditLimit: input.creditLimit, billingDate: input.billingDate, dueDate: input.dueDate };
 }
 
 export async function createWalletService(input: CreateWalletInput) {
@@ -79,7 +75,7 @@ export async function updateWalletService(id: string, input: Partial<CreateWalle
       update: profile ?? {},
       create: { walletId: id, ...(profile ?? { creditLimit: 0, billingDate: 1, dueDate: 1 }) },
     });
-  } else if (input.walletType !== undefined && input.walletType !== WalletType.CREDIT_CARD) {
+  } else if (input.walletType !== undefined && String(input.walletType) !== "CREDIT_CARD") {
     await prisma.creditCardProfile.deleteMany({ where: { walletId: id } });
   } else if (existing.walletType === WalletType.CREDIT_CARD && (input.creditLimit !== undefined || input.billingDate !== undefined || input.dueDate !== undefined)) {
     const current = existing.creditCard;
