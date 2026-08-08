@@ -1,55 +1,31 @@
 import AppShell from "@/components/layout/AppShell";
 import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
-import StatCard from "@/components/ui/StatCard";
-import { dashboard } from "@/data/dashboard";
+import { getDashboard } from "@/modules/dashboard";
+import DashboardView from "@/modules/dashboard/components/DashboardView";
+import type { DashboardPeriod } from "@/modules/dashboard";
 
-export default function Home() {
+const periods: DashboardPeriod[] = ["THIS_MONTH", "LAST_MONTH", "THIS_YEAR"];
+
+function isDashboardPeriod(value: string | undefined): value is DashboardPeriod {
+  return value !== undefined && periods.includes(value as DashboardPeriod);
+}
+
+export default async function Home({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string; currency?: string }>;
+}) {
+  const params = await searchParams;
+  const period = isDashboardPeriod(params.period)
+    ? params.period
+    : "THIS_MONTH";
+  const currencyCode = params.currency ?? "IDR";
+  const dashboard = await getDashboard({ period, currencyCode });
+
   return (
-    <AppShell
-      sidebar={<Sidebar />}
-      header={<Header />}
-    >
-      <div className="space-y-8">
-        <div>
-          <h1 className="text-3xl font-bold">OKANE</h1>
-          <p className="text-gray-500 mt-2">
-            Personal Financial Operating System
-          </p>
-        </div>
-
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            title="Net Worth"
-            value={dashboard.netWorth}
-          />
-
-          <StatCard
-            title="Income"
-            value={dashboard.income}
-          />
-
-          <StatCard
-            title="Expense"
-            value={dashboard.expense}
-          />
-
-          <StatCard
-            title="Safe to Spend"
-            value={dashboard.safeToSpend}
-          />
-        </div>
-
-        <div className="rounded-2xl border border-zinc-800 p-8">
-          <h2 className="text-xl font-semibold">
-            🚧 Dashboard is under development
-          </h2>
-
-          <p className="mt-3 text-zinc-400">
-            Next milestone: Wallet CRUD
-          </p>
-        </div>
-      </div>
+    <AppShell sidebar={<Sidebar />} header={<Header />}>
+      <DashboardView data={dashboard} />
     </AppShell>
   );
 }
