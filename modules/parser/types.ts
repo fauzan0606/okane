@@ -30,6 +30,8 @@ export type ParserContext = {
 export type ParsedTransaction = {
   tokens: Token[];
 
+  transactionDate: string;
+
   merchant?: string;
 
   amount?: number;
