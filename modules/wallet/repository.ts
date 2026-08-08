@@ -11,80 +11,45 @@ export type WalletWithRelations = Prisma.WalletGetPayload<{
   include: typeof walletInclude;
 }>;
 
+type WalletCreditCard = NonNullable<WalletWithRelations["creditCard"]>;
+
+export type WalletClientData = Omit<WalletWithRelations, "currentBalance" | "creditCard"> & {
+  currentBalance: string;
+  creditCard: Omit<WalletCreditCard, "creditLimit" | "rewardPoint" | "annualFee"> & {
+    creditLimit: string;
+    rewardPoint: string;
+    annualFee: string | null;
+  } | null;
+};
+
 export async function getWallets(): Promise<WalletWithRelations[]> {
   return prisma.wallet.findMany({
     include: walletInclude,
-    where: {
-      isActive: true,
-    },
-    orderBy: [
-      {
-        sortOrder: "asc",
-      },
-      {
-        createdAt: "asc",
-      },
-    ],
+    where: { isActive: true },
+    orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
   });
 }
 
-export async function getWalletById(
-  id: string
-): Promise<WalletWithRelations | null> {
-  return prisma.wallet.findUnique({
-    where: {
-      id,
-    },
-    include: walletInclude,
-  });
+export async function getWalletById(id: string): Promise<WalletWithRelations | null> {
+  return prisma.wallet.findUnique({ where: { id }, include: walletInclude });
 }
 
 export async function createWallet(data: Prisma.WalletCreateInput) {
-  return prisma.wallet.create({
-    data,
-    include: walletInclude,
-  });
+  return prisma.wallet.create({ data, include: walletInclude });
 }
 
-export async function updateWallet(
-  id: string,
-  data: Prisma.WalletUpdateInput
-) {
-  return prisma.wallet.update({
-    where: {
-      id,
-    },
-    data,
-    include: walletInclude,
-  });
+export async function updateWallet(id: string, data: Prisma.WalletUpdateInput) {
+  return prisma.wallet.update({ where: { id }, data, include: walletInclude });
 }
 
 export async function deleteWallet(id: string) {
-  return prisma.wallet.update({
-    where: {
-      id,
-    },
-    data: {
-      isActive: false,
-    },
-  });
+  return prisma.wallet.update({ where: { id }, data: { isActive: false } });
 }
 
 export async function getActiveCurrencies() {
-  return prisma.currency.findMany({
-    where: {
-      isActive: true,
-    },
-    orderBy: {
-      code: "asc",
-    },
-  });
+  return prisma.currency.findMany({ where: { isActive: true }, orderBy: { code: "asc" } });
 }
 
 export async function findCurrencyByCode(code: string) {
-  return prisma.currency.findUnique({
-    where: {
-      code,
-    },
-  });
+  return prisma.currency.findUnique({ where: { code } });
 }
