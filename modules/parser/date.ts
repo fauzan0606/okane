@@ -6,7 +6,7 @@ const MONTHS: Record<string, number> = {
   mei: 4, may: 4,
   juni: 5, jun: 5, june: 5,
   juli: 6, jul: 6, july: 6,
-  agustus: 7, agu: 7, agt: 7, august: 7,
+  agustus: 7, agu: 7, agt: 7, aug: 7, august: 7,
   september: 8, sep: 8,
   oktober: 9, okt: 9, october: 9,
   november: 10, nov: 10,
@@ -22,7 +22,11 @@ function buildDate(day: number, month: number, year?: number): string | undefine
   const resolvedYear = year ?? now.getFullYear();
   const date = new Date(resolvedYear, month, day);
 
-  if (date.getFullYear() !== resolvedYear || date.getMonth() !== month || date.getDate() !== day) {
+  if (
+    date.getFullYear() !== resolvedYear ||
+    date.getMonth() !== month ||
+    date.getDate() !== day
+  ) {
     return undefined;
   }
 
@@ -30,7 +34,7 @@ function buildDate(day: number, month: number, year?: number): string | undefine
 }
 
 export function extractTransactionDate(input: string): string {
-  const normalized = input.trim().toLowerCase();
+  const normalized = input.trim().toLowerCase().replace(/\s+/g, " ");
   const today = new Date();
 
   if (/\b(lusa)\b/.test(normalized)) {
@@ -55,6 +59,40 @@ export function extractTransactionDate(input: string): string {
     return toDateOnly(today);
   }
 
+  // Explicit Indonesian date phrases such as:
+  // "tanggal 7 aug", "tgl 7 agustus", "tanggal 7 aug 2026".
+  const explicitTextMonth = normalized.match(
+    /\b(?:tanggal|tgl)\s+(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/
+  );
+  if (explicitTextMonth) {
+    const [, day, monthName, year] = explicitTextMonth;
+    const month = MONTHS[monthName];
+
+    if (month !== undefined) {
+      const result = buildDate(
+        Number(day),
+        month,
+        year ? Number(year) : undefined
+      );
+
+      if (result) return result;
+    }
+  }
+
+  const explicitNumeric = normalized.match(
+    /\b(?:tanggal|tgl)\s+(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/
+  );
+  if (explicitNumeric) {
+    const [, day, month, year] = explicitNumeric;
+    const result = buildDate(
+      Number(day),
+      Number(month) - 1,
+      year ? Number(year) : undefined
+    );
+
+    if (result) return result;
+  }
+
   const iso = normalized.match(/\b(20\d{2})-(\d{1,2})-(\d{1,2})\b/);
   if (iso) {
     const [, year, month, day] = iso;
@@ -62,29 +100,51 @@ export function extractTransactionDate(input: string): string {
     if (result) return result;
   }
 
-  const numeric = normalized.match(/\b(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/);
+  const numeric = normalized.match(
+    /\b(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/
+  );
   if (numeric) {
     const [, day, month, year] = numeric;
-    const result = buildDate(Number(day), Number(month) - 1, year ? Number(year) : undefined);
+    const result = buildDate(
+      Number(day),
+      Number(month) - 1,
+      year ? Number(year) : undefined
+    );
     if (result) return result;
   }
 
-  const textMonth = normalized.match(/\b(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/);
+  const textMonth = normalized.match(
+    /\b(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/
+  );
   if (textMonth) {
     const [, day, monthName, year] = textMonth;
     const month = MONTHS[monthName];
+
     if (month !== undefined) {
-      const result = buildDate(Number(day), month, year ? Number(year) : undefined);
+      const result = buildDate(
+        Number(day),
+        month,
+        year ? Number(year) : undefined
+      );
+
       if (result) return result;
     }
   }
 
-  const monthFirst = normalized.match(/\b([a-z]+)\s+(\d{1,2})(?:\s+(20\d{2}))?\b/);
+  const monthFirst = normalized.match(
+    /\b([a-z]+)\s+(\d{1,2})(?:\s+(20\d{2}))?\b/
+  );
   if (monthFirst) {
     const [, monthName, day, year] = monthFirst;
     const month = MONTHS[monthName];
+
     if (month !== undefined) {
-      const result = buildDate(Number(day), month, year ? Number(year) : undefined);
+      const result = buildDate(
+        Number(day),
+        month,
+        year ? Number(year) : undefined
+      );
+
       if (result) return result;
     }
   }
