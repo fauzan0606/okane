@@ -11,6 +11,11 @@ import {
 import { walletSchema } from "./schema";
 import type { WalletActionState } from "./types";
 
+function revalidateFinancialViews() {
+  revalidatePath("/wallet");
+  revalidatePath("/");
+}
+
 export async function createWalletAction(
   _prevState: WalletActionState,
   formData: FormData
@@ -41,7 +46,7 @@ export async function createWalletAction(
     };
   }
 
-  revalidatePath("/wallet");
+  revalidateFinancialViews();
 
   return {
     success: true,
@@ -87,7 +92,7 @@ export async function updateWalletAction(
     };
   }
 
-  revalidatePath("/wallet");
+  revalidateFinancialViews();
 
   return {
     success: true,
@@ -117,7 +122,7 @@ export async function deleteWalletAction(
     };
   }
 
-  revalidatePath("/wallet");
+  revalidateFinancialViews();
 
   return {
     success: true,
