@@ -1,4 +1,5 @@
 import { extractAmount } from "./amount";
+import { extractTransactionDate } from "./date";
 import { findCategory } from "./category";
 import { findMerchant } from "./merchant";
 import { tokenize } from "./tokenizer";
@@ -17,21 +18,15 @@ export function parseTransactionText(
   return {
     tokens: tokenize(text),
 
-    transactionDate: new Date().toISOString().slice(0, 10),
+    transactionDate: extractTransactionDate(text),
 
     amount: extractAmount(text),
 
-    wallet: findWallet(
-      text,
-      context
-    ),
+    wallet: findWallet(text, context),
 
     merchant: findMerchant(text),
 
-    category: findCategory(
-      text,
-      context
-    ),
+    category: findCategory(text, context),
 
     type: detectTransactionType(text),
   };
