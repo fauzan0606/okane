@@ -4,6 +4,7 @@ export interface CreateWalletInput {
   name: string;
   walletType: WalletType;
   currencyCode: string;
+  currentBalance: string;
 
   bank?: string;
   note?: string;
@@ -13,6 +14,7 @@ export interface UpdateWalletInput {
   name?: string;
   walletType?: WalletType;
   currencyCode?: string;
+  currentBalance?: string;
 
   bank?: string;
   note?: string;
