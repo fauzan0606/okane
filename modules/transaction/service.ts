@@ -128,14 +128,14 @@ export async function createTransactionService(
           payee: { connect: { id: payee.id } },
         }),
       },
+      include: {
+        wallet: true,
+        payee: true,
+        category: true,
+      },
     });
 
-    if (
-      affectsCurrentBalance(
-        transaction,
-        wallet
-      )
-    ) {
+    if (affectsCurrentBalance(transaction, wallet)) {
       await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     }
 
@@ -236,6 +236,11 @@ export async function updateTransactionService(
         ...(payee && {
           payee: { connect: { id: payee.id } },
         }),
+      },
+      include: {
+        wallet: true,
+        payee: true,
+        category: true,
       },
     });
   });
