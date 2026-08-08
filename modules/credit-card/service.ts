@@ -9,87 +9,63 @@ function dateAtDay(year: number, month: number, day: number) {
 export function getClosedStatementPeriod(referenceDate: Date, billingDay: number) {
   const current = new Date(referenceDate);
   const currentBilling = dateAtDay(current.getFullYear(), current.getMonth(), billingDay);
-  const statementDate = current >= currentBilling
-    ? currentBilling
-    : dateAtDay(current.getFullYear(), current.getMonth() - 1, billingDay);
-
+  const statementDate = current >= currentBilling ? currentBilling : dateAtDay(current.getFullYear(), current.getMonth() - 1, billingDay);
   const periodEnd = statementDate;
-  const periodStart = new Date(
-    dateAtDay(statementDate.getFullYear(), statementDate.getMonth() - 1, billingDay)
-  );
+  const periodStart = new Date(dateAtDay(statementDate.getFullYear(), statementDate.getMonth() - 1, billingDay));
   periodStart.setDate(periodStart.getDate() + 1);
-
   return { periodStart, periodEnd, statementDate };
+}
+
+export function getOpenStatementPeriod(referenceDate: Date, billingDay: number) {
+  const current = new Date(referenceDate);
+  const closed = getClosedStatementPeriod(current, billingDay);
+  const nextStatementDate = dateAtDay(closed.statementDate.getFullYear(), closed.statementDate.getMonth() + 1, billingDay);
+  const periodStart = new Date(closed.periodEnd);
+  periodStart.setDate(periodStart.getDate() + 1);
+  return { periodStart, periodEnd: current, statementDate: nextStatementDate };
 }
 
 export function getDueDate(statementDate: Date, dueDay: number) {
   const candidate = dateAtDay(statementDate.getFullYear(), statementDate.getMonth(), dueDay);
-  if (candidate > statementDate) return candidate;
-  return dateAtDay(statementDate.getFullYear(), statementDate.getMonth() + 1, dueDay);
+  return candidate > statementDate ? candidate : dateAtDay(statementDate.getFullYear(), statementDate.getMonth() + 1, dueDay);
 }
 
 export async function calculateStatementAmount(walletId: string, periodStart: Date, periodEnd: Date) {
   const transactions = await prisma.transaction.findMany({
-    where: {
-      walletId,
-      transactionDate: { gt: periodStart, lte: periodEnd },
-    },
+    where: { walletId, transactionDate: { gt: periodStart, lte: periodEnd } },
     select: { amount: true, type: true },
   });
-
   return transactions.reduce((total, transaction) => {
     const amount = Number(transaction.amount);
     return transaction.type === TransactionType.EXPENSE ? total + amount : total - amount;
   }, 0);
 }
 
+export async function getStatementForecast(walletId: string, referenceDate = new Date()) {
+  const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
+  if (!profile) return null;
+  const period = getOpenStatementPeriod(referenceDate, profile.billingDate);
+  const amount = await calculateStatementAmount(walletId, period.periodStart, period.periodEnd);
+  return { ...period, dueDate: getDueDate(period.statementDate, profile.dueDate), amount };
+}
+
 export async function ensureStatement(walletId: string, referenceDate = new Date()) {
   const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
   if (!profile) throw new Error("Credit card profile not found.");
-
   const { periodStart, periodEnd, statementDate } = getClosedStatementPeriod(referenceDate, profile.billingDate);
   const dueDate = getDueDate(statementDate, profile.dueDate);
   const calculatedAmount = await calculateStatementAmount(walletId, periodStart, periodEnd);
-
-  const existing = await prisma.creditCardStatement.findUnique({
-    where: { creditCardId_periodStart_periodEnd: { creditCardId: profile.id, periodStart, periodEnd } },
-  });
-
+  const existing = await prisma.creditCardStatement.findUnique({ where: { creditCardId_periodStart_periodEnd: { creditCardId: profile.id, periodStart, periodEnd } } });
   if (existing) {
-    const status = existing.paidAmount >= Number(existing.actualAmount ?? existing.calculatedAmount)
-      ? CreditCardStatementStatus.PAID
-      : new Date() > existing.dueDate
-        ? CreditCardStatementStatus.OVERDUE
-        : existing.paidAmount > 0
-          ? CreditCardStatementStatus.PARTIALLY_PAID
-          : CreditCardStatementStatus.UNPAID;
-
-    return prisma.creditCardStatement.update({
-      where: { id: existing.id },
-      data: { calculatedAmount, status },
-    });
+    const target = Number(existing.actualAmount ?? existing.calculatedAmount);
+    const status = existing.paidAmount >= target ? CreditCardStatementStatus.PAID : new Date() > existing.dueDate ? CreditCardStatementStatus.OVERDUE : existing.paidAmount > 0 ? CreditCardStatementStatus.PARTIALLY_PAID : CreditCardStatementStatus.UNPAID;
+    return prisma.creditCardStatement.update({ where: { id: existing.id }, data: { calculatedAmount, status } });
   }
-
-  return prisma.creditCardStatement.create({
-    data: {
-      creditCardId: profile.id,
-      periodStart,
-      periodEnd,
-      statementDate,
-      dueDate,
-      calculatedAmount,
-      status: new Date() > dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID,
-    },
-  });
+  return prisma.creditCardStatement.create({ data: { creditCardId: profile.id, periodStart, periodEnd, statementDate, dueDate, calculatedAmount, status: new Date() > dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID } });
 }
 
 export async function getCreditCardStatements(walletId: string) {
   const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
   if (!profile) return [];
-
-  return prisma.creditCardStatement.findMany({
-    where: { creditCardId: profile.id },
-    orderBy: { statementDate: "desc" },
-    take: 12,
-  });
+  return prisma.creditCardStatement.findMany({ where: { creditCardId: profile.id }, orderBy: { statementDate: "desc" }, take: 12 });
 }
