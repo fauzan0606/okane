@@ -1,4 +1,5 @@
 import { Bell, Search, Plus } from "lucide-react";
+import Link from "next/link";
 
 export default function Header() {
   return (
@@ -31,10 +32,13 @@ export default function Header() {
           <Bell size={20} />
         </button>
 
-        <button className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-500">
+        <Link
+          href="/transactions/smart"
+          className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-500"
+        >
           <Plus size={18} />
           Transaksi
-        </button>
+        </Link>
 
       </div>
 

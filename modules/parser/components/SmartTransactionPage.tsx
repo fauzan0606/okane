@@ -123,6 +123,10 @@ export default function SmartTransactionPage({
           result={result.parsed}
           wallets={wallets}
           categories={categories}
+          onSaved={() => {
+            setText("");
+            setResult(undefined);
+          }}
         />
       )}
     </div>

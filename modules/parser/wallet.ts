@@ -76,6 +76,12 @@ export function findWallet(
     const walletName =
       wallet.name.toLowerCase();
 
+    const walletBank =
+      wallet.bank?.toLowerCase() ?? "";
+
+    const walletTerms =
+      `${walletName} ${walletBank}`;
+
     let score = 0;
 
     if (input.includes(walletName)) {
@@ -85,7 +91,7 @@ export function findWallet(
     for (const aliases of Object.values(ALIASES)) {
       for (const alias of aliases) {
         if (
-          walletName.includes(alias) &&
+          walletTerms.includes(alias) &&
           input.includes(alias)
         ) {
           score += 50;

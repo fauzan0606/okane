@@ -34,12 +34,14 @@ type EditablePreviewProps = {
   result: ParsedTransaction;
   wallets: Option[];
   categories: Option[];
+  onSaved: () => void;
 };
 
 export default function EditablePreview({
   result,
   wallets,
   categories,
+  onSaved,
 }: EditablePreviewProps) {
   const [parsed, setParsed] =
     useState(result);
@@ -82,6 +84,8 @@ export default function EditablePreview({
         alert(
           "Transaction saved successfully."
         );
+
+        onSaved();
       } catch (error) {
         alert(
           error instanceof Error
@@ -217,7 +221,12 @@ export default function EditablePreview({
                 id="wallet"
                 className="w-full border-slate-600 bg-white text-slate-950"
               >
-                <SelectValue placeholder="Pilih wallet" />
+                <SelectValue placeholder="Pilih wallet">
+                  {(walletId: string | null) =>
+                    wallets.find(
+                      (wallet) => wallet.id === walletId
+                    )?.name ?? "Pilih wallet"}
+                </SelectValue>
               </SelectTrigger>
 
               <SelectContent>
@@ -249,7 +258,12 @@ export default function EditablePreview({
                 id="category"
                 className="w-full border-slate-600 bg-white text-slate-950"
               >
-                <SelectValue placeholder="Pilih category" />
+                <SelectValue placeholder="Pilih category">
+                  {(categoryId: string | null) =>
+                    categories.find(
+                      (category) => category.id === categoryId
+                    )?.name ?? "Pilih category"}
+                </SelectValue>
               </SelectTrigger>
 
               <SelectContent>

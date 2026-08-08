@@ -4,6 +4,7 @@ import Sidebar from "@/components/layout/Sidebar";
 
 import { prisma } from "@/lib/prisma";
 
+import { listCategories } from "@/modules/category/service";
 import SmartTransactionPage from "@/modules/parser/components/SmartTransactionPage";
 
 export default async function Page() {
@@ -16,24 +17,14 @@ export default async function Page() {
         select: {
           id: true,
           name: true,
+          bank: true,
         },
         orderBy: {
           name: "asc",
         },
       }),
 
-      prisma.category.findMany({
-        where: {
-          isActive: true,
-        },
-        select: {
-          id: true,
-          name: true,
-        },
-        orderBy: {
-          name: "asc",
-        },
-      }),
+      listCategories(),
     ]);
 
   return (

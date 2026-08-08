@@ -1,4 +1,5 @@
 import { extractAmount } from "./amount";
+import { findCategory } from "./category";
 import { findMerchant } from "./merchant";
 import { tokenize } from "./tokenizer";
 import { detectTransactionType } from "./transactionType";
@@ -24,6 +25,11 @@ export function parseTransactionText(
     ),
 
     merchant: findMerchant(text),
+
+    category: findCategory(
+      text,
+      context
+    ),
 
     type: detectTransactionType(text),
   };

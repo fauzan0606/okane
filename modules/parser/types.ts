@@ -18,6 +18,7 @@ export type ParserContext = {
   wallets: {
     id: string;
     name: string;
+    bank?: string | null;
   }[];
 
   categories: {
@@ -46,6 +47,7 @@ export type SmartTransactionResult = {
   wallets: {
     id: string;
     name: string;
+    bank?: string | null;
   }[];
 
   categories: {

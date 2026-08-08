@@ -260,11 +260,16 @@ export default function TransactionForm({
                 transaction?.walletId
               }
             >
-              <SelectTrigger
-                id="walletId"
-                className="w-full"
-              >
-                <SelectValue placeholder="Select wallet" />
+                <SelectTrigger
+                  id="walletId"
+                  className="w-full"
+                >
+                  <SelectValue placeholder="Select wallet">
+                    {(walletId: string | null) =>
+                      wallets.find(
+                        (wallet) => wallet.id === walletId
+                      )?.name ?? "Select wallet"}
+                  </SelectValue>
               </SelectTrigger>
 
               <SelectContent>
@@ -303,7 +308,12 @@ export default function TransactionForm({
                   id="categoryId"
                   className="w-full"
                 >
-                  <SelectValue placeholder="Optional" />
+                  <SelectValue placeholder="Optional">
+                    {(categoryId: string | null) =>
+                      categories.find(
+                        (category) => category.id === categoryId
+                      )?.name ?? "Optional"}
+                  </SelectValue>
                 </SelectTrigger>
 
                 <SelectContent>

@@ -1,5 +1,7 @@
 import { WalletType } from "@prisma/client";
 
+import { prisma } from "@/lib/prisma";
+
 import {
   createWallet,
   updateWallet,
@@ -12,11 +14,50 @@ import {
 
 import { CreateWalletInput } from "./types";
 
+const DEFAULT_CURRENCIES = [
+  {
+    code: "IDR",
+    name: "Indonesian Rupiah",
+    symbol: "Rp",
+    decimalPlaces: 0,
+  },
+  {
+    code: "USD",
+    name: "US Dollar",
+    symbol: "$",
+    decimalPlaces: 2,
+  },
+  {
+    code: "SGD",
+    name: "Singapore Dollar",
+    symbol: "S$",
+    decimalPlaces: 2,
+  },
+];
+
 export async function listWallets() {
   return getWallets();
 }
 
 export async function listCurrencies() {
+  const currencies = await getActiveCurrencies();
+
+  if (currencies.length > 0) {
+    return currencies;
+  }
+
+  await prisma.$transaction(
+    DEFAULT_CURRENCIES.map((currency) =>
+      prisma.currency.upsert({
+        where: {
+          code: currency.code,
+        },
+        update: currency,
+        create: currency,
+      })
+    )
+  );
+
   return getActiveCurrencies();
 }
 

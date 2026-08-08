@@ -53,6 +53,9 @@ export default async function TransactionsPage() {
 
         <TransactionList
           transactions={transactions}
+          wallets={formData.wallets}
+          categories={formData.categories}
+          payees={formData.payees}
         />
       </div>
     </AppShell>
