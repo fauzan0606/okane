@@ -1,4 +1,4 @@
-import { TransactionType } from "@prisma/client";
+import type { TransactionType } from "@prisma/client";
 
 export type DashboardPeriod = "THIS_MONTH" | "LAST_MONTH" | "THIS_YEAR";
 
@@ -32,6 +32,12 @@ export type DashboardCategory = {
   percentage: number;
 };
 
+export type DashboardCashflowPoint = {
+  label: string;
+  income: number;
+  expense: number;
+};
+
 export type DashboardTransaction = {
   id: string;
   transactionDate: Date;
@@ -48,5 +54,6 @@ export type DashboardData = {
   summary: DashboardSummary;
   wallets: DashboardWallet[];
   spendingByCategory: DashboardCategory[];
+  cashflow: DashboardCashflowPoint[];
   recentTransactions: DashboardTransaction[];
 };
