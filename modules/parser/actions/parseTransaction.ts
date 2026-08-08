@@ -9,87 +9,62 @@ import type {
   SmartTransactionResult,
 } from "../types";
 
+function normalizeText(value: string) {
+  return value.trim().toLowerCase().replace(/\s+/g, " ");
+}
+
 export async function parseTransactionAction(
   text: string
 ): Promise<SmartTransactionResult> {
-  const wallets =
-    await prisma.wallet.findMany({
-      where: {
-        isActive: true,
-      },
-        select: {
-          id: true,
-          name: true,
-          bank: true,
-        },
-      orderBy: {
-        name: "asc",
-      },
+  const wallets = await prisma.wallet.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true, bank: true },
+    orderBy: { name: "asc" },
+  });
+
+  const categories = await prisma.category.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
+  const parsed = parseTransactionText(text, {
+    wallets,
+    categories,
+  });
+
+  let history: {
+    wallet: { id: string; name: string };
+    category: { id: string; name: string } | null;
+    amount: { toNumber: () => number };
+  }[] = [];
+
+  if (parsed.merchant) {
+    const payees = await prisma.payee.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true },
     });
 
-  const categories =
-    await prisma.category.findMany({
-      where: {
-        isActive: true,
-      },
-      select: {
-        id: true,
-        name: true,
-      },
-      orderBy: {
-        name: "asc",
-      },
-    });
+    const normalizedMerchant = normalizeText(parsed.merchant);
+    const matchingPayee = payees.find(
+      (payee) => normalizeText(payee.name) === normalizedMerchant
+    );
 
-  const parsed =
-    parseTransactionText(text, {
-      wallets,
-      categories,
-    });
-
-  const payee = parsed.merchant
-    ? await prisma.payee.findFirst({
-        where: {
-          name: parsed.merchant,
-          isActive: true,
-        },
-        select: {
-          id: true,
-        },
-      })
-    : null;
-
-  const history = payee
-    ? await prisma.transaction.findMany({
-        where: {
-          payeeId: payee.id,
-        },
+    if (matchingPayee) {
+      history = await prisma.transaction.findMany({
+        where: { payeeId: matchingPayee.id },
         select: {
           amount: true,
-          wallet: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          category: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
+          wallet: { select: { id: true, name: true } },
+          category: { select: { id: true, name: true } },
         },
-        orderBy: {
-          transactionDate: "desc",
-        },
-        take: 20,
-      })
-    : [];
+        orderBy: { transactionDate: "desc" },
+        take: 50,
+      });
+    }
+  }
 
-  const learned = applyTransactionLearning(
-    parsed,
-    history
-  );
+  const learned = applyTransactionLearning(parsed, history);
 
   return {
     parsed: learned,
