@@ -58,10 +58,27 @@ export async function ensureStatement(walletId: string, referenceDate = new Date
   const existing = await prisma.creditCardStatement.findUnique({ where: { creditCardId_periodStart_periodEnd: { creditCardId: profile.id, periodStart, periodEnd } } });
   if (existing) {
     const target = Number(existing.actualAmount ?? existing.calculatedAmount);
-    const status = existing.paidAmount >= target ? CreditCardStatementStatus.PAID : new Date() > existing.dueDate ? CreditCardStatementStatus.OVERDUE : existing.paidAmount > 0 ? CreditCardStatementStatus.PARTIALLY_PAID : CreditCardStatementStatus.UNPAID;
+    const paidAmount = Number(existing.paidAmount);
+    const status = paidAmount >= target
+      ? CreditCardStatementStatus.PAID
+      : new Date() > existing.dueDate
+        ? CreditCardStatementStatus.OVERDUE
+        : paidAmount > 0
+          ? CreditCardStatementStatus.PARTIALLY_PAID
+          : CreditCardStatementStatus.UNPAID;
     return prisma.creditCardStatement.update({ where: { id: existing.id }, data: { calculatedAmount, status } });
   }
-  return prisma.creditCardStatement.create({ data: { creditCardId: profile.id, periodStart, periodEnd, statementDate, dueDate, calculatedAmount, status: new Date() > dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID } });
+  return prisma.creditCardStatement.create({
+    data: {
+      creditCardId: profile.id,
+      periodStart,
+      periodEnd,
+      statementDate,
+      dueDate,
+      calculatedAmount,
+      status: new Date() > dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID,
+    },
+  });
 }
 
 export async function getCreditCardStatements(walletId: string) {
