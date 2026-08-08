@@ -12,6 +12,12 @@ import { transactionSchema } from "./schema";
 
 import type { TransactionActionState } from "./types";
 
+function revalidateFinancialViews() {
+  revalidatePath("/transactions");
+  revalidatePath("/wallet");
+  revalidatePath("/");
+}
+
 export async function createTransactionAction(
   _prevState: TransactionActionState,
   formData: FormData
@@ -45,7 +51,7 @@ export async function createTransactionAction(
     };
   }
 
-  revalidatePath("/transactions");
+  revalidateFinancialViews();
 
   return {
     success: true,
@@ -94,7 +100,7 @@ export async function updateTransactionAction(
     };
   }
 
-  revalidatePath("/transactions");
+  revalidateFinancialViews();
 
   return {
     success: true,
@@ -126,7 +132,7 @@ export async function deleteTransactionAction(
     };
   }
 
-  revalidatePath("/transactions");
+  revalidateFinancialViews();
 
   return {
     success: true,
