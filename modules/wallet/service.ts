@@ -94,6 +94,7 @@ export async function createWalletService(
     note: input.note ?? null,
 
     currentBalance: input.currentBalance,
+    balanceAsOf: new Date(),
     sortOrder: 0,
     isActive: true,
   });
@@ -115,6 +116,7 @@ export async function updateWalletService(
 
   if (input.currentBalance !== undefined) {
     data.currentBalance = input.currentBalance;
+    data.balanceAsOf = new Date();
   }
 
   if (input.bank !== undefined) {
