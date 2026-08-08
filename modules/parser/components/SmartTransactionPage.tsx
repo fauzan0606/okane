@@ -73,22 +73,22 @@ export default function SmartTransactionPage({
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
       <div>
-        <p className="text-sm font-medium text-blue-600">
+        <p className="text-sm font-medium text-blue-300">
           SMART TRANSACTION
         </p>
 
-        <h1 className="mt-1 text-3xl font-bold text-slate-950">
+        <h1 className="mt-1 text-3xl font-bold text-white">
           Smart Transaction
         </h1>
 
-        <p className="mt-2 text-slate-500">
+        <p className="mt-2 text-slate-400">
           Tulis transaksi dengan bahasa natural, lalu periksa sebelum menyimpan.
         </p>
       </div>
 
-      <div className="space-y-3 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="space-y-3 rounded-3xl border border-white/10 bg-[#182335] p-5 shadow-xl">
         <label
-          className="text-sm font-medium text-slate-700"
+          className="text-sm font-medium text-slate-200"
           htmlFor="transaction-input"
         >
           Deskripsi transaksi
@@ -106,6 +106,7 @@ export default function SmartTransactionPage({
               setResult(undefined);
             }
           }}
+          className="h-11 border-white/10 bg-[#0E151E] text-white placeholder:text-slate-500 focus-visible:border-white/20 focus-visible:ring-white/10"
           placeholder="Contoh: Starbucks 50rb BCA"
           autoFocus
         />
