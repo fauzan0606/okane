@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createWalletService, updateWalletService, deleteWalletService } from "./service";
-import { walletCreditCardSchema } from "./schemaCreditCard";
+import { updateWalletSchema, walletCreditCardSchema } from "./schemaCreditCard";
 import type { WalletActionState } from "./types";
 
 function revalidateFinancialViews() {
@@ -37,7 +37,7 @@ export async function createWalletAction(_prevState: WalletActionState, formData
 export async function updateWalletAction(_prevState: WalletActionState, formData: FormData): Promise<WalletActionState> {
   const id = formData.get("id");
   if (typeof id !== "string" || !id) return { success: false, message: "Missing wallet id." };
-  const parsed = walletCreditCardSchema.partial().safeParse(fields(formData));
+  const parsed = updateWalletSchema.safeParse(fields(formData));
   if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
   try { await updateWalletService(id, parsed.data); }
   catch (error) { return { success: false, message: error instanceof Error ? error.message : "Failed to update wallet." }; }
