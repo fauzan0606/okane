@@ -1,15 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { WalletType } from "@prisma/client";
-
-import {
-  createWalletService,
-  updateWalletService,
-  deleteWalletService,
-} from "./service";
-
-import { walletSchema } from "./schema";
+import { createWalletService, updateWalletService, deleteWalletService } from "./service";
+import { walletCreditCardSchema } from "./schemaCreditCard";
 import type { WalletActionState } from "./types";
 
 function revalidateFinancialViews() {
@@ -18,24 +11,22 @@ function revalidateFinancialViews() {
   revalidatePath("/credit-card");
 }
 
-function cardFields(formData: FormData) {
+function fields(formData: FormData) {
   return {
-    creditLimit: formData.get("creditLimit"),
-    billingDate: formData.get("billingDate"),
-    dueDate: formData.get("dueDate"),
-  };
-}
-
-export async function createWalletAction(_prevState: WalletActionState, formData: FormData): Promise<WalletActionState> {
-  const parsed = walletSchema.safeParse({
     name: formData.get("name"),
     walletType: formData.get("walletType"),
     currencyCode: formData.get("currencyCode"),
     currentBalance: formData.get("currentBalance"),
-    ...cardFields(formData),
+    creditLimit: formData.get("creditLimit"),
+    billingDate: formData.get("billingDate"),
+    dueDate: formData.get("dueDate"),
     bank: formData.get("bank"),
     note: formData.get("note"),
-  });
+  };
+}
+
+export async function createWalletAction(_prevState: WalletActionState, formData: FormData): Promise<WalletActionState> {
+  const parsed = walletCreditCardSchema.safeParse(fields(formData));
   if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
   try { await createWalletService(parsed.data); }
   catch (error) { return { success: false, message: error instanceof Error ? error.message : "Failed to create wallet." }; }
@@ -45,17 +36,8 @@ export async function createWalletAction(_prevState: WalletActionState, formData
 
 export async function updateWalletAction(_prevState: WalletActionState, formData: FormData): Promise<WalletActionState> {
   const id = formData.get("id");
-  if (typeof id !== "string" || id.length === 0) return { success: false, message: "Missing wallet id." };
-
-  const parsed = walletSchema.partial().safeParse({
-    name: formData.get("name"),
-    walletType: formData.get("walletType"),
-    currencyCode: formData.get("currencyCode"),
-    currentBalance: formData.get("currentBalance"),
-    ...cardFields(formData),
-    bank: formData.get("bank"),
-    note: formData.get("note"),
-  });
+  if (typeof id !== "string" || !id) return { success: false, message: "Missing wallet id." };
+  const parsed = walletCreditCardSchema.partial().safeParse(fields(formData));
   if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
   try { await updateWalletService(id, parsed.data); }
   catch (error) { return { success: false, message: error instanceof Error ? error.message : "Failed to update wallet." }; }
@@ -65,7 +47,7 @@ export async function updateWalletAction(_prevState: WalletActionState, formData
 
 export async function deleteWalletAction(_prevState: WalletActionState, formData: FormData): Promise<WalletActionState> {
   const id = formData.get("id");
-  if (typeof id !== "string" || id.length === 0) return { success: false, message: "Missing wallet id." };
+  if (typeof id !== "string" || !id) return { success: false, message: "Missing wallet id." };
   try { await deleteWalletService(id); }
   catch (error) { return { success: false, message: error instanceof Error ? error.message : "Failed to delete wallet." }; }
   revalidateFinancialViews();
