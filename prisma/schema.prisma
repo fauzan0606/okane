@@ -41,18 +41,41 @@ model Wallet {
 }
 
 model CreditCardProfile {
-  id            String   @id @default(uuid())
-  walletId      String   @unique
-  creditLimit   Decimal  @default(0)
+  id            String                     @id @default(uuid())
+  walletId      String                     @unique
+  creditLimit   Decimal                    @default(0)
   billingDate   Int
   dueDate       Int
   rewardProgram String?
-  rewardPoint   Decimal  @default(0)
+  rewardPoint   Decimal                    @default(0)
   annualFee     Decimal?
   annualFeeDate Int?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  wallet        Wallet   @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  createdAt     DateTime                   @default(now())
+  updatedAt     DateTime                   @updatedAt
+  wallet        Wallet                     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  statements    CreditCardStatement[]
+}
+
+model CreditCardStatement {
+  id                   String                     @id @default(uuid())
+  creditCardId         String
+  periodStart          DateTime
+  periodEnd            DateTime
+  statementDate        DateTime
+  dueDate              DateTime
+  calculatedAmount     Decimal                    @default(0)
+  actualAmount         Decimal?
+  paidAmount           Decimal                    @default(0)
+  paidAt               DateTime?
+  paymentTransactionId String?
+  status               CreditCardStatementStatus @default(UNPAID)
+  note                 String?
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
+  creditCard           CreditCardProfile          @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+
+  @@unique([creditCardId, periodStart, periodEnd])
+  @@index([creditCardId, dueDate])
 }
 
 model Category {
@@ -113,4 +136,11 @@ enum CategoryType {
 enum TransactionType {
   INCOME
   EXPENSE
+}
+
+enum CreditCardStatementStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
 }
