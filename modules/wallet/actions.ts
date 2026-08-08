@@ -19,6 +19,7 @@ export async function createWalletAction(
     name: formData.get("name"),
     walletType: formData.get("walletType"),
     currencyCode: formData.get("currencyCode"),
+    currentBalance: formData.get("currentBalance"),
     bank: formData.get("bank"),
     note: formData.get("note"),
   });
@@ -64,6 +65,7 @@ export async function updateWalletAction(
     name: formData.get("name"),
     walletType: formData.get("walletType"),
     currencyCode: formData.get("currencyCode"),
+    currentBalance: formData.get("currentBalance"),
     bank: formData.get("bank"),
     note: formData.get("note"),
   });
