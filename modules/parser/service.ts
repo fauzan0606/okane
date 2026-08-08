@@ -17,6 +17,8 @@ export function parseTransactionText(
   return {
     tokens: tokenize(text),
 
+    transactionDate: new Date().toISOString().slice(0, 10),
+
     amount: extractAmount(text),
 
     wallet: findWallet(
