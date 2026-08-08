@@ -4,13 +4,19 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, BarChart3, LayoutDashboard, Landmark, PiggyBank, Receipt, Settings, Tags, Target, Wallet } from "lucide-react";
+import { ArrowLeftRight, BarChart3, CreditCard, LayoutDashboard, Landmark, PiggyBank, Receipt, Settings, Tags, Target, Wallet } from "lucide-react";
 
 type MenuItem = { icon: LucideIcon; label: string; href: string };
 type MenuGroup = { title: string; items: MenuItem[] };
 const menus: MenuGroup[] = [
   { title: "Overview", items: [{ icon: LayoutDashboard, label: "Dashboard", href: "/" }] },
-  { title: "Finance", items: [{ icon: Receipt, label: "Transactions", href: "/transactions" }, { icon: Wallet, label: "Wallets", href: "/wallet" }, { icon: Tags, label: "Categories", href: "/category" }, { icon: ArrowLeftRight, label: "Transfer", href: "/transfer" }] },
+  { title: "Finance", items: [
+    { icon: Receipt, label: "Transactions", href: "/transactions" },
+    { icon: Wallet, label: "Wallets", href: "/wallet" },
+    { icon: CreditCard, label: "Credit Cards", href: "/credit-card" },
+    { icon: Tags, label: "Categories", href: "/category" },
+    { icon: ArrowLeftRight, label: "Transfer", href: "/transfer" },
+  ] },
   { title: "Planning", items: [{ icon: PiggyBank, label: "Budget", href: "/budget" }, { icon: Target, label: "Goals", href: "/goals" }] },
   { title: "Wealth & Insight", items: [{ icon: Landmark, label: "Assets", href: "/assets" }, { icon: BarChart3, label: "Analytics", href: "/analytics" }] },
 ];
