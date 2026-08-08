@@ -7,8 +7,9 @@ import WalletList from "@/modules/wallet/components/WalletList";
 import WalletForm from "@/modules/wallet/components/WalletForm";
 
 import { listWallets, listCurrencies } from "@/modules/wallet/service";
+import type { WalletClientData } from "@/modules/wallet/repository";
 
-function serializeWallets(wallets: Awaited<ReturnType<typeof listWallets>>) {
+function serializeWallets(wallets: Awaited<ReturnType<typeof listWallets>>): WalletClientData[] {
   return wallets.map((wallet) => ({
     ...wallet,
     currentBalance: wallet.currentBalance.toString(),
@@ -24,12 +25,7 @@ function serializeWallets(wallets: Awaited<ReturnType<typeof listWallets>>) {
 }
 
 export default async function WalletPage() {
-  const [wallets, currencies] = await Promise.all([
-    listWallets(),
-    listCurrencies(),
-  ]);
-
-  const serializedWallets = serializeWallets(wallets);
+  const [wallets, currencies] = await Promise.all([listWallets(), listCurrencies()]);
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
@@ -49,7 +45,7 @@ export default async function WalletPage() {
           />
         </div>
 
-        <WalletList wallets={serializedWallets} currencies={currencies} />
+        <WalletList wallets={serializeWallets(wallets)} currencies={currencies} />
       </div>
     </AppShell>
   );
