@@ -1,102 +1,48 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-
 import {
-  LayoutDashboard,
-  Wallet,
-  Tags,
   ArrowLeftRight,
-  Receipt,
-  Target,
+  BarChart3,
+  LayoutDashboard,
   Landmark,
   PiggyBank,
-  BarChart3,
+  Receipt,
   Settings,
+  Tags,
+  Target,
+  Wallet,
 } from "lucide-react";
 
-type MenuItem = {
-  icon: LucideIcon;
-  label: string;
-  href: string;
-};
-
-type MenuGroup = {
-  title: string;
-  items: MenuItem[];
-};
+type MenuItem = { icon: LucideIcon; label: string; href: string };
+type MenuGroup = { title: string; items: MenuItem[] };
 
 const menus: MenuGroup[] = [
-  {
-    title: "Overview",
-    items: [
-      {
-        icon: LayoutDashboard,
-        label: "Dashboard",
-        href: "/",
-      },
-    ],
-  },
+  { title: "Overview", items: [{ icon: LayoutDashboard, label: "Dashboard", href: "/" }] },
   {
     title: "Finance",
     items: [
-      {
-        icon: Wallet,
-        label: "Wallet",
-        href: "/wallet",
-      },
-      {
-        icon: Tags,
-        label: "Category",
-        href: "/category",
-      },  
-      {
-        icon: Receipt,
-        label: "Transactions",
-        href: "/transactions",
-      },
-      {
-        icon: ArrowLeftRight,
-        label: "Transfer",
-        href: "/transfer",
-      },
+      { icon: Receipt, label: "Transactions", href: "/transactions" },
+      { icon: Wallet, label: "Wallets", href: "/wallet" },
+      { icon: Tags, label: "Categories", href: "/category" },
+      { icon: ArrowLeftRight, label: "Transfer", href: "/transfer" },
     ],
   },
   {
     title: "Planning",
     items: [
-      {
-        icon: Target,
-        label: "Budget",
-        href: "/budget",
-      },
-      {
-        icon: PiggyBank,
-        label: "Goals",
-        href: "/goals",
-      },
+      { icon: PiggyBank, label: "Budget", href: "/budget" },
+      { icon: Target, label: "Goals", href: "/goals" },
     ],
   },
   {
-    title: "Wealth",
+    title: "Wealth & Insight",
     items: [
-      {
-        icon: Landmark,
-        label: "Assets",
-        href: "/assets",
-      },
-    ],
-  },
-  {
-    title: "Insight",
-    items: [
-      {
-        icon: BarChart3,
-        label: "Analytics",
-        href: "/analytics",
-      },
+      { icon: Landmark, label: "Assets", href: "/assets" },
+      { icon: BarChart3, label: "Analytics", href: "/analytics" },
     ],
   },
 ];
@@ -105,64 +51,61 @@ export default function Sidebar() {
   const pathname = usePathname();
 
   return (
-    <aside className="flex w-72 flex-col border-r border-white/10 bg-[#111827]">
-      <div className="px-8 pt-8 pb-6">
-        <h1 className="text-3xl font-black tracking-tight text-white">
-          OKANE
-        </h1>
-
-        <p className="mt-1 text-sm text-slate-400">
-          Personal Financial Operating System
-        </p>
+    <aside className="hidden w-[220px] shrink-0 border-r border-slate-200 bg-white lg:flex lg:flex-col">
+      <div className="px-7 pb-5 pt-7">
+        <div className="flex items-center gap-3">
+          <Image src="/okane-mascot.svg" alt="OKANE" width={46} height={46} />
+          <div>
+            <div className="text-[28px] font-black leading-none tracking-[-0.06em] text-slate-900">OKANE</div>
+            <div className="mt-1 text-[9px] font-semibold tracking-wide text-emerald-600">Your Money, Your Freedom</div>
+          </div>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4">
+      <nav className="flex-1 overflow-y-auto px-4 py-3">
         {menus.map((group) => (
-          <div key={group.title} className="mb-8">
-            <p className="mb-3 px-3 text-xs font-semibold uppercase tracking-wider text-slate-500">
-              {group.title}
-            </p>
-
-            {group.items.map((item) => {
-              const Icon = item.icon;
-              const isActive = pathname === item.href;
-
-              return (
-                <Link
-                  key={item.label}
-                  href={item.href}
-                  className={`mb-2 flex w-full items-center gap-3 rounded-2xl px-4 py-3 transition ${
-                    isActive
-                      ? "bg-blue-600 text-white shadow-lg"
-                      : "text-slate-400 hover:bg-white/5 hover:text-white"
-                  }`}
-                >
-                  <Icon size={20} />
-
-                  <span className="font-medium">
-                    {item.label}
-                  </span>
-                </Link>
-              );
-            })}
+          <div key={group.title} className="mb-6">
+            <p className="mb-2 px-3 text-[9px] font-bold uppercase tracking-[0.16em] text-slate-400">{group.title}</p>
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const Icon = item.icon;
+                const isActive = pathname === item.href;
+                return (
+                  <Link
+                    key={item.label}
+                    href={item.href}
+                    className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+                      isActive
+                        ? "bg-amber-50 text-slate-900 shadow-[inset_0_0_0_1px_#f7dfad]"
+                        : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
+                    }`}
+                  >
+                    <Icon size={17} strokeWidth={1.9} className={isActive ? "text-amber-500" : "text-slate-400"} />
+                    <span>{item.label}</span>
+                  </Link>
+                );
+              })}
+            </div>
           </div>
         ))}
-      </div>
+      </nav>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="border-t border-slate-100 p-4">
+        <div className="mb-3 flex items-center gap-3 rounded-xl bg-slate-50 px-3 py-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-sm font-bold text-slate-700 shadow-sm">F</div>
+          <div className="min-w-0">
+            <p className="truncate text-xs font-bold text-slate-800">Fauzan</p>
+            <p className="text-[10px] font-medium text-amber-500">Personal Plan</p>
+          </div>
+        </div>
         <Link
           href="/settings"
-          className={`flex w-full items-center gap-3 rounded-2xl px-4 py-3 transition ${
-            pathname === "/settings"
-              ? "bg-blue-600 text-white shadow-lg"
-              : "text-slate-400 hover:bg-white/5 hover:text-white"
+          className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition ${
+            pathname === "/settings" ? "bg-slate-100 text-slate-900" : "text-slate-500 hover:bg-slate-50 hover:text-slate-900"
           }`}
         >
-          <Settings size={20} />
-
-          <span className="font-medium">
-            Settings
-          </span>
+          <Settings size={17} className="text-slate-400" />
+          Settings
         </Link>
       </div>
     </aside>
