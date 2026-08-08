@@ -3,11 +3,8 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 import {
-  createTransaction,
-  deleteTransaction,
   getTransactionById,
   getTransactions,
-  updateTransaction,
 } from "./repository";
 
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
@@ -38,11 +35,12 @@ type BalanceWallet = {
 
 /**
  * A manually confirmed wallet balance is a snapshot of the real balance.
+ * Transactions dated before the snapshot are already included in that
+ * balance. Transactions after the snapshot affect the balance.
  *
- * Transactions dated before the snapshot are already assumed to be included
- * in that balance. Transactions after the snapshot affect the balance.
- * For transactions on the same calendar day, createdAt distinguishes records
- * entered after the snapshot from records that were already present.
+ * Transaction forms currently capture a calendar date rather than a time.
+ * For transactions on the same calendar day as the snapshot, createdAt is
+ * used to distinguish records entered after the snapshot.
  */
 function affectsCurrentBalance(
   transaction: BalanceTransaction,
@@ -54,18 +52,15 @@ function affectsCurrentBalance(
     return true;
   }
 
-  const transactionDate = transaction.transactionDate;
-  const snapshotDate = snapshot;
-
   const transactionDay = Date.UTC(
-    transactionDate.getUTCFullYear(),
-    transactionDate.getUTCMonth(),
-    transactionDate.getUTCDate()
+    transaction.transactionDate.getUTCFullYear(),
+    transaction.transactionDate.getUTCMonth(),
+    transaction.transactionDate.getUTCDate()
   );
   const snapshotDay = Date.UTC(
-    snapshotDate.getUTCFullYear(),
-    snapshotDate.getUTCMonth(),
-    snapshotDate.getUTCDate()
+    snapshot.getUTCFullYear(),
+    snapshot.getUTCMonth(),
+    snapshot.getUTCDate()
   );
 
   if (transactionDay > snapshotDay) {
@@ -76,7 +71,7 @@ function affectsCurrentBalance(
     return false;
   }
 
-  return transaction.createdAt > snapshotDate;
+  return transaction.createdAt > snapshot;
 }
 
 function balanceDelta(transaction: BalanceTransaction) {
@@ -94,17 +89,13 @@ async function applyBalanceDelta(
     return;
   }
 
-  if (delta.isPositive()) {
-    await tx.wallet.update({
-      where: { id: walletId },
-      data: { currentBalance: { increment: delta } },
-    });
-    return;
-  }
-
   await tx.wallet.update({
     where: { id: walletId },
-    data: { currentBalance: { decrement: delta.abs() } },
+    data: {
+      currentBalance: delta.isPositive()
+        ? { increment: delta }
+        : { decrement: delta.abs() },
+    },
   });
 }
 
@@ -123,15 +114,7 @@ export async function createTransactionService(
       throw new Error("Wallet not found.");
     }
 
-    const createdAt = new Date();
-    const transaction = {
-      transactionDate: input.transactionDate,
-      type: input.type,
-      amount: new Prisma.Decimal(input.amount),
-      createdAt,
-    } satisfies BalanceTransaction;
-
-    const created = await tx.transaction.create({
+    const transaction = await tx.transaction.create({
       data: {
         transactionDate: input.transactionDate,
         type: input.type,
@@ -147,11 +130,16 @@ export async function createTransactionService(
       },
     });
 
-    if (affectsCurrentBalance(transaction, wallet)) {
+    if (
+      affectsCurrentBalance(
+        transaction,
+        wallet
+      )
+    ) {
       await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     }
 
-    return created;
+    return transaction;
   });
 }
 
@@ -224,28 +212,31 @@ export async function updateTransactionService(
       );
     }
 
-    return updateTransaction(id, {
-      ...(input.transactionDate && {
-        transactionDate: input.transactionDate,
-      }),
-      ...(input.type && {
-        type: input.type,
-      }),
-      ...(input.amount !== undefined && {
-        amount: input.amount,
-      }),
-      ...(input.note !== undefined && {
-        note: input.note,
-      }),
-      ...(input.walletId && {
-        wallet: { connect: { id: input.walletId } },
-      }),
-      ...(input.categoryId && {
-        category: { connect: { id: input.categoryId } },
-      }),
-      ...(payee && {
-        payee: { connect: { id: payee.id } },
-      }),
+    return tx.transaction.update({
+      where: { id },
+      data: {
+        ...(input.transactionDate && {
+          transactionDate: input.transactionDate,
+        }),
+        ...(input.type && {
+          type: input.type,
+        }),
+        ...(input.amount !== undefined && {
+          amount: input.amount,
+        }),
+        ...(input.note !== undefined && {
+          note: input.note,
+        }),
+        ...(input.walletId && {
+          wallet: { connect: { id: input.walletId } },
+        }),
+        ...(input.categoryId && {
+          category: { connect: { id: input.categoryId } },
+        }),
+        ...(payee && {
+          payee: { connect: { id: payee.id } },
+        }),
+      },
     });
   });
 }
