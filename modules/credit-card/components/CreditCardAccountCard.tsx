@@ -68,8 +68,18 @@ export default function CreditCardAccountCard({ wallet, statements, forecast, in
       <button type="button" onClick={() => setExpanded((value) => !value)} className="w-full px-5 py-5 text-left transition hover:bg-white/[0.02] md:px-6" aria-expanded={expanded}>
         <div className="flex items-start gap-4">
           <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400"><CreditCard size={18} /></div>
-          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-semibold text-white">{wallet.name}</h2><span className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${meta.className}`}>{meta.label}</span></div><p className="mt-1 text-xs text-slate-500">Limit {wallet.currencySymbol}{formatMoney(Number(wallet.creditLimit))} · Billing day {wallet.billingDate} · {formatMoney(Number(wallet.rewardPoint))} pts</p></div>
-          <ChevronDown size={19} className={`mt-1 shrink-0 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h2 className="truncate text-base font-semibold text-white">{wallet.name}</h2><span className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${meta.className}`}>{meta.label}</span></div><p className="mt-1 text-xs text-slate-500">Limit {wallet.currencySymbol}{formatMoney(Number(wallet.creditLimit))} · Billing day {wallet.billingDate}</p></div>
+          <div className="flex shrink-0 items-start gap-3">
+            <div className="hidden text-right sm:block">
+              <p className="text-[9px] uppercase tracking-[0.08em] text-slate-600">Points</p>
+              <p className="mt-0.5 text-xs font-semibold text-slate-300">{formatMoney(Number(wallet.rewardPoint))} pts</p>
+            </div>
+            <div className="hidden text-right sm:block">
+              <p className="text-[9px] uppercase tracking-[0.08em] text-slate-600">Installments</p>
+              <p className={`mt-0.5 text-xs font-semibold ${installments.length > 0 ? "text-emerald-300" : "text-slate-500"}`}>{installments.length} active</p>
+            </div>
+            <ChevronDown size={19} className={`mt-1 shrink-0 text-slate-500 transition-transform ${expanded ? "rotate-180" : ""}`} />
+          </div>
         </div>
         <div className="mt-5 grid gap-4 sm:grid-cols-[1fr_auto_1fr] sm:items-end">
           <div><p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Outstanding</p><p className={`mt-1 text-2xl font-bold tracking-tight ${status === "OVERDUE" || status === "UNPAID" ? "text-red-300" : "text-white"}`}>{wallet.currencySymbol}{formatMoney(outstanding)}</p></div>
