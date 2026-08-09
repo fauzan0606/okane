@@ -9,6 +9,7 @@ export interface CreateWalletInput {
   creditLimit?: string;
   billingDate?: number;
   dueDate?: number;
+  rewardPoint?: string;
 
   bank?: string;
   note?: string;
@@ -23,6 +24,7 @@ export interface UpdateWalletInput {
   creditLimit?: string;
   billingDate?: number;
   dueDate?: number;
+  rewardPoint?: string;
 
   bank?: string;
   note?: string;
