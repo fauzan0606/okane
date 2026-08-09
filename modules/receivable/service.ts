@@ -18,8 +18,34 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
 }
 
 export async function getReceivables() {
-  const receivables = await prisma.receivable.findMany({ include: { currency: { select: { code: true, symbol: true } }, sourceWallet: { select: { id: true, name: true, walletType: true } }, payments: { orderBy: { receivedAt: "desc" }, include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } } } }, orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }] });
-  return receivables.map((item) => ({ ...item, amount: Number(item.amount), receivedAmount: Number(item.receivedAmount), remaining: Math.max(Number(item.amount) - Number(item.receivedAmount), 0), payments: item.payments.map((payment) => ({ ...payment, amount: Number(payment.amount) })) }));
+  const receivables = await prisma.receivable.findMany({
+    include: {
+      currency: { select: { code: true, symbol: true } },
+      payments: {
+        orderBy: { receivedAt: "desc" },
+        include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } },
+      },
+    },
+    orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
+  });
+
+  const sourceWalletIds = receivables.map((item) => item.sourceWalletId).filter((id): id is string => Boolean(id));
+  const sourceWallets = sourceWalletIds.length
+    ? await prisma.wallet.findMany({
+        where: { id: { in: sourceWalletIds } },
+        select: { id: true, name: true, walletType: true },
+      })
+    : [];
+  const sourceWalletMap = new Map(sourceWallets.map((wallet) => [wallet.id, wallet]));
+
+  return receivables.map((item) => ({
+    ...item,
+    sourceWallet: item.sourceWalletId ? sourceWalletMap.get(item.sourceWalletId) ?? null : null,
+    amount: Number(item.amount),
+    receivedAmount: Number(item.receivedAmount),
+    remaining: Math.max(Number(item.amount) - Number(item.receivedAmount), 0),
+    payments: item.payments.map((payment) => ({ ...payment, amount: Number(payment.amount) })),
+  }));
 }
 
 export async function getReceivableSummary(currencyCode = "IDR") {
@@ -34,11 +60,18 @@ export async function createReceivable(input: { personName: string; description:
     if (!wallet) throw new Error("Source wallet not found.");
     if (wallet.currencyId !== input.currencyId) throw new Error("Source wallet currency must match the receivable currency.");
 
-    const receivable = await tx.receivable.create({ data: { personName: input.personName.trim(), description: input.description.trim(), amount: input.amount, currency: { connect: { id: input.currencyId } }, sourceWallet: { connect: { id: input.sourceWalletId } }, dueDate: input.dueDate ?? null, sourceTransactionId: input.sourceTransactionId ?? null } });
+    const receivable = await tx.receivable.create({
+      data: {
+        personName: input.personName.trim(),
+        description: input.description.trim(),
+        amount: input.amount,
+        currency: { connect: { id: input.currencyId } },
+        sourceWalletId: input.sourceWalletId,
+        dueDate: input.dueDate ?? null,
+        sourceTransactionId: input.sourceTransactionId ?? null,
+      },
+    });
 
-    // A direct loan from a cash/bank/e-wallet/etc. really leaves the wallet now.
-    // A credit-card receivable normally comes from an existing CC transaction, so
-    // changing currentBalance here would double-count the card's outstanding balance.
     const shouldReduceWallet = wallet.walletType !== WalletType.CREDIT_CARD;
     const createdAt = receivable.createdAt;
     const effectiveDate = createdAt;
