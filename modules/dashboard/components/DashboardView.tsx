@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { ArrowDownRight, ArrowUpRight, Bell, CalendarDays, ChevronDown, CreditCard, Landmark, MoreHorizontal, ReceiptText, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import type { DashboardData, DashboardPeriod } from "../types";
+import CreditCardSummary from "./CreditCardSummary";
 
 const periods: Array<{ value: DashboardPeriod; label: string }> = [
   { value: "THIS_MONTH", label: "This Month" },
@@ -64,6 +65,8 @@ export default function DashboardView({ data }: { data: DashboardData }) {
           <SummaryCard icon={<ArrowUpRight size={18} />} tone="blue" title="Net Cashflow" value={formatCurrency(summary.netCashFlow, summary.currencyCode)} detail={summary.netCashFlow >= 0 ? "Positive cash flow" : "Negative cash flow"} />
           <SummaryCard icon={<WalletCards size={18} />} tone="purple" title="Total Assets" value={formatCurrency(summary.netWorth, summary.currencyCode)} detail={`${data.wallets.length} active wallet${data.wallets.length === 1 ? "" : "s"}`} />
         </section>
+
+        <CreditCardSummary />
 
         <section className="mb-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
           <DarkPanel>
