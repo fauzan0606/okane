@@ -1,6 +1,8 @@
 import { TransactionType } from "@prisma/client";
 import { z } from "zod";
 
+const checkbox = z.preprocess((value) => value === true || value === "true" || value === "on", z.boolean());
+
 export const transactionSchema = z.object({
   transactionDate: z.coerce.date(),
   type: z.nativeEnum(TransactionType),
@@ -9,7 +11,7 @@ export const transactionSchema = z.object({
   categoryId: z.string().optional().transform((value) => value || undefined),
   merchant: z.string().trim().optional().transform((value) => value || undefined),
   note: z.string().trim().optional().transform((value) => value || undefined),
-  installmentEnabled: z.coerce.boolean().default(false),
+  installmentEnabled: checkbox.default(false),
   installmentTenor: z.coerce.number().int().min(2).max(120).optional(),
   installmentStartDate: z.coerce.date().optional(),
   installmentFee: z.coerce.number().min(0).optional(),
