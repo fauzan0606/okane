@@ -17,6 +17,13 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
   return createdAt > balanceAsOf;
 }
 
+async function updateReceivableStatus(tx: Prisma.TransactionClient, receivableId: string) {
+  const receivable = await tx.receivable.findUnique({ where: { id: receivableId } });
+  if (!receivable) return;
+  const status = getStatus(new Prisma.Decimal(receivable.amount), new Prisma.Decimal(receivable.receivedAmount), receivable.dueDate);
+  if (status !== receivable.status) await tx.receivable.update({ where: { id: receivable.id }, data: { status } });
+}
+
 export async function getReceivables() {
   const receivables = await prisma.receivable.findMany({
     include: {
@@ -84,6 +91,58 @@ export async function createReceivable(input: { personName: string; description:
   });
 }
 
+export async function updateReceivable(input: { receivableId: string; personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; loanDate: Date; dueDate?: Date | null }) {
+  if (input.amount <= 0) throw new Error("Receivable amount must be greater than zero.");
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.receivable.findUnique({ where: { id: input.receivableId } });
+    if (!existing) throw new Error("Receivable not found.");
+    if (new Prisma.Decimal(input.amount).lt(existing.receivedAmount)) throw new Error("Receivable amount cannot be lower than the amount already received.");
+
+    const oldWallet = existing.sourceWalletId ? await tx.wallet.findUnique({ where: { id: existing.sourceWalletId }, select: { id: true, currencyId: true, walletType: true, balanceAsOf: true } }) : null;
+    const newWallet = await tx.wallet.findUnique({ where: { id: input.sourceWalletId }, select: { id: true, currencyId: true, walletType: true, balanceAsOf: true } });
+    if (!newWallet) throw new Error("Source wallet not found.");
+    if (newWallet.currencyId !== input.currencyId) throw new Error("Source wallet currency must match the receivable currency.");
+
+    const oldEffective = existing.loanDate;
+    const oldApplied = oldWallet && oldWallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(oldEffective, existing.createdAt, oldWallet.balanceAsOf);
+    if (oldApplied && oldWallet) await tx.wallet.update({ where: { id: oldWallet.id }, data: { currentBalance: { increment: existing.amount } } });
+
+    const newApplied = newWallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(input.loanDate, existing.createdAt, newWallet.balanceAsOf);
+    if (newApplied) await tx.wallet.update({ where: { id: newWallet.id }, data: { currentBalance: { decrement: input.amount } } });
+
+    const updated = await tx.receivable.update({
+      where: { id: existing.id },
+      data: {
+        personName: input.personName.trim(),
+        description: input.description.trim(),
+        amount: input.amount,
+        currency: { connect: { id: input.currencyId } },
+        sourceWallet: { connect: { id: input.sourceWalletId } },
+        loanDate: input.loanDate,
+        dueDate: input.dueDate ?? null,
+      },
+    });
+    await updateReceivableStatus(tx, existing.id);
+    return updated;
+  });
+}
+
+export async function deleteReceivable(receivableId: string) {
+  return prisma.$transaction(async (tx) => {
+    const receivable = await tx.receivable.findUnique({ where: { id: receivableId }, include: { payments: true } });
+    if (!receivable) throw new Error("Receivable not found.");
+    if (receivable.payments.length > 0) throw new Error("Delete the payment history first before deleting this receivable.");
+
+    if (receivable.sourceWalletId) {
+      const wallet = await tx.wallet.findUnique({ where: { id: receivable.sourceWalletId }, select: { id: true, walletType: true, balanceAsOf: true } });
+      if (wallet && wallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(receivable.loanDate, receivable.createdAt, wallet.balanceAsOf)) {
+        await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: receivable.amount } } });
+      }
+    }
+    await tx.receivable.delete({ where: { id: receivable.id } });
+  });
+}
+
 export async function recordReceivablePayment(input: { receivableId: string; amount: number; receivedAt: Date; walletId: string; note?: string }) {
   if (input.amount <= 0) throw new Error("Payment amount must be greater than zero.");
   return prisma.$transaction(async (tx) => {
@@ -113,6 +172,61 @@ export async function recordReceivablePayment(input: { receivableId: string; amo
     await tx.receivable.update({ where: { id: receivable.id }, data: { receivedAmount, status } });
     if (affectsCurrentBalance(input.receivedAt, transaction.createdAt, wallet.balanceAsOf)) await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: amount } } });
     return payment;
+  });
+}
+
+export async function updateReceivablePayment(input: { paymentId: string; amount: number; receivedAt: Date; walletId: string; note?: string }) {
+  if (input.amount <= 0) throw new Error("Payment amount must be greater than zero.");
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.receivablePayment.findUnique({ where: { id: input.paymentId }, include: { receivable: true, transaction: true } });
+    if (!payment) throw new Error("Payment not found.");
+    const receivable = payment.receivable;
+    const otherReceived = new Prisma.Decimal(receivable.receivedAmount).minus(payment.amount);
+    const newAmount = new Prisma.Decimal(input.amount);
+    if (otherReceived.plus(newAmount).gt(receivable.amount)) throw new Error("Payment total cannot exceed the receivable amount.");
+
+    const oldWallet = await tx.wallet.findUnique({ where: { id: payment.walletId }, select: { id: true, balanceAsOf: true } });
+    const newWallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, currencyId: true } });
+    if (!newWallet) throw new Error("Wallet not found.");
+    if (newWallet.currencyId !== receivable.currencyId) throw new Error("Payment wallet currency must match the receivable currency.");
+
+    if (oldWallet && affectsCurrentBalance(payment.receivedAt, payment.transaction.createdAt, oldWallet.balanceAsOf)) {
+      await tx.wallet.update({ where: { id: oldWallet.id }, data: { currentBalance: { decrement: payment.amount } } });
+    }
+
+    const updatedTransaction = await tx.transaction.update({
+      where: { id: payment.transactionId },
+      data: {
+        transactionDate: input.receivedAt,
+        amount: newAmount,
+        note: input.note?.trim() || `Reimbursement from ${receivable.personName}: ${receivable.description}`,
+        wallet: { connect: { id: input.walletId } },
+      },
+    });
+    await tx.receivablePayment.update({ where: { id: payment.id }, data: { amount: newAmount, receivedAt: input.receivedAt, walletId: input.walletId, note: input.note?.trim() || null } });
+
+    if (affectsCurrentBalance(input.receivedAt, updatedTransaction.createdAt, newWallet.balanceAsOf)) {
+      await tx.wallet.update({ where: { id: newWallet.id }, data: { currentBalance: { increment: newAmount } } });
+    }
+
+    const receivedAmount = otherReceived.plus(newAmount);
+    await tx.receivable.update({ where: { id: receivable.id }, data: { receivedAmount, status: getStatus(new Prisma.Decimal(receivable.amount), receivedAmount, receivable.dueDate) } });
+    return updatedTransaction;
+  });
+}
+
+export async function deleteReceivablePayment(paymentId: string) {
+  return prisma.$transaction(async (tx) => {
+    const payment = await tx.receivablePayment.findUnique({ where: { id: paymentId }, include: { receivable: true, transaction: true } });
+    if (!payment) throw new Error("Payment not found.");
+    const wallet = await tx.wallet.findUnique({ where: { id: payment.walletId }, select: { id: true, balanceAsOf: true } });
+    if (wallet && affectsCurrentBalance(payment.receivedAt, payment.transaction.createdAt, wallet.balanceAsOf)) {
+      await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { decrement: payment.amount } } });
+    }
+    await tx.receivablePayment.delete({ where: { id: payment.id } });
+    await tx.transaction.delete({ where: { id: payment.transactionId } });
+    const remainingReceived = new Prisma.Decimal(payment.receivable.receivedAmount).minus(payment.amount);
+    await tx.receivable.update({ where: { id: payment.receivableId }, data: { receivedAmount: remainingReceived, status: getStatus(new Prisma.Decimal(payment.receivable.amount), remainingReceived, payment.receivable.dueDate) } });
   });
 }
 
