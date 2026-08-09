@@ -43,7 +43,18 @@ export async function recordReceivablePayment(input: { receivableId: string; amo
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, currencyId: true } });
     if (!wallet) throw new Error("Wallet not found.");
     if (wallet.currencyId !== receivable.currencyId) throw new Error("Payment wallet currency must match the receivable currency.");
-    const transaction = await tx.transaction.create({ data: { transactionDate: input.receivedAt, type: "INCOME", kind: TransactionKind.REIMBURSEMENT, amount, note: input.note?.trim() || `Reimbursement from ${receivable.personName}: ${receivable.description}`, wallet: { connect: { id: input.walletId } } });
+
+    const transaction = await tx.transaction.create({
+      data: {
+        transactionDate: input.receivedAt,
+        type: "INCOME",
+        kind: TransactionKind.REIMBURSEMENT,
+        amount,
+        note: input.note?.trim() || `Reimbursement from ${receivable.personName}: ${receivable.description}`,
+        wallet: { connect: { id: input.walletId } },
+      },
+    });
+
     const receivedAmount = new Prisma.Decimal(receivable.receivedAmount).plus(amount);
     const status = getStatus(new Prisma.Decimal(receivable.amount), receivedAmount, receivable.dueDate);
     const payment = await tx.receivablePayment.create({ data: { receivableId: receivable.id, amount, receivedAt: input.receivedAt, walletId: input.walletId, transactionId: transaction.id, note: input.note?.trim() || null } });
