@@ -2,124 +2,37 @@ import { CreditCard, ExternalLink } from "lucide-react";
 import { prisma } from "@/lib/prisma";
 import { ensureStatement, getCreditCardStatements, getStatementForecast } from "@/modules/credit-card/service";
 
-function formatMoney(value: number, currencyCode: string) {
-  return new Intl.NumberFormat("id-ID", {
-    style: "currency",
-    currency: currencyCode,
-    maximumFractionDigits: currencyCode === "IDR" || currencyCode === "JPY" || currencyCode === "KRW" ? 0 : 2,
-  }).format(value);
-}
-
-function formatDate(value: Date) {
-  return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(value);
-}
-
+function formatMoney(value: number, currencyCode: string) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: currencyCode, maximumFractionDigits: currencyCode === "IDR" || currencyCode === "JPY" || currencyCode === "KRW" ? 0 : 2 }).format(value); }
+function formatDate(value: Date) { return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(value); }
 function statusMeta(status: string) {
   if (status === "PAID") return { label: "PAID", className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" };
   if (status === "OVERDUE") return { label: "OVERDUE", className: "border-red-400/25 bg-red-400/10 text-red-300" };
   if (status === "PARTIALLY_PAID") return { label: "PARTIALLY PAID", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" };
-  return { label: "UNPAID", className: "border-white/10 bg-white/5 text-slate-300" };
+  return { label: "UNPAID", className: "border-red-400/20 bg-red-400/10 text-red-300" };
 }
 
 export default async function CreditCardSummary() {
-  const cards = await prisma.wallet.findMany({
-    where: { isActive: true, walletType: "CREDIT_CARD", creditCard: { isNot: null } },
-    select: {
-      id: true,
-      name: true,
-      currentBalance: true,
-      currency: { select: { code: true } },
-      creditCard: { select: { creditLimit: true } },
-    },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
-
+  const cards = await prisma.wallet.findMany({ where: { isActive: true, walletType: "CREDIT_CARD", creditCard: { isNot: null } }, select: { id: true, name: true, currentBalance: true, currency: { select: { code: true } }, creditCard: { select: { creditLimit: true } } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] });
   if (cards.length === 0) return null;
-
   const summaries = await Promise.all(cards.map(async (card) => {
     await ensureStatement(card.id);
-    const [statements, forecast] = await Promise.all([
-      getCreditCardStatements(card.id),
-      getStatementForecast(card.id),
-    ]);
-
+    const [statements, forecast] = await Promise.all([getCreditCardStatements(card.id), getStatementForecast(card.id)]);
     const latestUnpaid = statements.find((statement) => statement.status !== "PAID");
     const status = latestUnpaid?.status ?? statements[0]?.status ?? "UNPAID";
     const dueDate = latestUnpaid?.dueDate ?? forecast?.dueDate ?? null;
     const outstanding = Math.abs(Number(card.currentBalance));
     const limit = Number(card.creditCard?.creditLimit ?? 0);
     const utilization = limit > 0 ? Math.min((outstanding / limit) * 100, 100) : 0;
-
-    return {
-      ...card,
-      outstanding,
-      limit,
-      utilization,
-      nextStatement: forecast?.amount ?? 0,
-      dueDate,
-      status,
-    };
+    return { ...card, outstanding, limit, utilization, nextStatement: forecast?.amount ?? 0, dueDate, status };
   }));
 
-  return (
-    <section className="mb-5">
-      <div className="mb-3 flex items-end justify-between gap-4">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Liabilities</p>
-          <h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-white">Credit Cards</h2>
-        </div>
-        <a href="/credit-card" className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300">
-          Manage cards <ExternalLink size={12} />
-        </a>
-      </div>
-
-      <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">
-        {summaries.map((card) => {
-          const meta = statusMeta(card.status);
-          return (
-            <div key={card.id} className="rounded-[20px] border border-white/10 bg-[#0d151e] p-5 shadow-[0_12px_35px_rgba(0,0,0,0.16)] transition hover:border-white/15 hover:bg-[#111923]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex min-w-0 items-center gap-2.5">
-                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400"><CreditCard size={17} /></div>
-                  <p className="truncate text-sm font-semibold text-white">{card.name}</p>
-                </div>
-                <span className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold ${meta.className}`}>{meta.label}</span>
-              </div>
-
-              <div className="mt-5 flex items-end justify-between gap-4">
-                <div>
-                  <p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Outstanding</p>
-                  <p className={`mt-1 text-xl font-bold tracking-tight ${card.status === "OVERDUE" ? "text-red-300" : "text-white"}`}>
-                    {formatMoney(card.outstanding, card.currency.code)}
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-[10px] text-slate-500">Due</p>
-                  <p className={`mt-1 text-sm font-semibold ${card.status === "OVERDUE" ? "text-red-300" : "text-slate-200"}`}>
-                    {card.dueDate ? formatDate(card.dueDate) : "—"}
-                  </p>
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3">
-                <div>
-                  <p className="text-[10px] text-slate-500">Next Statement</p>
-                  <p className="mt-0.5 text-sm font-semibold text-slate-200">{formatMoney(card.nextStatement, card.currency.code)}</p>
-                </div>
-                <div className="min-w-[125px] text-right">
-                  <p className="text-[10px] text-slate-500">Credit Utilization</p>
-                  <p className="mt-0.5 text-xs font-semibold text-slate-300">{card.utilization.toFixed(1)}%</p>
-                </div>
-              </div>
-
-              <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
-                <div className={`h-full rounded-full ${card.utilization >= 80 ? "bg-red-400" : card.utilization >= 50 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${card.utilization}%` }} />
-              </div>
-              <p className="mt-1 text-[9px] text-slate-600">{formatMoney(card.outstanding, card.currency.code)} / {formatMoney(card.limit, card.currency.code)}</p>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
+  return <section className="mb-5">
+    <div className="mb-3 flex items-end justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Liabilities</p><h2 className="mt-1 text-lg font-semibold tracking-[-0.02em] text-white">Credit Cards</h2></div><a href="/credit-card" className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300">Manage cards <ExternalLink size={12} /></a></div>
+    <div className="grid gap-3.5 md:grid-cols-2 xl:grid-cols-3">{summaries.map((card) => { const meta = statusMeta(card.status); const alert = card.status === "OVERDUE" || card.status === "UNPAID"; return <div key={card.id} className="rounded-[20px] border border-white/10 bg-[#0d151e] p-5 shadow-[0_12px_35px_rgba(0,0,0,0.16)] transition hover:border-white/15 hover:bg-[#111923]">
+      <div className="flex items-start justify-between gap-3"><div className="flex min-w-0 items-center gap-2.5"><div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-500/10 text-blue-400"><CreditCard size={17} /></div><p className="truncate text-sm font-semibold text-white">{card.name}</p></div><span className={`shrink-0 rounded-full border px-2.5 py-1 text-[9px] font-semibold ${meta.className}`}>{meta.label}</span></div>
+      <div className="mt-5 flex items-end justify-between gap-4"><div><p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Outstanding</p><p className={`mt-1 text-xl font-bold tracking-tight ${alert ? "text-red-300" : "text-white"}`}>{formatMoney(card.outstanding, card.currency.code)}</p></div><div className="text-right"><p className="text-[10px] text-slate-500">Due</p><p className={`mt-1 text-sm font-semibold ${alert ? "text-red-300" : "text-slate-200"}`}>{card.dueDate ? formatDate(card.dueDate) : "—"}</p></div></div>
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-3"><div><p className="text-[10px] text-slate-500">Next Statement</p><p className="mt-0.5 text-sm font-semibold text-slate-200">{formatMoney(card.nextStatement, card.currency.code)}</p></div><div className="min-w-[125px] text-right"><p className="text-[10px] text-slate-500">Credit Utilization</p><p className="mt-0.5 text-xs font-semibold text-slate-300">{card.utilization.toFixed(1)}%</p></div></div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className={`h-full rounded-full ${card.utilization >= 80 ? "bg-red-400" : card.utilization >= 50 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${card.utilization}%` }} /></div><p className="mt-1 text-[9px] text-slate-600">{formatMoney(card.outstanding, card.currency.code)} / {formatMoney(card.limit, card.currency.code)}</p>
+    </div>; })}</div>
+  </section>;
 }
