@@ -35,9 +35,9 @@ model Wallet {
   updatedAt      DateTime           @updatedAt
   creditCard     CreditCardProfile?
   currency       Currency           @relation(fields: [currencyId], references: [id])
+  transactions   Transaction[]
 
   @@index([currencyId])
-  transactions Transaction[]
 }
 
 model CreditCardProfile {
@@ -71,7 +71,7 @@ model CreditCardStatement {
   status               CreditCardStatementStatus @default(UNPAID)
   note                 String?
   createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
+  updatedAt             DateTime                   @updatedAt
   creditCard           CreditCardProfile          @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
   payments             CreditCardStatementPayment[]
 
@@ -127,8 +127,31 @@ model Transaction {
   category Category? @relation(fields: [categoryId], references: [id])
   payeeId String?
   payee Payee? @relation(fields: [payeeId], references: [id])
+  installmentPlan InstallmentPlan?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model InstallmentPlan {
+  id                String               @id @default(uuid())
+  transactionId     String               @unique
+  totalAmount       Decimal
+  feeAmount         Decimal              @default(0)
+  installmentAmount Decimal
+  tenorMonths       Int
+  startDate         DateTime
+  status            InstallmentPlanStatus @default(ACTIVE)
+  transaction       Transaction           @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+
+  @@index([startDate, status])
+}
+
+enum InstallmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
 }
 
 enum WalletType {
