@@ -8,11 +8,17 @@ function getStatus(amount: Prisma.Decimal, received: Prisma.Decimal, dueDate: Da
   return ReceivableStatus.OUTSTANDING;
 }
 
+function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAsOf: Date | null) {
+  if (!balanceAsOf) return true;
+  const transactionDay = Date.UTC(transactionDate.getUTCFullYear(), transactionDate.getUTCMonth(), transactionDate.getUTCDate());
+  const snapshotDay = Date.UTC(balanceAsOf.getUTCFullYear(), balanceAsOf.getUTCMonth(), balanceAsOf.getUTCDate());
+  if (transactionDay > snapshotDay) return true;
+  if (transactionDay < snapshotDay) return false;
+  return createdAt > balanceAsOf;
+}
+
 export async function getReceivables() {
-  const receivables = await prisma.receivable.findMany({
-    include: { currency: { select: { code: true, symbol: true } }, payments: { orderBy: { receivedAt: "desc" }, include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } } } },
-    orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
-  });
+  const receivables = await prisma.receivable.findMany({ include: { currency: { select: { code: true, symbol: true } }, payments: { orderBy: { receivedAt: "desc" }, include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } } } }, orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }] });
   return receivables.map((item) => ({ ...item, amount: Number(item.amount), receivedAmount: Number(item.receivedAmount), remaining: Math.max(Number(item.amount) - Number(item.receivedAmount), 0), payments: item.payments.map((payment) => ({ ...payment, amount: Number(payment.amount) })) }));
 }
 
@@ -37,12 +43,12 @@ export async function recordReceivablePayment(input: { receivableId: string; amo
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, currencyId: true } });
     if (!wallet) throw new Error("Wallet not found.");
     if (wallet.currencyId !== receivable.currencyId) throw new Error("Payment wallet currency must match the receivable currency.");
-    const transaction = await tx.transaction.create({ data: { transactionDate: input.receivedAt, type: "INCOME", kind: TransactionKind.REIMBURSEMENT, amount, note: input.note?.trim() || `Reimbursement from ${receivable.personName}: ${receivable.description}`, wallet: { connect: { id: input.walletId } } } });
+    const transaction = await tx.transaction.create({ data: { transactionDate: input.receivedAt, type: "INCOME", kind: TransactionKind.REIMBURSEMENT, amount, note: input.note?.trim() || `Reimbursement from ${receivable.personName}: ${receivable.description}`, wallet: { connect: { id: input.walletId } } });
     const receivedAmount = new Prisma.Decimal(receivable.receivedAmount).plus(amount);
     const status = getStatus(new Prisma.Decimal(receivable.amount), receivedAmount, receivable.dueDate);
     const payment = await tx.receivablePayment.create({ data: { receivableId: receivable.id, amount, receivedAt: input.receivedAt, walletId: input.walletId, transactionId: transaction.id, note: input.note?.trim() || null } });
     await tx.receivable.update({ where: { id: receivable.id }, data: { receivedAmount, status } });
-    await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: amount } } });
+    if (affectsCurrentBalance(input.receivedAt, transaction.createdAt, wallet.balanceAsOf)) await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: amount } } });
     return payment;
   });
 }
