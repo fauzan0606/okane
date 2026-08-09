@@ -19,6 +19,7 @@ export const walletCreditCardBaseSchema = z.object({
   creditLimit: amountSchema.optional(),
   billingDate: daySchema.optional(),
   dueDate: daySchema.optional(),
+  rewardPoint: amountSchema.optional(),
   bank: z.string().trim().max(100).optional().transform((value) => value || undefined),
   note: z.string().trim().max(500).optional().transform((value) => value || undefined),
 });
