@@ -37,14 +37,7 @@ async function buildInstallmentPlan(tx: Prisma.TransactionClient, walletId: stri
   const fee = new Prisma.Decimal(installment.feeAmount ?? 0);
   const totalAmount = new Prisma.Decimal(input.amount).plus(fee);
   const installmentAmount = totalAmount.div(installment.tenorMonths);
-  return {
-    totalAmount,
-    feeAmount: fee,
-    installmentAmount,
-    tenorMonths: installment.tenorMonths,
-    startDate: installment.startDate ?? input.transactionDate,
-    status: "ACTIVE" as const,
-  };
+  return { totalAmount, feeAmount: fee, installmentAmount, tenorMonths: installment.tenorMonths, startDate: installment.startDate ?? input.transactionDate, status: "ACTIVE" as const };
 }
 
 export async function listTransactions() { return getTransactions(); }
@@ -57,16 +50,7 @@ export async function createTransactionService(input: CreateTransactionInput) {
     if (!wallet) throw new Error("Wallet not found.");
     const plan = await buildInstallmentPlan(tx, input.walletId, input);
     const transaction = await tx.transaction.create({
-      data: {
-        transactionDate: input.transactionDate,
-        type: input.type,
-        amount: input.amount,
-        note: input.note ?? null,
-        wallet: { connect: { id: input.walletId } },
-        ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
-        ...(payee && { payee: { connect: { id: payee.id } } }),
-        ...(plan && { installmentPlan: { create: plan } }),
-      },
+      data: { transactionDate: input.transactionDate, type: input.type, amount: input.amount, note: input.note ?? null, wallet: { connect: { id: input.walletId } }, ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } }), ...(plan && { installmentPlan: { create: plan } }) },
       include: { wallet: true, payee: true, category: true, installmentPlan: true },
     });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
@@ -82,17 +66,14 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     const newWalletId = input.walletId ?? existing.walletId;
     const newWallet = newWalletId === existing.wallet.id ? existing.wallet : await tx.wallet.findUnique({ where: { id: newWalletId }, select: { id: true, balanceAsOf: true, walletType: true } });
     if (!newWallet) throw new Error("Wallet not found.");
-
     const oldTransaction: BalanceTransaction = { transactionDate: existing.transactionDate, type: existing.type, amount: existing.amount, createdAt: existing.createdAt };
     const newTransaction: BalanceTransaction = { transactionDate: input.transactionDate ?? existing.transactionDate, type: input.type ?? existing.type, amount: input.amount !== undefined ? new Prisma.Decimal(input.amount) : existing.amount, createdAt: existing.createdAt };
-
     if (input.installment?.enabled) {
       if (newTransaction.type !== TransactionType.EXPENSE) throw new Error("Installments are available for expense transactions only.");
-      if (!input.installment.tenorMonths && !existing.installmentPlan) throw new Error("Installment tenor is required.");
+      const tenor = input.installment.tenorMonths ?? existing.installmentPlan?.tenorMonths;
+      if (!tenor || tenor < 2) throw new Error("Installment tenor is required.");
       const walletType = "walletType" in newWallet ? newWallet.walletType : (await tx.wallet.findUnique({ where: { id: newWallet.id }, select: { walletType: true } }))?.walletType;
       if (walletType !== WalletType.CREDIT_CARD) throw new Error("Installments are available for credit card transactions only.");
-      const tenor = input.installment.tenorMonths ?? existing.installmentPlan?.tenorMonths;
-      if (!tenor) throw new Error("Installment tenor is required.");
       const fee = new Prisma.Decimal(input.installment.feeAmount ?? existing.installmentPlan?.feeAmount ?? 0);
       const totalAmount = new Prisma.Decimal(newTransaction.amount).plus(fee);
       const startDate = input.installment.startDate ?? existing.installmentPlan?.startDate ?? newTransaction.transactionDate;
@@ -102,23 +83,9 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     } else if (input.installment?.enabled === false && existing.installmentPlan) {
       await tx.installmentPlan.delete({ where: { transactionId: id } });
     }
-
     if (affectsCurrentBalance(oldTransaction, existing.wallet)) await applyBalanceDelta(tx, existing.wallet.id, balanceDelta(oldTransaction).negated());
     if (affectsCurrentBalance(newTransaction, newWallet)) await applyBalanceDelta(tx, newWallet.id, balanceDelta(newTransaction));
-
-    return tx.transaction.update({
-      where: { id },
-      data: {
-        ...(input.transactionDate && { transactionDate: input.transactionDate }),
-        ...(input.type && { type: input.type }),
-        ...(input.amount !== undefined && { amount: input.amount }),
-        ...(input.note !== undefined && { note: input.note }),
-        ...(input.walletId && { wallet: { connect: { id: input.walletId } } }),
-        ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
-        ...(payee && { payee: { connect: { id: payee.id } } }),
-      },
-      include: { wallet: true, payee: true, category: true, installmentPlan: true },
-    });
+    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } }) }, include: { wallet: true, payee: true, category: true, installmentPlan: true } });
   });
 }
 
@@ -134,7 +101,7 @@ export async function deleteTransactionService(id: string) {
 
 export async function transactionFormData() {
   const [wallets, categories, payees] = await Promise.all([
-    prisma.wallet.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true }, orderBy: { name: "asc" } }),
     prisma.category.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
     prisma.payee.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
