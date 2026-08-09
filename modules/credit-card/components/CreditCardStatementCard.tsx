@@ -1,9 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import { Check, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import type { CreditCardStatementStatus } from "@prisma/client";
-import { recordStatementPaymentAction, updateStatementAction } from "../actions";
+import { deleteStatementPaymentAction, recordStatementPaymentAction, updateStatementAction, updateStatementPaymentAction } from "../actions";
 
 export type CreditCardStatementPaymentView = { id: string; amount: string; paidAt: string; note: string | null };
 export type CreditCardStatementView = {
@@ -25,11 +26,19 @@ export type CreditCardStatementView = {
 
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
 function statusLabel(status: CreditCardStatementStatus) { if (status === "PAID") return "PAID"; if (status === "PARTIALLY_PAID") return "PARTIALLY PAID"; if (status === "OVERDUE") return "OVERDUE"; return "UNPAID"; }
+function toDateInput(value: string) { return new Date(value).toISOString().slice(0, 10); }
 
 export default function CreditCardStatementCard({ statement }: { statement: CreditCardStatementView }) {
   const [pending, setPending] = useState(false);
   const [paymentPending, setPaymentPending] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState("");
+  const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
+  const [editAmount, setEditAmount] = useState("");
+  const [editPaidAt, setEditPaidAt] = useState("");
+  const [editNote, setEditNote] = useState("");
+  const [editPending, setEditPending] = useState(false);
+  const [deletePendingId, setDeletePendingId] = useState<string | null>(null);
+
   const calculatedAmount = Number(statement.calculatedAmount);
   const actualAmount = statement.actualAmount === null ? null : Number(statement.actualAmount);
   const paidAmount = Number(statement.paidAmount);
@@ -52,6 +61,37 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
     finally { setPaymentPending(false); }
   }
 
+  function startEdit(payment: CreditCardStatementPaymentView) {
+    setEditingPaymentId(payment.id);
+    setEditAmount(payment.amount);
+    setEditPaidAt(toDateInput(payment.paidAt));
+    setEditNote(payment.note ?? "");
+  }
+
+  function cancelEdit() {
+    setEditingPaymentId(null);
+    setEditAmount("");
+    setEditPaidAt("");
+    setEditNote("");
+  }
+
+  async function submitEdit(formData: FormData) {
+    setEditPending(true);
+    try { await updateStatementPaymentAction(formData); cancelEdit(); toast.success("Payment updated."); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Failed to update payment."); }
+    finally { setEditPending(false); }
+  }
+
+  async function submitDelete(formData: FormData) {
+    const paymentId = formData.get("paymentId");
+    if (typeof paymentId !== "string") return;
+    if (!window.confirm("Delete this payment? The statement total will be recalculated.")) return;
+    setDeletePendingId(paymentId);
+    try { await deleteStatementPaymentAction(formData); toast.success("Payment deleted."); }
+    catch (error) { toast.error(error instanceof Error ? error.message : "Failed to delete payment."); }
+    finally { setDeletePendingId(null); }
+  }
+
   return (
     <div className="rounded-[20px] border border-white/10 bg-[#0E151E] p-5 shadow-[0_12px_35px_rgba(0,0,0,0.16)]">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -71,7 +111,23 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
       </form>
       <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Payment History</p><p className="mt-0.5 text-xs text-slate-500">Record every payment here. Paid and Remaining update automatically.</p></div><p className="text-sm font-semibold text-slate-200">Rp{formatMoney(paidAmount)}</p></div>
-        {statement.payments.length > 0 && <div className="mt-3 space-y-2">{statement.payments.map((payment) => <div key={payment.id} className="flex items-center justify-between rounded-xl bg-[#070C12] px-3 py-2 text-xs"><span className="text-slate-400">{new Date(payment.paidAt).toLocaleDateString("id-ID")}{payment.note ? ` · ${payment.note}` : ""}</span><span className="font-semibold text-emerald-300">Rp{formatMoney(Number(payment.amount))}</span></div>)}</div>}
+        {statement.payments.length > 0 && <div className="mt-3 space-y-2">
+          {statement.payments.map((payment) => editingPaymentId === payment.id ? (
+            <form key={payment.id} action={submitEdit} className="grid gap-2 rounded-xl border border-white/10 bg-[#070C12] p-3 md:grid-cols-[1fr_1fr_1.5fr_auto_auto]">
+              <input type="hidden" name="paymentId" value={payment.id} />
+              <input name="amount" value={editAmount} onChange={(event) => setEditAmount(event.target.value)} inputMode="decimal" className="rounded-lg border border-white/10 bg-[#0E151E] px-3 py-2 text-sm text-white outline-none" aria-label="Payment amount" />
+              <input name="paidAt" type="date" value={editPaidAt} onChange={(event) => setEditPaidAt(event.target.value)} className="rounded-lg border border-white/10 bg-[#0E151E] px-3 py-2 text-sm text-white outline-none" aria-label="Payment date" />
+              <input name="note" value={editNote} onChange={(event) => setEditNote(event.target.value)} placeholder="Note (optional)" className="rounded-lg border border-white/10 bg-[#0E151E] px-3 py-2 text-sm text-white outline-none" aria-label="Payment note" />
+              <button type="submit" disabled={editPending} className="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-500 px-3 py-2 text-sm font-semibold text-[#06110b] disabled:opacity-50"><Check size={14} />{editPending ? "Saving" : "Save"}</button>
+              <button type="button" onClick={cancelEdit} disabled={editPending} className="inline-flex items-center justify-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-sm text-slate-300 hover:bg-white/5"><X size={14} />Cancel</button>
+            </form>
+          ) : (
+            <div key={payment.id} className="flex flex-wrap items-center justify-between gap-3 rounded-xl bg-[#070C12] px-3 py-2">
+              <div className="min-w-0 text-xs"><span className="text-slate-400">{new Date(payment.paidAt).toLocaleDateString("id-ID")}</span>{payment.note && <span className="text-slate-500"> · {payment.note}</span>}</div>
+              <div className="flex items-center gap-3"><span className="font-semibold text-emerald-300">Rp{formatMoney(Number(payment.amount))}</span><div className="flex items-center gap-1"><button type="button" onClick={() => startEdit(payment)} className="rounded-lg p-1.5 text-slate-500 hover:bg-white/5 hover:text-slate-200" aria-label="Edit payment"><Pencil size={14} /></button><form action={submitDelete}><input type="hidden" name="paymentId" value={payment.id} /><button type="submit" disabled={deletePendingId === payment.id} className="rounded-lg p-1.5 text-slate-500 hover:bg-red-400/10 hover:text-red-300 disabled:opacity-40" aria-label="Delete payment"><Trash2 size={14} /></button></form></div></div>
+            </div>
+          ))}
+        </div>}
         {statement.status !== "PAID" && <form action={submitPayment} className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_1.5fr_auto_auto]">
           <input type="hidden" name="statementId" value={statement.id} />
           <input name="amount" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Payment amount" inputMode="decimal" className="rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
