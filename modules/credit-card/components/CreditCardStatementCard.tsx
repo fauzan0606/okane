@@ -29,6 +29,7 @@ function statusLabel(status: CreditCardStatementStatus) { if (status === "PAID")
 export default function CreditCardStatementCard({ statement }: { statement: CreditCardStatementView }) {
   const [pending, setPending] = useState(false);
   const [paymentPending, setPaymentPending] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState("");
   const calculatedAmount = Number(statement.calculatedAmount);
   const actualAmount = statement.actualAmount === null ? null : Number(statement.actualAmount);
   const paidAmount = Number(statement.paidAmount);
@@ -46,7 +47,7 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
 
   async function submitPayment(formData: FormData) {
     setPaymentPending(true);
-    try { await recordStatementPaymentAction(formData); toast.success("Payment recorded."); }
+    try { await recordStatementPaymentAction(formData); setPaymentAmount(""); toast.success("Payment recorded."); }
     catch (error) { toast.error(error instanceof Error ? error.message : "Failed to record payment."); }
     finally { setPaymentPending(false); }
   }
@@ -63,22 +64,21 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
         <div><p className="text-xs text-slate-500">Paid</p><p className="mt-1 text-lg font-semibold text-white">Rp{formatMoney(paidAmount)}</p></div>
         <div><p className="text-xs text-slate-500">Remaining</p><p className={`mt-1 text-lg font-semibold ${remainingAmount > 0 ? "text-amber-300" : "text-emerald-300"}`}>Rp{formatMoney(remainingAmount)}</p></div>
       </div>
-      <form action={submit} className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:grid-cols-3">
+      <form action={submit} className="mt-5 grid gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-4 md:grid-cols-[1fr_auto]">
         <input type="hidden" name="id" value={statement.id} />
-        <label className="text-xs text-slate-500">Actual Amount<input name="actualAmount" defaultValue={statement.actualAmount ?? statement.calculatedAmount} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" /></label>
-        <label className="text-xs text-slate-500">Paid Amount<input name="paidAmount" defaultValue={statement.paidAmount} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" /></label>
-        <label className="text-xs text-slate-500">Paid Date<input name="paidAt" type="date" defaultValue={statement.paidAt ? new Date(statement.paidAt).toISOString().slice(0, 10) : ""} className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" /></label>
-        <div className="flex justify-end md:col-span-3"><button type="submit" disabled={pending} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-[#06110b] transition hover:bg-emerald-400 disabled:opacity-50">{pending ? "Saving…" : "Save Statement"}</button></div>
+        <label className="text-xs text-slate-500">Bank Statement Amount<input name="actualAmount" defaultValue={statement.actualAmount ?? statement.calculatedAmount} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" /></label>
+        <div className="flex items-end"><button type="submit" disabled={pending} className="w-full rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-[#06110b] transition hover:bg-emerald-400 disabled:opacity-50 md:w-auto">{pending ? "Saving…" : "Save Statement"}</button></div>
       </form>
       <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.02] p-4">
-        <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Payment History</p><p className="mt-0.5 text-xs text-slate-500">Record multiple payments against this bill.</p></div><p className="text-sm font-semibold text-slate-200">Rp{formatMoney(paidAmount)}</p></div>
+        <div className="flex items-center justify-between gap-3"><div><p className="text-sm font-semibold text-white">Payment History</p><p className="mt-0.5 text-xs text-slate-500">Record every payment here. Paid and Remaining update automatically.</p></div><p className="text-sm font-semibold text-slate-200">Rp{formatMoney(paidAmount)}</p></div>
         {statement.payments.length > 0 && <div className="mt-3 space-y-2">{statement.payments.map((payment) => <div key={payment.id} className="flex items-center justify-between rounded-xl bg-[#070C12] px-3 py-2 text-xs"><span className="text-slate-400">{new Date(payment.paidAt).toLocaleDateString("id-ID")}{payment.note ? ` · ${payment.note}` : ""}</span><span className="font-semibold text-emerald-300">Rp{formatMoney(Number(payment.amount))}</span></div>)}</div>}
-        {statement.status !== "PAID" && <form action={submitPayment} className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_1.5fr_auto]">
+        {statement.status !== "PAID" && <form action={submitPayment} className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_1.5fr_auto_auto]">
           <input type="hidden" name="statementId" value={statement.id} />
-          <input name="amount" placeholder="Payment amount" inputMode="decimal" className="rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
+          <input name="amount" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)} placeholder="Payment amount" inputMode="decimal" className="rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
           <input name="paidAt" type="date" defaultValue={new Date().toISOString().slice(0, 10)} className="rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
           <input name="note" placeholder="Note (optional)" className="rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
-          <button type="submit" disabled={paymentPending} className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-50">{paymentPending ? "Saving…" : "Add Payment"}</button>
+          <button type="button" onClick={() => setPaymentAmount(String(remainingAmount))} disabled={remainingAmount <= 0} className="rounded-xl border border-emerald-400/20 bg-emerald-400/10 px-4 py-2 text-sm font-semibold text-emerald-300 hover:bg-emerald-400/15 disabled:opacity-40">Pay Remaining</button>
+          <button type="submit" disabled={paymentPending || !paymentAmount} className="rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-[#06110b] hover:bg-emerald-400 disabled:opacity-50">{paymentPending ? "Saving…" : "Add Payment"}</button>
         </form>}
       </div>
       {difference !== null && <p className={`mt-3 text-xs ${Math.abs(difference) < 0.5 ? "text-emerald-300" : "text-amber-300"}`}>Difference: Rp{formatMoney(difference)}</p>}
