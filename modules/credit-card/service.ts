@@ -31,10 +31,7 @@ export function getDueDate(statementDate: Date, dueDay: number) {
 }
 
 export async function calculateStatementAmount(walletId: string, periodStart: Date, periodEnd: Date) {
-  const transactions = await prisma.transaction.findMany({
-    where: { walletId, transactionDate: { gt: periodStart, lte: periodEnd } },
-    select: { amount: true, type: true },
-  });
+  const transactions = await prisma.transaction.findMany({ where: { walletId, transactionDate: { gt: periodStart, lte: periodEnd } }, select: { amount: true, type: true } });
   return transactions.reduce((total, transaction) => {
     const amount = Number(transaction.amount);
     return transaction.type === TransactionType.EXPENSE ? total + amount : total - amount;
@@ -49,6 +46,13 @@ export async function getStatementForecast(walletId: string, referenceDate = new
   return { ...period, dueDate: getDueDate(period.statementDate, profile.dueDate), amount };
 }
 
+function getStatus(target: number, paidAmount: number, dueDate: Date) {
+  if (paidAmount >= target) return CreditCardStatementStatus.PAID;
+  if (new Date() > dueDate) return CreditCardStatementStatus.OVERDUE;
+  if (paidAmount > 0) return CreditCardStatementStatus.PARTIALLY_PAID;
+  return CreditCardStatementStatus.UNPAID;
+}
+
 export async function ensureStatement(walletId: string, referenceDate = new Date()) {
   const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
   if (!profile) throw new Error("Credit card profile not found.");
@@ -59,30 +63,33 @@ export async function ensureStatement(walletId: string, referenceDate = new Date
   if (existing) {
     const target = Number(existing.actualAmount ?? existing.calculatedAmount);
     const paidAmount = Number(existing.paidAmount);
-    const status = paidAmount >= target
-      ? CreditCardStatementStatus.PAID
-      : new Date() > existing.dueDate
-        ? CreditCardStatementStatus.OVERDUE
-        : paidAmount > 0
-          ? CreditCardStatementStatus.PARTIALLY_PAID
-          : CreditCardStatementStatus.UNPAID;
-    return prisma.creditCardStatement.update({ where: { id: existing.id }, data: { calculatedAmount, status } });
+    return prisma.creditCardStatement.update({ where: { id: existing.id }, data: { calculatedAmount, status: getStatus(target, paidAmount, existing.dueDate) } });
   }
-  return prisma.creditCardStatement.create({
-    data: {
-      creditCardId: profile.id,
-      periodStart,
-      periodEnd,
-      statementDate,
-      dueDate,
-      calculatedAmount,
-      status: new Date() > dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID,
-    },
-  });
+  return prisma.creditCardStatement.create({ data: { creditCardId: profile.id, periodStart, periodEnd, statementDate, dueDate, calculatedAmount, status: getStatus(calculatedAmount, 0, dueDate) } });
+}
+
+export async function createManualStatement(walletId: string, input: { periodStart: Date; periodEnd: Date; statementDate: Date; dueDate: Date; actualAmount: number }) {
+  const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
+  if (!profile) throw new Error("Credit card profile not found.");
+  const existing = await prisma.creditCardStatement.findUnique({ where: { creditCardId_periodStart_periodEnd: { creditCardId: profile.id, periodStart: input.periodStart, periodEnd: input.periodEnd } } });
+  if (existing) throw new Error("A statement already exists for this billing period.");
+  return prisma.creditCardStatement.create({ data: { creditCardId: profile.id, periodStart: input.periodStart, periodEnd: input.periodEnd, statementDate: input.statementDate, dueDate: input.dueDate, calculatedAmount: 0, actualAmount: input.actualAmount, status: getStatus(input.actualAmount, 0, input.dueDate) } });
+}
+
+export async function recordStatementPayment(statementId: string, amount: number, paidAt: Date, note?: string) {
+  const statement = await prisma.creditCardStatement.findUnique({ where: { id: statementId } });
+  if (!statement) throw new Error("Statement not found.");
+  if (amount <= 0) throw new Error("Payment amount must be greater than zero.");
+  const target = Number(statement.actualAmount ?? statement.calculatedAmount);
+  const payment = await prisma.creditCardStatementPayment.create({ data: { statementId, amount, paidAt, note: note?.trim() || null } });
+  const payments = await prisma.creditCardStatementPayment.aggregate({ where: { statementId }, _sum: { amount: true } });
+  const paidAmount = Number(payments._sum.amount ?? 0);
+  await prisma.creditCardStatement.update({ where: { id: statementId }, data: { paidAmount, paidAt: paidAmount > 0 ? paidAt : null, status: getStatus(target, paidAmount, statement.dueDate) } });
+  return payment;
 }
 
 export async function getCreditCardStatements(walletId: string) {
   const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
   if (!profile) return [];
-  return prisma.creditCardStatement.findMany({ where: { creditCardId: profile.id }, orderBy: { statementDate: "desc" }, take: 12 });
+  return prisma.creditCardStatement.findMany({ where: { creditCardId: profile.id }, include: { payments: { orderBy: { paidAt: "desc" } } }, orderBy: { statementDate: "desc" }, take: 12 });
 }
