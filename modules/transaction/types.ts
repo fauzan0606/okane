@@ -1,25 +1,24 @@
 import { TransactionType } from "@prisma/client";
 
+export interface InstallmentInput {
+  enabled: boolean;
+  tenorMonths?: number;
+  startDate?: Date;
+  feeAmount?: number;
+}
+
 export interface CreateTransactionInput {
   transactionDate: Date;
   type: TransactionType;
   amount: number;
-
   walletId: string;
-
   categoryId?: string;
-
-  /**
-   * Merchant typed by the user.
-   * It will be converted into a Payee internally.
-   */
   merchant?: string;
-
   note?: string;
+  installment?: InstallmentInput;
 }
 
-export type UpdateTransactionInput =
-  Partial<CreateTransactionInput>;
+export type UpdateTransactionInput = Partial<CreateTransactionInput>;
 
 export type TransactionActionState = {
   success: boolean;
