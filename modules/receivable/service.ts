@@ -1,4 +1,4 @@
-import { Prisma, ReceivableStatus, TransactionKind } from "@prisma/client";
+import { Prisma, ReceivableStatus, TransactionKind, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function getStatus(amount: Prisma.Decimal, received: Prisma.Decimal, dueDate: Date | null) {
@@ -29,10 +29,25 @@ export async function getReceivableSummary(currencyCode = "IDR") {
 
 export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; dueDate?: Date | null; sourceTransactionId?: string | null }) {
   if (input.amount <= 0) throw new Error("Receivable amount must be greater than zero.");
-  const wallet = await prisma.wallet.findUnique({ where: { id: input.sourceWalletId }, select: { id: true, currencyId: true } });
-  if (!wallet) throw new Error("Source wallet not found.");
-  if (wallet.currencyId !== input.currencyId) throw new Error("Source wallet currency must match the receivable currency.");
-  return prisma.receivable.create({ data: { personName: input.personName.trim(), description: input.description.trim(), amount: input.amount, currency: { connect: { id: input.currencyId } }, sourceWallet: { connect: { id: input.sourceWalletId } }, dueDate: input.dueDate ?? null, sourceTransactionId: input.sourceTransactionId ?? null } });
+  return prisma.$transaction(async (tx) => {
+    const wallet = await tx.wallet.findUnique({ where: { id: input.sourceWalletId }, select: { id: true, currencyId: true, walletType: true, currentBalance: true, balanceAsOf: true } });
+    if (!wallet) throw new Error("Source wallet not found.");
+    if (wallet.currencyId !== input.currencyId) throw new Error("Source wallet currency must match the receivable currency.");
+
+    const receivable = await tx.receivable.create({ data: { personName: input.personName.trim(), description: input.description.trim(), amount: input.amount, currency: { connect: { id: input.currencyId } }, sourceWallet: { connect: { id: input.sourceWalletId } }, dueDate: input.dueDate ?? null, sourceTransactionId: input.sourceTransactionId ?? null } });
+
+    // A direct loan from a cash/bank/e-wallet/etc. really leaves the wallet now.
+    // A credit-card receivable normally comes from an existing CC transaction, so
+    // changing currentBalance here would double-count the card's outstanding balance.
+    const shouldReduceWallet = wallet.walletType !== WalletType.CREDIT_CARD;
+    const createdAt = receivable.createdAt;
+    const effectiveDate = createdAt;
+    if (shouldReduceWallet && affectsCurrentBalance(effectiveDate, createdAt, wallet.balanceAsOf)) {
+      await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { decrement: input.amount } } });
+    }
+
+    return receivable;
+  });
 }
 
 export async function recordReceivablePayment(input: { receivableId: string; amount: number; receivedAt: Date; walletId: string; note?: string }) {
