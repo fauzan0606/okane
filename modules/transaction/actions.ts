@@ -53,12 +53,18 @@ export async function createTransactionAction(_prevState: TransactionActionState
 export async function updateTransactionAction(_prevState: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
   const id = formData.get("id");
   if (typeof id !== "string" || id.length === 0) return { success: false, message: "Missing transaction id." };
-  const parsed = transactionSchema.partial().safeParse(formValues(formData));
+
+  // The edit form submits the complete transaction form, so the full schema
+  // can be used here. Using transactionSchema.partial() is invalid because
+  // the schema contains a superRefine refinement, which Zod does not allow
+  // object.partial() to apply directly.
+  const parsed = transactionSchema.safeParse(formValues(formData));
   if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
+
   try {
     await updateTransactionService(id, {
       ...parsed.data,
-      installment: parsed.data.installmentEnabled === undefined ? undefined : {
+      installment: {
         enabled: parsed.data.installmentEnabled,
         tenorMonths: parsed.data.installmentTenor,
         startDate: parsed.data.installmentStartDate,
