@@ -66,7 +66,7 @@ export async function createReceivable(input: { personName: string; description:
         description: input.description.trim(),
         amount: input.amount,
         currency: { connect: { id: input.currencyId } },
-        sourceWalletId: input.sourceWalletId,
+        sourceWallet: { connect: { id: input.sourceWalletId } },
         dueDate: input.dueDate ?? null,
         sourceTransactionId: input.sourceTransactionId ?? null,
       },
