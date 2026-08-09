@@ -33,7 +33,7 @@ model Wallet {
   sortOrder      Int                @default(0)
   isActive       Boolean            @default(true)
   createdAt      DateTime           @default(now())
-  updatedAt      DateTime             @updatedAt
+  updatedAt      DateTime            @updatedAt
   creditCard     CreditCardProfile?
   currency       Currency           @relation(fields: [currencyId], references: [id])
   transactions   Transaction[]
@@ -114,7 +114,7 @@ model Payee {
   sortOrder Int @default(0)
   isActive Boolean @default(true)
   createdAt DateTime @default(now())
-  updatedAt @updatedAt
+  updatedAt DateTime @updatedAt
   transactions Transaction[]
 }
 
