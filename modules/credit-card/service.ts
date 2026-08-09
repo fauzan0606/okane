@@ -123,6 +123,13 @@ export async function deleteStatementPayment(paymentId: string) {
   await refreshStatementPaymentTotals(payment.statementId);
 }
 
+export async function updateCreditCardRewardPoint(walletId: string, rewardPoint: number) {
+  if (rewardPoint < 0) throw new Error("Reward points cannot be negative.");
+  const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
+  if (!profile) throw new Error("Credit card profile not found.");
+  return prisma.creditCardProfile.update({ where: { walletId }, data: { rewardPoint } });
+}
+
 export async function getCreditCardStatements(walletId: string) {
   const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
   if (!profile) return [];
