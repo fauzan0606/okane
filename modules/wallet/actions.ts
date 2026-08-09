@@ -20,6 +20,7 @@ function fields(formData: FormData) {
     creditLimit: formData.get("creditLimit"),
     billingDate: formData.get("billingDate"),
     dueDate: formData.get("dueDate"),
+    rewardPoint: formData.get("rewardPoint"),
     bank: formData.get("bank"),
     note: formData.get("note"),
   };
