@@ -53,7 +53,7 @@ export async function getReceivableSummary(currencyCode = "IDR") {
   return items.reduce((sum, item) => sum + Math.max(Number(item.amount) - Number(item.receivedAmount), 0), 0);
 }
 
-export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; dueDate?: Date | null; sourceTransactionId?: string | null }) {
+export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; loanDate?: Date; dueDate?: Date | null; sourceTransactionId?: string | null }) {
   if (input.amount <= 0) throw new Error("Receivable amount must be greater than zero.");
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { id: input.sourceWalletId }, select: { id: true, currencyId: true, walletType: true, currentBalance: true, balanceAsOf: true } });
@@ -67,6 +67,7 @@ export async function createReceivable(input: { personName: string; description:
         amount: input.amount,
         currency: { connect: { id: input.currencyId } },
         sourceWallet: { connect: { id: input.sourceWalletId } },
+        loanDate: input.loanDate ?? new Date(),
         dueDate: input.dueDate ?? null,
         sourceTransactionId: input.sourceTransactionId ?? null,
       },
@@ -74,7 +75,7 @@ export async function createReceivable(input: { personName: string; description:
 
     const shouldReduceWallet = wallet.walletType !== WalletType.CREDIT_CARD;
     const createdAt = receivable.createdAt;
-    const effectiveDate = createdAt;
+    const effectiveDate = input.loanDate ?? createdAt;
     if (shouldReduceWallet && affectsCurrentBalance(effectiveDate, createdAt, wallet.balanceAsOf)) {
       await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { decrement: input.amount } } });
     }
