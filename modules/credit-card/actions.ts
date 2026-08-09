@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { CreditCardStatementStatus } from "@prisma/client";
-import { createManualStatement, deleteStatementPayment, recordStatementPayment, updateStatementPayment } from "./service";
+import { createManualStatement, deleteStatementPayment, recordStatementPayment, updateCreditCardRewardPoint, updateStatementPayment } from "./service";
 
 function parseAmount(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value.trim())) return null;
@@ -70,4 +70,13 @@ export async function deleteStatementPaymentAction(formData: FormData) {
   await deleteStatementPayment(paymentId);
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
+}
+
+export async function updateCreditCardRewardPointAction(formData: FormData) {
+  const walletId = formData.get("walletId");
+  const rewardPoint = parseAmount(formData.get("rewardPoint"));
+  if (typeof walletId !== "string" || !walletId || rewardPoint === null) throw new Error("Please enter a valid reward point balance.");
+  await updateCreditCardRewardPoint(walletId, rewardPoint);
+  revalidatePath("/credit-card");
+  revalidatePath("/");
 }
