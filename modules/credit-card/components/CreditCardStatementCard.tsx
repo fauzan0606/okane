@@ -18,7 +18,12 @@ function statusLabel(status: CreditCardStatement["status"]) {
 
 export default function CreditCardStatementCard({ statement }: { statement: CreditCardStatement }) {
   const [pending, setPending] = useState(false);
-  const targetAmount = Number(statement.actualAmount ?? statement.calculatedAmount);
+  const calculatedAmount = Number(statement.calculatedAmount);
+  const actualAmount = statement.actualAmount === null ? null : Number(statement.actualAmount);
+  const paidAmount = Number(statement.paidAmount);
+  const targetAmount = actualAmount ?? calculatedAmount;
+  const remainingAmount = Math.max(targetAmount - paidAmount, 0);
+  const difference = actualAmount === null ? null : actualAmount - calculatedAmount;
   const statusClass = statement.status === "PAID"
     ? "border-emerald-400/20 bg-emerald-400/10 text-emerald-300"
     : statement.status === "OVERDUE"
@@ -55,18 +60,24 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
         </span>
       </div>
 
-      <div className="mt-5 grid gap-4 md:grid-cols-3">
+      <div className="mt-5 grid gap-4 md:grid-cols-4">
         <div>
           <p className="text-xs text-slate-500">Calculated</p>
-          <p className="mt-1 text-lg font-semibold text-white">Rp{formatMoney(Number(statement.calculatedAmount))}</p>
+          <p className="mt-1 text-lg font-semibold text-white">Rp{formatMoney(calculatedAmount)}</p>
         </div>
         <div>
           <p className="text-xs text-slate-500">Bank Statement</p>
-          <p className="mt-1 text-lg font-semibold text-white">{statement.actualAmount === null ? "—" : `Rp${formatMoney(Number(statement.actualAmount))}`}</p>
+          <p className="mt-1 text-lg font-semibold text-white">{actualAmount === null ? "—" : `Rp${formatMoney(actualAmount)}`}</p>
         </div>
         <div>
-          <p className="text-xs text-slate-500">Due</p>
-          <p className="mt-1 text-lg font-semibold text-white">{new Date(statement.dueDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" })}</p>
+          <p className="text-xs text-slate-500">Paid</p>
+          <p className="mt-1 text-lg font-semibold text-white">Rp{formatMoney(paidAmount)}</p>
+        </div>
+        <div>
+          <p className="text-xs text-slate-500">Remaining</p>
+          <p className={`mt-1 text-lg font-semibold ${remainingAmount > 0 ? "text-amber-300" : "text-emerald-300"}`}>
+            Rp{formatMoney(remainingAmount)}
+          </p>
         </div>
       </div>
 
@@ -91,9 +102,9 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
         </div>
       </form>
 
-      {statement.actualAmount !== null && (
-        <p className={`mt-3 text-xs ${Math.abs(Number(statement.actualAmount) - Number(statement.calculatedAmount)) < 0.5 ? "text-emerald-300" : "text-amber-300"}`}>
-          Difference: Rp{formatMoney(Number(statement.actualAmount) - Number(statement.calculatedAmount))}
+      {difference !== null && (
+        <p className={`mt-3 text-xs ${Math.abs(difference) < 0.5 ? "text-emerald-300" : "text-amber-300"}`}>
+          Difference: Rp{formatMoney(difference)}
         </p>
       )}
 
@@ -103,7 +114,7 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
       {statement.status !== "PAID" && new Date() > statement.dueDate && (
         <p className="mt-2 text-sm font-medium text-red-300">⚠ This statement is overdue.</p>
       )}
-      {statement.paidAmount > statement.calculatedAmount && targetAmount < Number(statement.paidAmount) && (
+      {paidAmount > targetAmount && (
         <p className="mt-2 text-xs text-slate-500">Payment exceeds the current statement amount.</p>
       )}
     </div>
