@@ -13,12 +13,24 @@ export default function TransactionCard({ transaction, wallets, categories, paye
   const plan = transaction.installmentPlan;
   const currentInstallment = plan ? getInstallmentNumber(new Date(plan.startDate), new Date(), plan.tenorMonths) : 0;
   const remainingInstallments = plan ? Math.max(plan.tenorMonths - currentInstallment, 0) : 0;
+  const transactionForClient: TransactionWithRelations = {
+    ...transaction,
+    transactionDate: String(transaction.transactionDate),
+    amount: String(transaction.amount),
+    installmentPlan: plan ? {
+      ...plan,
+      totalAmount: String(plan.totalAmount),
+      feeAmount: String(plan.feeAmount),
+      installmentAmount: String(plan.installmentAmount),
+      startDate: String(plan.startDate),
+    } : null,
+  };
 
   return (
     <div className="rounded-[20px] border border-white/10 bg-[#0E151E] p-5 shadow-[0_12px_35px_rgba(0,0,0,0.16)] transition hover:border-white/15 hover:bg-[#111923]">
       <div className="flex items-start justify-between">
         <div><h3 className="font-semibold text-white">{transaction.category?.name ?? "Uncategorized"}</h3><p className="mt-1 text-sm text-slate-500">{formatTransactionType(transaction.type)}</p></div>
-        <TransactionCardActions transaction={transaction} wallets={wallets} categories={categories} payees={payees} />
+        <TransactionCardActions transaction={transactionForClient} wallets={wallets} categories={categories} payees={payees} />
       </div>
       <div className="mt-6">
         <p className={`text-2xl font-bold ${amountColor}`}>{transaction.wallet.currency.code} {amount.toLocaleString("id-ID")}</p>
