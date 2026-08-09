@@ -33,7 +33,7 @@ model Wallet {
   sortOrder      Int                @default(0)
   isActive       Boolean            @default(true)
   createdAt      DateTime           @default(now())
-  updatedAt      DateTime            @updatedAt
+  updatedAt      DateTime           @updatedAt
   creditCard     CreditCardProfile?
   currency       Currency           @relation(fields: [currencyId], references: [id])
   transactions   Transaction[]
@@ -73,8 +73,8 @@ model CreditCardStatement {
   paymentTransactionId String?
   status               CreditCardStatementStatus @default(UNPAID)
   note                 String?
-  createdAt             DateTime                   @default(now())
-  updatedAt             DateTime                   @updatedAt
+  createdAt            DateTime                   @default(now())
+  updatedAt            DateTime                   @updatedAt
   creditCard            CreditCardProfile          @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
   payments              CreditCardStatementPayment[]
 
@@ -161,6 +161,7 @@ model Receivable {
   receivedAmount      Decimal            @default(0)
   currencyId          String
   sourceWalletId      String?
+  loanDate            DateTime           @default(now())
   dueDate             DateTime?
   status              ReceivableStatus   @default(OUTSTANDING)
   sourceTransactionId String?
