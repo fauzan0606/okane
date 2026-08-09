@@ -19,13 +19,12 @@ function parseDate(value: FormDataEntryValue | null) {
 export async function updateStatementAction(formData: FormData) {
   const id = formData.get("id");
   const actualAmount = parseAmount(formData.get("actualAmount"));
-  const paidAmount = parseAmount(formData.get("paidAmount"));
-  const paidAtValue = formData.get("paidAt");
-  if (typeof id !== "string" || !id || actualAmount === null || paidAmount === null) throw new Error("Invalid statement data.");
+  if (typeof id !== "string" || !id || actualAmount === null) throw new Error("Invalid statement data.");
   const statement = await prisma.creditCardStatement.findUnique({ where: { id } });
   if (!statement) throw new Error("Statement not found.");
+  const paidAmount = Number(statement.paidAmount);
   const status = paidAmount >= actualAmount ? CreditCardStatementStatus.PAID : paidAmount > 0 ? CreditCardStatementStatus.PARTIALLY_PAID : new Date() > statement.dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID;
-  await prisma.creditCardStatement.update({ where: { id }, data: { actualAmount, paidAmount, paidAt: paidAmount > 0 && typeof paidAtValue === "string" && paidAtValue ? parseDate(paidAtValue) : null, status } });
+  await prisma.creditCardStatement.update({ where: { id }, data: { actualAmount, status } });
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
 }
