@@ -50,7 +50,16 @@ export async function createTransactionService(input: CreateTransactionInput) {
     if (!wallet) throw new Error("Wallet not found.");
     const plan = await buildInstallmentPlan(tx, input.walletId, input);
     const transaction = await tx.transaction.create({
-      data: { transactionDate: input.transactionDate, type: input.type, amount: input.amount, note: input.note ?? null, wallet: { connect: { id: input.walletId } }, ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } }), ...(plan && { installmentPlan: { create: plan } }) },
+      data: {
+        transactionDate: input.transactionDate,
+        type: input.type,
+        amount: input.amount,
+        note: input.note ?? null,
+        wallet: { connect: { id: input.walletId } },
+        ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
+        ...(payee && { payee: { connect: { id: payee.id } } }),
+        ...(plan && { installmentPlan: { create: plan } }),
+      },
       include: { wallet: true, payee: true, category: true, installmentPlan: true },
     });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
@@ -68,6 +77,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     if (!newWallet) throw new Error("Wallet not found.");
     const oldTransaction: BalanceTransaction = { transactionDate: existing.transactionDate, type: existing.type, amount: existing.amount, createdAt: existing.createdAt };
     const newTransaction: BalanceTransaction = { transactionDate: input.transactionDate ?? existing.transactionDate, type: input.type ?? existing.type, amount: input.amount !== undefined ? new Prisma.Decimal(input.amount) : existing.amount, createdAt: existing.createdAt };
+
     if (input.installment?.enabled) {
       if (newTransaction.type !== TransactionType.EXPENSE) throw new Error("Installments are available for expense transactions only.");
       const tenor = input.installment.tenorMonths ?? existing.installmentPlan?.tenorMonths;
@@ -83,9 +93,23 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     } else if (input.installment?.enabled === false && existing.installmentPlan) {
       await tx.installmentPlan.delete({ where: { transactionId: id } });
     }
+
     if (affectsCurrentBalance(oldTransaction, existing.wallet)) await applyBalanceDelta(tx, existing.wallet.id, balanceDelta(oldTransaction).negated());
     if (affectsCurrentBalance(newTransaction, newWallet)) await applyBalanceDelta(tx, newWallet.id, balanceDelta(newTransaction));
-    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } }) }, include: { wallet: true, payee: true, category: true, installmentPlan: true } });
+
+    return tx.transaction.update({
+      where: { id },
+      data: {
+        ...(input.transactionDate && { transactionDate: input.transactionDate }),
+        ...(input.type && { type: input.type }),
+        ...(input.amount !== undefined && { amount: input.amount }),
+        ...(input.note !== undefined && { note: input.note }),
+        ...(input.walletId && { wallet: { connect: { id: input.walletId } } }),
+        ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
+        ...(payee && { payee: { connect: { id: payee.id } } }),
+      },
+      include: { wallet: true, payee: true, category: true, installmentPlan: true },
+    });
   });
 }
 
