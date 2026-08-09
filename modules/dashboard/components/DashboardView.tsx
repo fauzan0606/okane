@@ -1,0 +1,117 @@
+import Image from "next/image";
+import { ArrowDownRight, ArrowUpRight, Bell, CalendarDays, ChevronDown, CreditCard, Landmark, MoreHorizontal, ReceiptText, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import type { ReactNode } from "react";
+import type { DashboardData, DashboardPeriod } from "../types";
+import CreditCardSummary from "./CreditCardSummary";
+
+const periods: Array<{ value: DashboardPeriod; label: string }> = [
+  { value: "THIS_MONTH", label: "This Month" },
+  { value: "LAST_MONTH", label: "Last Month" },
+  { value: "THIS_YEAR", label: "This Year" },
+];
+const categoryColors = ["#F5A623", "#43B96D", "#28A9C5", "#8B62D9", "#A8AFB8", "#F97316"];
+
+function formatCurrency(value: number, currencyCode: string) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: currencyCode, maximumFractionDigits: currencyCode === "IDR" || currencyCode === "JPY" || currencyCode === "KRW" ? 0 : 2 }).format(value);
+}
+function formatCompactCurrency(value: number, currencyCode: string) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: currencyCode, notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+function formatDate(value: Date) { return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(value); }
+function periodHref(period: DashboardPeriod, currencyCode: string) { return `/?period=${period}&currency=${encodeURIComponent(currencyCode)}`; }
+
+export default function DashboardView({ data }: { data: DashboardData }) {
+  const { summary } = data;
+  const maxCashflow = Math.max(...data.cashflow.flatMap((point) => [point.income, point.expense]), 1);
+  const donutSegments = data.spendingByCategory.slice(0, 6).reduce<string[]>((segments, category, index) => {
+    const previous = data.spendingByCategory.slice(0, index).reduce((sum, item) => sum + item.percentage, 0);
+    segments.push(`${categoryColors[index % categoryColors.length]} ${previous}% ${previous + category.percentage}%`);
+    return segments;
+  }, []);
+  const donutStyle = { background: donutSegments.length > 0 ? `conic-gradient(${donutSegments.join(", ")})` : "conic-gradient(#273244 0 100%)" };
+
+  return (
+    <div className="min-h-screen bg-[#070c12] text-slate-100">
+      <div className="mx-auto max-w-[1480px] px-5 py-6 md:px-8 md:py-8 xl:px-10">
+        <header className="mb-6 flex items-start justify-between gap-6">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Personal Financial Operating System</p>
+            <h1 className="mt-2 text-[30px] font-semibold tracking-[-0.035em] text-white md:text-[34px]">Good morning, Fauzan! <span aria-hidden>👋</span></h1>
+            <p className="mt-1 text-sm text-slate-400">Let&apos;s make today a great financial day.</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <button type="button" aria-label="Notifications" className="relative rounded-xl p-2.5 text-slate-300 transition hover:bg-white/5 hover:text-white"><Bell size={20} /><span className="absolute right-2 top-2 h-1.5 w-1.5 rounded-full bg-red-500" /></button>
+            <div className="relative group">
+              <a href={periodHref(data.period, summary.currencyCode)} className="flex items-center gap-2 rounded-xl border border-white/10 bg-[#0d141e] px-3.5 py-2.5 text-xs font-semibold text-slate-200 shadow-sm hover:border-white/20"><CalendarDays size={15} className="text-slate-400" />{data.periodLabel}<ChevronDown size={14} className="text-slate-500" /></a>
+              <div className="absolute right-0 z-30 mt-2 hidden w-36 overflow-hidden rounded-xl border border-white/10 bg-[#111923] p-1 shadow-2xl group-hover:block">{periods.map((period) => <a key={period.value} href={periodHref(period.value, summary.currencyCode)} className="block rounded-lg px-3 py-2 text-xs text-slate-300 hover:bg-white/5 hover:text-white">{period.label}</a>)}</div>
+            </div>
+          </div>
+        </header>
+
+        <section className="relative mb-5 min-h-[185px] overflow-hidden rounded-[22px] border border-white/10 bg-gradient-to-r from-[#101820] via-[#0d151c] to-[#101914] px-6 py-6 shadow-[0_20px_50px_rgba(0,0,0,0.25)] md:px-8 md:py-7">
+          <div className="absolute -right-16 -top-20 h-56 w-56 rounded-full bg-emerald-500/10 blur-3xl" /><div className="absolute bottom-0 right-24 h-32 w-72 rounded-full bg-emerald-400/10 blur-3xl" />
+          <div className="relative z-10 max-w-[62%]">
+            <div className="flex items-center gap-2 text-sm font-medium text-slate-200"><span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/5 text-emerald-400">◈</span>Total Balance</div>
+            <p className="mt-2 text-[34px] font-semibold tracking-[-0.04em] text-white md:text-[42px]">{formatCurrency(summary.netWorth, summary.currencyCode)}</p>
+            <p className="mt-0.5 text-sm text-slate-400">Across your {data.wallets.length} active wallet{data.wallets.length === 1 ? "" : "s"}</p>
+            <div className="mt-5 flex max-w-[390px] items-center gap-3"><div className="h-2 flex-1 overflow-hidden rounded-full bg-white/10"><div className="h-full w-[65%] rounded-full bg-emerald-500" /></div><span className="text-xs font-semibold text-emerald-400">65%</span></div>
+            <p className="mt-1.5 text-[11px] text-slate-500">Current balance position</p>
+          </div>
+          <div className="absolute bottom-0 right-4 hidden h-[185px] w-[230px] md:block lg:right-8"><Image src="/okane-mascot.svg" alt="OKANE mascot" fill className="object-contain object-bottom drop-shadow-[0_12px_20px_rgba(34,197,94,0.16)]" priority /></div>
+        </section>
+
+        <section className="mb-5 grid gap-3.5 md:grid-cols-2 xl:grid-cols-4">
+          <SummaryCard icon={<TrendingUp size={18} />} tone="green" title="Total Income" value={formatCurrency(summary.income, summary.currencyCode)} detail={data.periodLabel} />
+          <SummaryCard icon={<TrendingDown size={18} />} tone="orange" title="Total Expense" value={formatCurrency(summary.expense, summary.currencyCode)} detail={data.periodLabel} />
+          <SummaryCard icon={<ArrowUpRight size={18} />} tone="blue" title="Net Cashflow" value={formatCurrency(summary.netCashFlow, summary.currencyCode)} detail={summary.netCashFlow >= 0 ? "Positive cash flow" : "Negative cash flow"} />
+          <SummaryCard icon={<WalletCards size={18} />} tone="purple" title="Total Assets" value={formatCurrency(summary.netWorth, summary.currencyCode)} detail={`${data.wallets.length} active wallet${data.wallets.length === 1 ? "" : "s"}`} />
+        </section>
+
+        <CreditCardSummary />
+
+        <section className="mb-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
+          <DarkPanel>
+            <PanelHeading eyebrow="Money movement" title="Cashflow Overview"><div className="flex items-center gap-4 text-[11px] text-slate-400"><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-emerald-500" />Income</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-orange-400" />Expense</span></div></PanelHeading>
+            <div className="mt-6 flex h-[220px] gap-3"><div className="flex flex-col justify-between py-1 text-[9px] text-slate-500"><span>{formatCompactCurrency(maxCashflow, summary.currencyCode)}</span><span>{formatCompactCurrency(maxCashflow * 0.66, summary.currencyCode)}</span><span>{formatCompactCurrency(maxCashflow * 0.33, summary.currencyCode)}</span><span>0</span></div><div className="relative flex flex-1 items-end justify-around gap-1.5 border-b border-white/10 pt-1"><div className="pointer-events-none absolute inset-0 flex flex-col justify-between"><span className="border-t border-dashed border-white/5" /><span className="border-t border-dashed border-white/5" /><span className="border-t border-dashed border-white/5" /><span className="border-t border-dashed border-white/5" /></div>{data.cashflow.length === 0 ? <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">No cashflow data yet.</div> : data.cashflow.map((point) => <div key={point.label} className="relative z-10 flex h-full flex-1 items-end justify-center gap-1"><div className="w-2.5 rounded-t-md bg-emerald-500 transition hover:bg-emerald-400" style={{ height: `${Math.max((point.income / maxCashflow) * 88, point.income > 0 ? 4 : 0)}%` }} title={`Income ${formatCurrency(point.income, summary.currencyCode)}`} /><div className="w-2.5 rounded-t-md bg-orange-400 transition hover:bg-orange-300" style={{ height: `${Math.max((point.expense / maxCashflow) * 88, point.expense > 0 ? 4 : 0)}%` }} title={`Expense ${formatCurrency(point.expense, summary.currencyCode)}`} /><span className="absolute -bottom-5 whitespace-nowrap text-[9px] text-slate-500">{point.label}</span></div>)}</div></div>
+          </DarkPanel>
+
+          <DarkPanel>
+            <PanelHeading eyebrow="Where it goes" title="Spending by Category"><MoreHorizontal size={18} className="text-slate-500" /></PanelHeading>
+            <div className="mt-5 flex items-center gap-5"><div className="relative h-[142px] w-[142px] shrink-0 rounded-full" style={donutStyle}><div className="absolute inset-[27%] flex flex-col items-center justify-center rounded-full bg-[#111923] text-center shadow-inner shadow-black/30"><span className="text-[13px] font-bold text-white">{formatCompactCurrency(summary.expense, summary.currencyCode)}</span><span className="mt-0.5 text-[9px] text-slate-500">Total Expense</span></div></div><div className="min-w-0 flex-1 space-y-3">{data.spendingByCategory.slice(0, 5).map((category, index) => <div key={category.id} className="flex items-center justify-between gap-3 text-[11px]"><span className="flex min-w-0 items-center gap-2 text-slate-300"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} /><span className="truncate">{category.name}</span></span><span className="shrink-0 font-semibold text-slate-200">{category.percentage.toFixed(0)}%</span></div>)}{data.spendingByCategory.length === 0 && <p className="text-sm text-slate-500">No expenses yet.</p>}</div></div>
+            {data.spendingByCategory.length > 0 && <a href="/transactions" className="mt-5 block text-right text-[11px] font-semibold text-emerald-400 hover:text-emerald-300">View transactions →</a>}
+          </DarkPanel>
+        </section>
+
+        <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]">
+          <DarkPanel><PanelHeading eyebrow="Accounts" title="Your Wallets"><a href="/wallet" className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300">See all →</a></PanelHeading><div className="mt-4 divide-y divide-white/5">{data.wallets.length === 0 ? <EmptyState message="No active wallets." /> : data.wallets.slice(0, 6).map((wallet, index) => <div key={wallet.id} className="flex items-center justify-between gap-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${index % 3 === 0 ? "bg-blue-500/15 text-blue-400" : index % 3 === 1 ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>{wallet.walletType.toLowerCase().includes("bank") ? <Landmark size={17} /> : <CreditCard size={17} />}</div><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{wallet.name}</p><p className="truncate text-xs capitalize text-slate-500">{wallet.walletType.replaceAll("_", " ").toLowerCase()}</p></div></div><p className="shrink-0 text-sm font-semibold text-slate-200">{formatCurrency(wallet.balance, wallet.currencyCode)} <span className="ml-2 text-slate-600">›</span></p></div>)}</div></DarkPanel>
+
+          <DarkPanel><PanelHeading eyebrow="Latest activity" title="Recent Transactions"><a href="/transactions" className="text-[11px] font-semibold text-emerald-400 hover:text-emerald-300">See all →</a></PanelHeading><div className="mt-4 divide-y divide-white/5">{data.recentTransactions.length === 0 ? <EmptyState message="No transactions yet." /> : data.recentTransactions.slice(0, 7).map((transaction) => <div key={transaction.id} className="flex items-center justify-between gap-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${transaction.type === "INCOME" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>{transaction.type === "INCOME" ? <ArrowDownRight size={17} /> : <ReceiptText size={17} />}</div><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{transaction.payeeName}</p><p className="truncate text-xs text-slate-500">{transaction.categoryName} · {transaction.walletName}</p></div></div><div className="shrink-0 text-right"><p className={`text-sm font-semibold ${transaction.type === "INCOME" ? "text-emerald-400" : "text-red-400"}`}>{transaction.type === "INCOME" ? "+" : "−"}{formatCurrency(transaction.amount, summary.currencyCode)}</p><p className="text-[10px] text-slate-600">{formatDate(transaction.transactionDate)}</p></div></div>)}</div></DarkPanel>
+        </section>
+
+        <section className="mt-5 flex flex-col gap-4 rounded-[20px] border border-white/10 bg-[#0d151e] px-6 py-4 md:flex-row md:items-center md:justify-between"><div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-500/10"><Sparkles size={18} className="text-emerald-400" /></div><div><p className="text-sm font-semibold text-slate-200">Take control anywhere</p><p className="text-xs text-slate-500">Add a transaction instantly with OKANE Smart Transaction.</p></div></div><a href="/transactions/smart" className="inline-flex items-center justify-center rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-[#07110b] shadow-[0_8px_25px_rgba(34,197,94,0.18)] transition hover:bg-emerald-400">Add with Smart Transaction →</a></section>
+      </div>
+    </div>
+  );
+}
+
+function SummaryCard({ icon, tone, title, value, detail }: { icon: ReactNode; tone: "green" | "orange" | "blue" | "purple"; title: string; value: string; detail: string }) {
+  const toneClasses = {
+    green: "bg-emerald-500/10 text-emerald-400",
+    orange: "bg-orange-500/10 text-orange-400",
+    blue: "bg-blue-500/10 text-blue-400",
+    purple: "bg-purple-500/10 text-purple-400",
+  };
+  return <div className="rounded-[18px] border border-white/10 bg-[#0d151e] p-4 shadow-[0_10px_30px_rgba(0,0,0,0.12)]"><div className="flex items-center gap-2"><span className={`flex h-8 w-8 items-center justify-center rounded-lg ${toneClasses[tone]}`}>{icon}</span><span className="text-xs font-medium text-slate-400">{title}</span></div><p className="mt-3 text-lg font-bold text-white">{value}</p><p className="mt-1 text-[10px] text-slate-500">{detail}</p></div>;
+}
+
+function DarkPanel({ children }: { children: ReactNode }) {
+  return <div className="rounded-[20px] border border-white/10 bg-[#0d151e] p-5 shadow-[0_12px_35px_rgba(0,0,0,0.14)]">{children}</div>;
+}
+
+function PanelHeading({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) {
+  return <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">{eyebrow}</p><h2 className="mt-1 text-base font-semibold text-white">{title}</h2></div>{children}</div>;
+}
+
+function EmptyState({ message }: { message: string }) {
+  return <div className="py-10 text-center text-sm text-slate-500">{message}</div>;
+}
