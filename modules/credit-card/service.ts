@@ -53,6 +53,29 @@ function getStatus(target: number, paidAmount: number, dueDate: Date) {
   return CreditCardStatementStatus.UNPAID;
 }
 
+async function refreshStatementPaymentTotals(statementId: string) {
+  const statement = await prisma.creditCardStatement.findUnique({ where: { id: statementId } });
+  if (!statement) throw new Error("Statement not found.");
+
+  const [payments, latestPayment] = await Promise.all([
+    prisma.creditCardStatementPayment.aggregate({ where: { statementId }, _sum: { amount: true } }),
+    prisma.creditCardStatementPayment.findFirst({ where: { statementId }, orderBy: [{ paidAt: "desc" }, { createdAt: "desc" }] }),
+  ]);
+  const paidAmount = Number(payments._sum.amount ?? 0);
+  const target = Number(statement.actualAmount ?? statement.calculatedAmount);
+
+  await prisma.creditCardStatement.update({
+    where: { id: statementId },
+    data: {
+      paidAmount,
+      paidAt: latestPayment?.paidAt ?? null,
+      status: getStatus(target, paidAmount, statement.dueDate),
+    },
+  });
+
+  return paidAmount;
+}
+
 export async function ensureStatement(walletId: string, referenceDate = new Date()) {
   const profile = await prisma.creditCardProfile.findUnique({ where: { walletId } });
   if (!profile) throw new Error("Credit card profile not found.");
@@ -80,12 +103,24 @@ export async function recordStatementPayment(statementId: string, amount: number
   const statement = await prisma.creditCardStatement.findUnique({ where: { id: statementId } });
   if (!statement) throw new Error("Statement not found.");
   if (amount <= 0) throw new Error("Payment amount must be greater than zero.");
-  const target = Number(statement.actualAmount ?? statement.calculatedAmount);
   const payment = await prisma.creditCardStatementPayment.create({ data: { statementId, amount, paidAt, note: note?.trim() || null } });
-  const payments = await prisma.creditCardStatementPayment.aggregate({ where: { statementId }, _sum: { amount: true } });
-  const paidAmount = Number(payments._sum.amount ?? 0);
-  await prisma.creditCardStatement.update({ where: { id: statementId }, data: { paidAmount, paidAt: paidAmount > 0 ? paidAt : null, status: getStatus(target, paidAmount, statement.dueDate) } });
+  await refreshStatementPaymentTotals(statementId);
   return payment;
+}
+
+export async function updateStatementPayment(paymentId: string, amount: number, paidAt: Date, note?: string) {
+  if (amount <= 0) throw new Error("Payment amount must be greater than zero.");
+  const payment = await prisma.creditCardStatementPayment.findUnique({ where: { id: paymentId } });
+  if (!payment) throw new Error("Payment not found.");
+  await prisma.creditCardStatementPayment.update({ where: { id: paymentId }, data: { amount, paidAt, note: note?.trim() || null } });
+  await refreshStatementPaymentTotals(payment.statementId);
+}
+
+export async function deleteStatementPayment(paymentId: string) {
+  const payment = await prisma.creditCardStatementPayment.findUnique({ where: { id: paymentId } });
+  if (!payment) throw new Error("Payment not found.");
+  await prisma.creditCardStatementPayment.delete({ where: { id: paymentId } });
+  await refreshStatementPaymentTotals(payment.statementId);
 }
 
 export async function getCreditCardStatements(walletId: string) {
