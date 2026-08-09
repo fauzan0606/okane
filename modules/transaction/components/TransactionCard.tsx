@@ -11,7 +11,7 @@ export default function TransactionCard({ transaction, wallets, categories, paye
   const amount = Number(transaction.amount);
   const amountColor = transaction.type === "EXPENSE" ? "text-red-400" : "text-emerald-400";
   const plan = transaction.installmentPlan;
-  const currentInstallment = plan ? getInstallmentNumber(plan.startDate, new Date(), plan.tenorMonths) : 0;
+  const currentInstallment = plan ? getInstallmentNumber(new Date(plan.startDate), new Date(), plan.tenorMonths) : 0;
   const remainingInstallments = plan ? Math.max(plan.tenorMonths - currentInstallment, 0) : 0;
 
   return (
