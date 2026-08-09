@@ -30,7 +30,12 @@ async function getRequiredCurrency(code: string) {
 function cardProfile(input: Partial<CreateWalletInput>) {
   if (input.walletType !== WalletType.CREDIT_CARD) return null;
   if (!input.creditLimit || input.billingDate === undefined || input.dueDate === undefined) throw new Error("Credit card settings are incomplete.");
-  return { creditLimit: input.creditLimit, billingDate: input.billingDate, dueDate: input.dueDate };
+  return {
+    creditLimit: input.creditLimit,
+    billingDate: input.billingDate,
+    dueDate: input.dueDate,
+    rewardPoint: input.rewardPoint ?? "0",
+  };
 }
 
 export async function createWalletService(input: CreateWalletInput) {
@@ -73,11 +78,11 @@ export async function updateWalletService(id: string, input: Partial<CreateWalle
     await prisma.creditCardProfile.upsert({
       where: { walletId: id },
       update: profile ?? {},
-      create: { walletId: id, ...(profile ?? { creditLimit: 0, billingDate: 1, dueDate: 1 }) },
+      create: { walletId: id, ...(profile ?? { creditLimit: 0, billingDate: 1, dueDate: 1, rewardPoint: 0 }) },
     });
   } else if (input.walletType !== undefined && String(input.walletType) !== "CREDIT_CARD") {
     await prisma.creditCardProfile.deleteMany({ where: { walletId: id } });
-  } else if (existing.walletType === WalletType.CREDIT_CARD && (input.creditLimit !== undefined || input.billingDate !== undefined || input.dueDate !== undefined)) {
+  } else if (existing.walletType === WalletType.CREDIT_CARD && (input.creditLimit !== undefined || input.billingDate !== undefined || input.dueDate !== undefined || input.rewardPoint !== undefined)) {
     const current = existing.creditCard;
     if (!current) throw new Error("Credit card profile not found.");
     await prisma.creditCardProfile.update({
@@ -86,6 +91,7 @@ export async function updateWalletService(id: string, input: Partial<CreateWalle
         creditLimit: input.creditLimit ?? current.creditLimit,
         billingDate: input.billingDate ?? current.billingDate,
         dueDate: input.dueDate ?? current.dueDate,
+        rewardPoint: input.rewardPoint ?? current.rewardPoint,
       },
     });
   }
