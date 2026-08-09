@@ -18,7 +18,7 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
 }
 
 export async function getReceivables() {
-  const receivables = await prisma.receivable.findMany({ include: { currency: { select: { code: true, symbol: true } }, payments: { orderBy: { receivedAt: "desc" }, include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } } } }, orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }] });
+  const receivables = await prisma.receivable.findMany({ include: { currency: { select: { code: true, symbol: true } }, sourceWallet: { select: { id: true, name: true, walletType: true } }, payments: { orderBy: { receivedAt: "desc" }, include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } } } }, orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }] });
   return receivables.map((item) => ({ ...item, amount: Number(item.amount), receivedAmount: Number(item.receivedAmount), remaining: Math.max(Number(item.amount) - Number(item.receivedAmount), 0), payments: item.payments.map((payment) => ({ ...payment, amount: Number(payment.amount) })) }));
 }
 
@@ -27,9 +27,12 @@ export async function getReceivableSummary(currencyCode = "IDR") {
   return items.reduce((sum, item) => sum + Math.max(Number(item.amount) - Number(item.receivedAmount), 0), 0);
 }
 
-export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; dueDate?: Date | null; sourceTransactionId?: string | null }) {
+export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; dueDate?: Date | null; sourceTransactionId?: string | null }) {
   if (input.amount <= 0) throw new Error("Receivable amount must be greater than zero.");
-  return prisma.receivable.create({ data: { personName: input.personName.trim(), description: input.description.trim(), amount: input.amount, currency: { connect: { id: input.currencyId } }, dueDate: input.dueDate ?? null, sourceTransactionId: input.sourceTransactionId ?? null } });
+  const wallet = await prisma.wallet.findUnique({ where: { id: input.sourceWalletId }, select: { id: true, currencyId: true } });
+  if (!wallet) throw new Error("Source wallet not found.");
+  if (wallet.currencyId !== input.currencyId) throw new Error("Source wallet currency must match the receivable currency.");
+  return prisma.receivable.create({ data: { personName: input.personName.trim(), description: input.description.trim(), amount: input.amount, currency: { connect: { id: input.currencyId } }, sourceWallet: { connect: { id: input.sourceWalletId } }, dueDate: input.dueDate ?? null, sourceTransactionId: input.sourceTransactionId ?? null } });
 }
 
 export async function recordReceivablePayment(input: { receivableId: string; amount: number; receivedAt: Date; walletId: string; note?: string }) {
