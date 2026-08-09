@@ -3,24 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { createReceivable, recordReceivablePayment, refreshReceivableStatuses } from "./service";
 
-function parseAmount(value: FormDataEntryValue | null) {
-  if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value.trim())) return null;
-  return Number(value.trim());
-}
-
-function parseDate(value: FormDataEntryValue | null) {
-  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
-  const date = new Date(`${value}T12:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-}
+function parseAmount(value: FormDataEntryValue | null) { if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value.trim())) return null; return Number(value.trim()); }
+function parseDate(value: FormDataEntryValue | null) { if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(value)) return null; const date = new Date(`${value}T12:00:00`); return Number.isNaN(date.getTime()) ? null : date; }
 
 export async function createReceivableAction(formData: FormData) {
   const personName = formData.get("personName");
   const description = formData.get("description");
   const amount = parseAmount(formData.get("amount"));
+  const currencyId = formData.get("currencyId");
   const dueDate = parseDate(formData.get("dueDate"));
-  if (typeof personName !== "string" || !personName.trim() || typeof description !== "string" || !description.trim() || amount === null) throw new Error("Please complete the receivable fields.");
-  await createReceivable({ personName, description, amount, dueDate });
+  if (typeof personName !== "string" || !personName.trim() || typeof description !== "string" || !description.trim() || amount === null || typeof currencyId !== "string" || !currencyId) throw new Error("Please complete the receivable fields.");
+  await createReceivable({ personName, description, amount, currencyId, dueDate });
   revalidatePath("/receivables");
   revalidatePath("/");
 }
@@ -39,8 +32,4 @@ export async function recordReceivablePaymentAction(formData: FormData) {
   revalidatePath("/");
 }
 
-export async function refreshReceivableStatusesAction() {
-  await refreshReceivableStatuses();
-  revalidatePath("/receivables");
-  revalidatePath("/");
-}
+export async function refreshReceivableStatusesAction() { await refreshReceivableStatuses(); revalidatePath("/receivables"); revalidatePath("/"); }
