@@ -34,16 +34,17 @@ export default function TransactionForm({ mode, transaction, wallets, categories
   const [open, setOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [walletId, setWalletId] = useState(transaction?.walletId ?? "");
+  const [amount, setAmount] = useState(transaction?.amount?.toString() ?? "");
   const [installmentEnabled, setInstallmentEnabled] = useState(Boolean(transaction?.installmentPlan));
   const [installmentTenor, setInstallmentTenor] = useState(transaction?.installmentPlan?.tenorMonths?.toString() ?? "6");
   const [installmentStartDate, setInstallmentStartDate] = useState(dateInputValue(transaction?.installmentPlan?.startDate ?? transaction?.transactionDate));
   const [installmentFee, setInstallmentFee] = useState(transaction?.installmentPlan?.feeAmount?.toString() ?? "0");
   const selectedWallet = wallets.find((wallet) => wallet.id === walletId);
   const canInstallment = selectedWallet?.walletType === "CREDIT_CARD" && (transaction?.type ?? "EXPENSE") === "EXPENSE";
-  const amount = Number(transaction?.amount ?? 0);
   const fee = Number(installmentFee || 0);
   const tenor = Number(installmentTenor || 0);
-  const monthlyAmount = tenor > 1 ? (amount + fee) / tenor : 0;
+  const principal = Number(amount || 0);
+  const monthlyAmount = tenor > 1 ? (principal + fee) / tenor : 0;
   const baseAction = mode === "create" ? createTransactionAction : updateTransactionAction;
   const [state, formAction, isPending] = useActionState(async (prevState: TransactionActionState, formData: FormData) => {
     const result = await baseAction(prevState, formData);
@@ -58,6 +59,7 @@ export default function TransactionForm({ mode, transaction, wallets, categories
   function resetCreateForm() {
     setFormKey((k) => k + 1);
     setWalletId("");
+    setAmount("");
     setInstallmentEnabled(false);
     setInstallmentTenor("6");
     setInstallmentStartDate(dateInputValue());
@@ -75,13 +77,12 @@ export default function TransactionForm({ mode, transaction, wallets, categories
             <div className="space-y-1.5"><Label htmlFor="transactionDate">Date</Label><Input id="transactionDate" name="transactionDate" type="date" defaultValue={dateInputValue(transaction?.transactionDate)} required />{state.fieldErrors?.transactionDate && <p className="text-xs text-destructive">{state.fieldErrors.transactionDate[0]}</p>}</div>
             <div className="space-y-1.5"><Label htmlFor="type">Type</Label><Select name="type" defaultValue={transaction?.type ?? TRANSACTION_TYPES[0]}><SelectTrigger id="type" className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{TRANSACTION_TYPES.map((type) => <SelectItem key={type} value={type}>{formatTransactionType(type)}</SelectItem>)}</SelectContent></Select></div>
           </div>
-          <div className="space-y-1.5"><Label htmlFor="amount">Amount</Label><Input id="amount" name="amount" type="number" step="0.01" defaultValue={transaction?.amount} placeholder="100000" required />{state.fieldErrors?.amount && <p className="text-xs text-destructive">{state.fieldErrors.amount[0]}</p>}</div>
+          <div className="space-y-1.5"><Label htmlFor="amount">Amount</Label><Input id="amount" name="amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="100000" required />{state.fieldErrors?.amount && <p className="text-xs text-destructive">{state.fieldErrors.amount[0]}</p>}</div>
           <div className="space-y-1.5">
             <Label htmlFor="walletId">Wallet</Label>
             <Select name="walletId" defaultValue={transaction?.walletId ?? ""} onValueChange={(value) => { const nextValue = value ?? ""; setWalletId(nextValue); if (wallets.find((wallet) => wallet.id === nextValue)?.walletType !== "CREDIT_CARD") setInstallmentEnabled(false); }}>
               <SelectTrigger id="walletId" className="w-full"><SelectValue placeholder="Select wallet">{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select wallet"}</SelectValue></SelectTrigger>
-              <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name}</SelectItem>)}</SelectContent>
-            </Select>
+              <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name}</SelectItem>)}</SelectContent></Select>
             {state.fieldErrors?.walletId && <p className="text-xs text-destructive">{state.fieldErrors.walletId[0]}</p>}
           </div>
           {canInstallment && <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
