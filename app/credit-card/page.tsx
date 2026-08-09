@@ -32,7 +32,7 @@ function priority(status: CreditCardStatementView["status"], dueDate: string | n
 export default async function CreditCardPage() {
   const cards = await prisma.wallet.findMany({ where: { isActive: true, walletType: "CREDIT_CARD" }, include: { currency: true, creditCard: true }, orderBy: { name: "asc" } });
 
-  const rawData = await Promise.all(cards.map(async (wallet) => {
+  const rawData: Array<CardData | null> = await Promise.all(cards.map(async (wallet) => {
     if (!wallet.creditCard) return null;
     await ensureStatement(wallet.id);
     const [statements, forecast] = await Promise.all([getCreditCardStatements(wallet.id), getStatementForecast(wallet.id)]);
