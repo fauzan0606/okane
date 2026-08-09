@@ -1,17 +1,31 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronDown, CreditCard } from "lucide-react";
+import { ChevronDown, CreditCard, ReceiptText } from "lucide-react";
 import CreditCardStatementCard from "./CreditCardStatementCard";
 import type { CreditCardStatementView } from "./CreditCardStatementCard";
 import AddStatementForm from "./AddStatementForm";
 import CreditCardRewardPointForm from "./CreditCardRewardPointForm";
 
 type ForecastData = { amount: number; periodStart: string; statementDate: string; dueDate: string } | null;
+type InstallmentView = {
+  id: string;
+  transactionId: string;
+  merchant: string;
+  category: string;
+  totalAmount: string;
+  feeAmount: string;
+  installmentAmount: string;
+  tenorMonths: number;
+  startDate: string;
+  currentInstallment: number;
+  remainingInstallments: number;
+};
 type CreditCardAccountCardProps = {
   wallet: { id: string; name: string; currencySymbol: string; creditLimit: string; rewardPoint: string; billingDate: number; dueDay: number };
   statements: CreditCardStatementView[];
   forecast: ForecastData;
+  installments: InstallmentView[];
   defaultExpanded?: boolean;
 };
 
@@ -37,7 +51,7 @@ function dueLabel(dueDate: string | null, status: CreditCardStatementView["statu
   return `Due ${formatDate(dueDate, { day: "2-digit", month: "short" })}`;
 }
 
-export default function CreditCardAccountCard({ wallet, statements, forecast, defaultExpanded = false }: CreditCardAccountCardProps) {
+export default function CreditCardAccountCard({ wallet, statements, forecast, installments, defaultExpanded = false }: CreditCardAccountCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const currentStatement = useMemo(() => statements.find((statement) => statement.status !== "PAID") ?? statements[0] ?? null, [statements]);
   const targetAmount = currentStatement ? Number(currentStatement.actualAmount ?? currentStatement.calculatedAmount) : 0;
@@ -66,9 +80,30 @@ export default function CreditCardAccountCard({ wallet, statements, forecast, de
       </button>
 
       {expanded && <div className="border-t border-white/5 px-5 pb-5 pt-5 md:px-6 md:pb-6">
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Card details</p><p className="mt-1 text-sm text-slate-400">Keep your reward balance, statements, and payments up to date.</p></div><AddStatementForm walletId={wallet.id} /></div>
+        <div className="mb-5 flex flex-wrap items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-500">Card details</p><p className="mt-1 text-sm text-slate-400">Keep your reward balance, statements, payments, and installments up to date.</p></div><AddStatementForm walletId={wallet.id} /></div>
         <div className="mb-5"><CreditCardRewardPointForm walletId={wallet.id} rewardPoint={wallet.rewardPoint} /></div>
         <div className="space-y-4">{statements.map((statement) => <CreditCardStatementCard key={statement.id} statement={statement} />)}</div>
+
+        {installments.length > 0 && <div className="mt-6 rounded-2xl border border-white/10 bg-white/[0.025] p-4 md:p-5">
+          <div className="flex items-start justify-between gap-4">
+            <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Active installments</p><h3 className="mt-1 text-base font-semibold text-white">Installment plans</h3><p className="mt-1 text-xs text-slate-500">Scheduled installment progress for this card.</p></div>
+            <span className="rounded-full border border-emerald-400/15 bg-emerald-400/10 px-2.5 py-1 text-[9px] font-semibold text-emerald-300">{installments.length} active</span>
+          </div>
+          <div className="mt-4 divide-y divide-white/5">
+            {installments.map((installment) => {
+              const progress = installment.tenorMonths > 0 ? Math.min((installment.currentInstallment / installment.tenorMonths) * 100, 100) : 0;
+              return <div key={installment.id} className="py-4 first:pt-0 last:pb-0">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex min-w-0 items-start gap-3"><div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-500/10 text-blue-400"><ReceiptText size={15} /></div><div className="min-w-0"><p className="truncate text-sm font-semibold text-white">{installment.merchant}</p><p className="mt-0.5 truncate text-xs text-slate-500">{installment.category} · Started {formatDate(installment.startDate, { day: "2-digit", month: "short", year: "numeric" })}</p></div></div>
+                  <div className="shrink-0 text-right"><p className="text-sm font-semibold text-slate-200">{wallet.currencySymbol}{formatMoney(Number(installment.installmentAmount))}</p><p className="mt-0.5 text-[10px] text-slate-500">per month</p></div>
+                </div>
+                <div className="mt-3 flex items-center justify-between gap-3 text-[11px]"><span className="font-semibold text-slate-200">Installment {installment.currentInstallment} / {installment.tenorMonths}</span><span className="text-slate-500">{installment.remainingInstallments} remaining</span></div>
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${progress}%` }} /></div>
+                <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-slate-600"><span>Total {wallet.currencySymbol}{formatMoney(Number(installment.totalAmount))}</span><span>{installment.feeAmount !== "0" ? `Fee ${wallet.currencySymbol}${formatMoney(Number(installment.feeAmount))}` : "0% / no fee"}</span></div>
+              </div>;
+            })}
+          </div>
+        </div>}
       </div>}
     </section>
   );
