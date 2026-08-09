@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, BarChart3, CreditCard, LayoutDashboard, Landmark, PiggyBank, Receipt, Settings, Tags, Target, Wallet } from "lucide-react";
+import { ArrowLeftRight, BarChart3, CreditCard, HandCoins, LayoutDashboard, Landmark, PiggyBank, Receipt, Settings, Tags, Target, Wallet } from "lucide-react";
 
 type MenuItem = { icon: LucideIcon; label: string; href: string };
 type MenuGroup = { title: string; items: MenuItem[] };
@@ -14,6 +14,7 @@ const menus: MenuGroup[] = [
     { icon: Receipt, label: "Transactions", href: "/transactions" },
     { icon: Wallet, label: "Wallets", href: "/wallet" },
     { icon: CreditCard, label: "Credit Cards", href: "/credit-card" },
+    { icon: HandCoins, label: "Receivables", href: "/receivables" },
     { icon: Tags, label: "Categories", href: "/category" },
     { icon: ArrowLeftRight, label: "Transfer", href: "/transfer" },
   ] },
