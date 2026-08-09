@@ -40,7 +40,7 @@ export async function getDashboardCashflow(period: DashboardPeriod, currencyCode
 }
 
 export async function getDashboardRecentTransactions(currencyCode: string) {
-  return prisma.transaction.findMany({ where: { wallet: { currency: code }, }, take: 10, orderBy: { transactionDate: "desc" }, select: { id: true, transactionDate: true, type: true, amount: true, kind: true, wallet: { select: { name: true } }, category: { select: { name: true } }, payee: { select: { name: true } } } });
+  return prisma.transaction.findMany({ where: { wallet: { currency: { code: currencyCode } } }, take: 10, orderBy: { transactionDate: "desc" }, select: { id: true, transactionDate: true, type: true, amount: true, kind: true, wallet: { select: { name: true } }, category: { select: { name: true } }, payee: { select: { name: true } } } });
 }
 
 export async function getActiveCurrencies() {
