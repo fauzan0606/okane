@@ -73,9 +73,22 @@ model CreditCardStatement {
   createdAt            DateTime                   @default(now())
   updatedAt            DateTime                   @updatedAt
   creditCard           CreditCardProfile          @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  payments             CreditCardStatementPayment[]
 
   @@unique([creditCardId, periodStart, periodEnd])
   @@index([creditCardId, dueDate])
+}
+
+model CreditCardStatementPayment {
+  id          String               @id @default(uuid())
+  statementId String
+  amount      Decimal
+  paidAt      DateTime
+  note        String?
+  createdAt   DateTime             @default(now())
+  statement   CreditCardStatement  @relation(fields: [statementId], references: [id], onDelete: Cascade)
+
+  @@index([statementId, paidAt])
 }
 
 model Category {
