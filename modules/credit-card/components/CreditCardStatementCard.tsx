@@ -5,6 +5,19 @@ import { toast } from "sonner";
 import type { CreditCardStatement } from "@prisma/client";
 import { updateStatementAction } from "../actions";
 
+type SerializedCreditCardStatement = Omit<CreditCardStatement, "calculatedAmount" | "actualAmount" | "paidAmount" | "statementDate" | "periodStart" | "periodEnd" | "dueDate" | "paidAt" | "createdAt" | "updatedAt"> & {
+  calculatedAmount: string;
+  actualAmount: string | null;
+  paidAmount: string;
+  statementDate: string;
+  periodStart: string;
+  periodEnd: string;
+  dueDate: string;
+  paidAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 function formatMoney(value: number) {
   return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value);
 }
@@ -16,7 +29,7 @@ function statusLabel(status: CreditCardStatement["status"]) {
   return "UNPAID";
 }
 
-export default function CreditCardStatementCard({ statement }: { statement: CreditCardStatement }) {
+export default function CreditCardStatementCard({ statement }: { statement: SerializedCreditCardStatement }) {
   const [pending, setPending] = useState(false);
   const calculatedAmount = Number(statement.calculatedAmount);
   const actualAmount = statement.actualAmount === null ? null : Number(statement.actualAmount);
@@ -91,11 +104,11 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
         <input type="hidden" name="id" value={statement.id} />
         <label className="text-xs text-slate-500">
           Actual Amount
-          <input name="actualAmount" defaultValue={statement.actualAmount?.toString() ?? statement.calculatedAmount.toString()} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
+          <input name="actualAmount" defaultValue={statement.actualAmount ?? statement.calculatedAmount} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
         </label>
         <label className="text-xs text-slate-500">
           Paid Amount
-          <input name="paidAmount" defaultValue={statement.paidAmount.toString()} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
+          <input name="paidAmount" defaultValue={statement.paidAmount} inputMode="decimal" className="mt-1 w-full rounded-xl border border-white/10 bg-[#070C12] px-3 py-2 text-sm text-white outline-none" />
         </label>
         <label className="text-xs text-slate-500">
           Paid Date
@@ -115,7 +128,7 @@ export default function CreditCardStatementCard({ statement }: { statement: Cred
         </p>
       )}
 
-      {statement.status !== "PAID" && new Date() > statement.dueDate && (
+      {statement.status !== "PAID" && new Date() > new Date(statement.dueDate) && (
         <p className="mt-2 text-sm font-medium text-red-300">⚠ This statement is overdue. Please record the payment when it is made.</p>
       )}
       {paidAmount > targetAmount && (
