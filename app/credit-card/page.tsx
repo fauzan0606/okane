@@ -7,7 +7,7 @@ import CreditCardAccountCard from "@/modules/credit-card/components/CreditCardAc
 import type { CreditCardStatementView } from "@/modules/credit-card/components/CreditCardStatementCard";
 
 type CardData = {
-  wallet: { id: string; name: string; currencySymbol: string; creditLimit: string; billingDate: number; dueDay: number };
+  wallet: { id: string; name: string; currencySymbol: string; creditLimit: string; rewardPoint: string; billingDate: number; dueDay: number };
   statements: CreditCardStatementView[];
   forecast: { amount: number; periodStart: string; statementDate: string; dueDate: string } | null;
   status: CreditCardStatementView["status"];
@@ -57,7 +57,7 @@ export default async function CreditCardPage() {
     const status = current?.status ?? "UNPAID";
     const dueDate = current?.dueDate ?? forecast?.dueDate.toISOString() ?? null;
     return {
-      wallet: { id: wallet.id, name: wallet.name, currencySymbol: wallet.currency.symbol, creditLimit: wallet.creditCard.creditLimit.toString(), billingDate: wallet.creditCard.billingDate, dueDay: wallet.creditCard.dueDate },
+      wallet: { id: wallet.id, name: wallet.name, currencySymbol: wallet.currency.symbol, creditLimit: wallet.creditCard.creditLimit.toString(), rewardPoint: wallet.creditCard.rewardPoint.toString(), billingDate: wallet.creditCard.billingDate, dueDay: wallet.creditCard.dueDate },
       statements: serializedStatements,
       forecast: forecast ? { amount: forecast.amount, periodStart: forecast.periodStart.toISOString(), statementDate: forecast.statementDate.toISOString(), dueDate: forecast.dueDate.toISOString() } : null,
       status, dueDate, remaining, priority: priority(status, dueDate),
