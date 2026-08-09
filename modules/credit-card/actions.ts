@@ -1,9 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { prisma } from "@/lib/prisma";
 import { CreditCardStatementStatus } from "@prisma/client";
-import { createManualStatement, recordStatementPayment } from "./service";
+import { createManualStatement, deleteStatementPayment, recordStatementPayment, updateStatementPayment } from "./service";
 
 function parseAmount(value: FormDataEntryValue | null) {
   if (typeof value !== "string" || !/^\d+(\.\d+)?$/.test(value.trim())) return null;
@@ -20,11 +19,11 @@ export async function updateStatementAction(formData: FormData) {
   const id = formData.get("id");
   const actualAmount = parseAmount(formData.get("actualAmount"));
   if (typeof id !== "string" || !id || actualAmount === null) throw new Error("Invalid statement data.");
-  const statement = await prisma.creditCardStatement.findUnique({ where: { id } });
+  const statement = await (await import("@/lib/prisma")).prisma.creditCardStatement.findUnique({ where: { id } });
   if (!statement) throw new Error("Statement not found.");
   const paidAmount = Number(statement.paidAmount);
   const status = paidAmount >= actualAmount ? CreditCardStatementStatus.PAID : paidAmount > 0 ? CreditCardStatementStatus.PARTIALLY_PAID : new Date() > statement.dueDate ? CreditCardStatementStatus.OVERDUE : CreditCardStatementStatus.UNPAID;
-  await prisma.creditCardStatement.update({ where: { id }, data: { actualAmount, status } });
+  await (await import("@/lib/prisma")).prisma.creditCardStatement.update({ where: { id }, data: { actualAmount, status } });
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
 }
@@ -49,6 +48,25 @@ export async function recordStatementPaymentAction(formData: FormData) {
   const note = formData.get("note");
   if (typeof statementId !== "string" || !statementId || amount === null || !paidAt) throw new Error("Please enter a valid payment.");
   await recordStatementPayment(statementId, amount, paidAt, typeof note === "string" ? note : undefined);
+  revalidatePath("/wallet");
+  revalidatePath("/credit-card");
+}
+
+export async function updateStatementPaymentAction(formData: FormData) {
+  const paymentId = formData.get("paymentId");
+  const amount = parseAmount(formData.get("amount"));
+  const paidAt = parseDate(formData.get("paidAt"));
+  const note = formData.get("note");
+  if (typeof paymentId !== "string" || !paymentId || amount === null || !paidAt) throw new Error("Please enter a valid payment.");
+  await updateStatementPayment(paymentId, amount, paidAt, typeof note === "string" ? note : undefined);
+  revalidatePath("/wallet");
+  revalidatePath("/credit-card");
+}
+
+export async function deleteStatementPaymentAction(formData: FormData) {
+  const paymentId = formData.get("paymentId");
+  if (typeof paymentId !== "string" || !paymentId) throw new Error("Invalid payment.");
+  await deleteStatementPayment(paymentId);
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
 }
