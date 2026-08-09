@@ -12,9 +12,10 @@ export async function createReceivableAction(formData: FormData) {
   const amount = parseAmount(formData.get("amount"));
   const currencyId = formData.get("currencyId");
   const sourceWalletId = formData.get("sourceWalletId");
+  const loanDate = parseDate(formData.get("loanDate"));
   const dueDate = parseDate(formData.get("dueDate"));
-  if (typeof personName !== "string" || !personName.trim() || typeof description !== "string" || !description.trim() || amount === null || typeof currencyId !== "string" || !currencyId || typeof sourceWalletId !== "string" || !sourceWalletId) throw new Error("Please complete the receivable fields.");
-  await createReceivable({ personName, description, amount, currencyId, sourceWalletId, dueDate });
+  if (typeof personName !== "string" || !personName.trim() || typeof description !== "string" || !description.trim() || amount === null || typeof currencyId !== "string" || !currencyId || typeof sourceWalletId !== "string" || !sourceWalletId || !loanDate) throw new Error("Please complete the receivable fields.");
+  await createReceivable({ personName, description, amount, currencyId, sourceWalletId, loanDate, dueDate });
   revalidatePath("/receivables");
   revalidatePath("/");
 }
