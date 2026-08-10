@@ -19,7 +19,7 @@ export type TransactionWithRelations = {
   category: { id: string; name: string; type: "INCOME" | "EXPENSE"; icon: string | null; color: string | null } | null;
   payee: { id: string; name: string; note: string | null } | null;
   installmentPlan: { id: string; transactionId: string; totalAmount: string; feeAmount: string; installmentAmount: string; tenorMonths: number; startDate: string; status: "ACTIVE" | "COMPLETED" | "CANCELLED" } | null;
-  splitBill: { id: string; totalAmount: string; personalAmount: string; status: "OPEN" | "SETTLED" | "CANCELLED" } | null;
+  splitBill: { id: string; totalAmount: string; personalAmount: string; status: "DRAFT" | "OPEN" | "SETTLED" | "CANCELLED" } | null;
 };
 
 type RawTransaction = Prisma.TransactionGetPayload<{ include: { wallet: { include: { currency: true } }; category: true; payee: true; installmentPlan: true; splitBill: true } }>;
