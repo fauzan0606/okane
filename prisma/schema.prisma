@@ -2,95 +2,90 @@ generator client {
   provider = "prisma-client-js"
 }
 
-datasource db {
-  provider = "sqlite"
-}
+datasource db { provider = "sqlite" }
 
 model Currency {
-  id            String   @id @default(uuid())
-  code          String   @unique
-  name          String
-  symbol        String
+  id String @id @default(uuid())
+  code String @unique
+  name String
+  symbol String
   decimalPlaces Int
-  isActive      Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  wallets       Wallet[]
-  receivables   Receivable[]
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  wallets Wallet[]
+  receivables Receivable[]
 }
 
 model Wallet {
-  id             String             @id @default(uuid())
-  name           String
-  walletType     WalletType
-  currencyId     String
-  currentBalance Decimal            @default(0)
-  balanceAsOf    DateTime?
-  bank           String?
-  color          String?
-  icon           String?
-  note           String?
-  sortOrder      Int                @default(0)
-  isActive       Boolean            @default(true)
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
-  creditCard     CreditCardProfile?
-  currency       Currency           @relation(fields: [currencyId], references: [id])
-  transactions   Transaction[]
+  id String @id @default(uuid())
+  name String
+  walletType WalletType
+  currencyId String
+  currentBalance Decimal @default(0)
+  balanceAsOf DateTime?
+  bank String?
+  color String?
+  icon String?
+  note String?
+  sortOrder Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  creditCard CreditCardProfile?
+  currency Currency @relation(fields: [currencyId], references: [id])
+  transactions Transaction[]
   receivablePayments ReceivablePayment[]
-  sourceReceivables Receivable[]     @relation("ReceivableSourceWallet")
-
+  sourceReceivables Receivable[] @relation("ReceivableSourceWallet")
   @@index([currencyId])
 }
 
 model CreditCardProfile {
-  id            String                     @id @default(uuid())
-  walletId      String                     @unique
-  creditLimit   Decimal                    @default(0)
-  billingDate   Int
-  dueDate       Int
+  id String @id @default(uuid())
+  walletId String @unique
+  creditLimit Decimal @default(0)
+  billingDate Int
+  dueDate Int
   rewardProgram String?
-  rewardPoint   Decimal                    @default(0)
-  annualFee     Decimal?
+  rewardPoint Decimal @default(0)
+  annualFee Decimal?
   annualFeeDate Int?
-  createdAt     DateTime                   @default(now())
-  updatedAt     DateTime                   @updatedAt
-  wallet        Wallet                     @relation(fields: [walletId], references: [id], onDelete: Cascade)
-  statements    CreditCardStatement[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  statements CreditCardStatement[]
 }
 
 model CreditCardStatement {
-  id                   String                     @id @default(uuid())
-  creditCardId         String
-  periodStart          DateTime
-  periodEnd            DateTime
-  statementDate        DateTime
-  dueDate              DateTime
-  calculatedAmount     Decimal                    @default(0)
-  actualAmount         Decimal?
-  paidAmount           Decimal                    @default(0)
-  paidAt               DateTime?
+  id String @id @default(uuid())
+  creditCardId String
+  periodStart DateTime
+  periodEnd DateTime
+  statementDate DateTime
+  dueDate DateTime
+  calculatedAmount Decimal @default(0)
+  actualAmount Decimal?
+  paidAmount Decimal @default(0)
+  paidAt DateTime?
   paymentTransactionId String?
-  status               CreditCardStatementStatus @default(UNPAID)
-  note                 String?
-  createdAt            DateTime                   @default(now())
-  updatedAt            DateTime                   @updatedAt
-  creditCard            CreditCardProfile          @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
-  payments              CreditCardStatementPayment[]
-
+  status CreditCardStatementStatus @default(UNPAID)
+  note String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  creditCard CreditCardProfile @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
+  payments CreditCardStatementPayment[]
   @@unique([creditCardId, periodStart, periodEnd])
   @@index([creditCardId, dueDate])
 }
 
 model CreditCardStatementPayment {
-  id          String               @id @default(uuid())
+  id String @id @default(uuid())
   statementId String
-  amount      Decimal
-  paidAt      DateTime
-  note        String?
-  createdAt   DateTime             @default(now())
-  statement   CreditCardStatement  @relation(fields: [statementId], references: [id], onDelete: Cascade)
-
+  amount Decimal
+  paidAt DateTime
+  note String?
+  createdAt DateTime @default(now())
+  statement CreditCardStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
   @@index([statementId, paidAt])
 }
 
@@ -139,172 +134,120 @@ model Transaction {
 }
 
 model InstallmentPlan {
-  id                String               @id @default(uuid())
-  transactionId     String               @unique
-  totalAmount       Decimal
-  feeAmount         Decimal              @default(0)
+  id String @id @default(uuid())
+  transactionId String @unique
+  totalAmount Decimal
+  feeAmount Decimal @default(0)
   installmentAmount Decimal
-  tenorMonths       Int
-  startDate         DateTime
-  status            InstallmentPlanStatus @default(ACTIVE)
-  transaction       Transaction           @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  createdAt          DateTime              @default(now())
-  updatedAt          DateTime              @updatedAt
-
+  tenorMonths Int
+  startDate DateTime
+  status InstallmentPlanStatus @default(ACTIVE)
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([startDate, status])
 }
 
 model SplitBill {
-  id             String                   @id @default(uuid())
-  transactionId  String                   @unique
-  totalAmount    Decimal
+  id String @id @default(uuid())
+  merchantName String
+  transactionId String? @unique
+  totalAmount Decimal
   personalAmount Decimal
-  status         SplitBillStatus          @default(OPEN)
-  note           String?
-  transaction    Transaction              @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-  participants   SplitBillParticipant[]
-  items          SplitBillItem[]
-  createdAt      DateTime                 @default(now())
-  updatedAt      DateTime                 @updatedAt
-
+  status SplitBillStatus @default(DRAFT)
+  note String?
+  transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
+  participants SplitBillParticipant[]
+  items SplitBillItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([status, createdAt])
 }
 
 model SplitBillParticipant {
-  id          String                    @id @default(uuid())
+  id String @id @default(uuid())
   splitBillId String
-  name        String
-  isMe        Boolean                   @default(false)
-  shareAmount Decimal                   @default(0)
-  splitBill   SplitBill                 @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
+  name String
+  isMe Boolean @default(false)
+  shareAmount Decimal @default(0)
+  splitBill SplitBill @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
   allocations SplitBillItemAllocation[]
-  receivable  Receivable?
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
-
+  receivable Receivable?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([splitBillId, isMe])
 }
 
 model SplitBillItem {
-  id          String                    @id @default(uuid())
+  id String @id @default(uuid())
   splitBillId String
-  name        String
-  quantity    Decimal                   @default(1)
-  unitPrice   Decimal
-  splitMethod SplitBillItemMethod       @default(EQUAL)
-  splitBill   SplitBill                 @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
+  name String
+  quantity Decimal @default(1)
+  unitPrice Decimal
+  splitMethod SplitBillItemMethod @default(EQUAL)
+  splitBill SplitBill @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
   allocations SplitBillItemAllocation[]
-  createdAt   DateTime                  @default(now())
-  updatedAt   DateTime                  @updatedAt
-
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([splitBillId])
 }
 
 model SplitBillItemAllocation {
-  id            String                 @id @default(uuid())
-  itemId        String
+  id String @id @default(uuid())
+  itemId String
   participantId String
-  units         Decimal                @default(0)
-  amount        Decimal                @default(0)
-  item          SplitBillItem          @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  participant   SplitBillParticipant   @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
+  units Decimal @default(0)
+  amount Decimal @default(0)
+  item SplitBillItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  participant SplitBillParticipant @relation(fields: [participantId], references: [id], onDelete: Cascade)
   @@unique([itemId, participantId])
   @@index([participantId])
 }
 
 model Receivable {
-  id                     String                   @id @default(uuid())
-  personName             String
-  description            String
-  amount                 Decimal
-  receivedAmount         Decimal                  @default(0)
-  currencyId             String
-  sourceWalletId         String?
-  loanDate               DateTime                 @default(now())
-  dueDate                DateTime?
-  status                 ReceivableStatus         @default(OUTSTANDING)
-  sourceTransactionId    String?
-  splitBillParticipantId String?                  @unique
-  currency               Currency                 @relation(fields: [currencyId], references: [id])
-  sourceWallet           Wallet?                  @relation("ReceivableSourceWallet", fields: [sourceWalletId], references: [id], onDelete: SetNull)
-  splitBillParticipant   SplitBillParticipant?    @relation(fields: [splitBillParticipantId], references: [id], onDelete: SetNull)
-  payments               ReceivablePayment[]
-  createdAt              DateTime                 @default(now())
-  updatedAt              DateTime                 @updatedAt
-
+  id String @id @default(uuid())
+  personName String
+  description String
+  amount Decimal
+  receivedAmount Decimal @default(0)
+  currencyId String
+  sourceWalletId String?
+  loanDate DateTime @default(now())
+  dueDate DateTime?
+  status ReceivableStatus @default(OUTSTANDING)
+  sourceTransactionId String?
+  splitBillParticipantId String? @unique
+  currency Currency @relation(fields: [currencyId], references: [id])
+  sourceWallet Wallet? @relation("ReceivableSourceWallet", fields: [sourceWalletId], references: [id], onDelete: SetNull)
+  splitBillParticipant SplitBillParticipant? @relation(fields: [splitBillParticipantId], references: [id], onDelete: SetNull)
+  payments ReceivablePayment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   @@index([status, dueDate])
   @@index([currencyId, status])
   @@index([sourceWalletId, status])
 }
 
 model ReceivablePayment {
-  id            String      @id @default(uuid())
-  receivableId  String
-  amount        Decimal
-  receivedAt    DateTime
-  walletId      String
-  transactionId String      @unique
-  note          String?
-  receivable    Receivable  @relation(fields: [receivableId], references: [id], onDelete: Cascade)
-  wallet        Wallet      @relation(fields: [walletId], references: [id])
-  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
-
+  id String @id @default(uuid())
+  receivableId String
+  amount Decimal
+  receivedAt DateTime
+  walletId String
+  transactionId String @unique
+  note String?
+  receivable Receivable @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   @@index([receivableId, receivedAt])
 }
 
-enum InstallmentPlanStatus {
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
-enum SplitBillStatus {
-  OPEN
-  SETTLED
-  CANCELLED
-}
-
-enum SplitBillItemMethod {
-  EQUAL
-  PRO_RATA
-}
-
-enum ReceivableStatus {
-  OUTSTANDING
-  PARTIALLY_RECEIVED
-  RECEIVED
-  OVERDUE
-}
-
-enum TransactionKind {
-  STANDARD
-  REIMBURSEMENT
-}
-
-enum WalletType {
-  CASH
-  BANK_ACCOUNT
-  CREDIT_CARD
-  DEBIT_CARD
-  E_WALLET
-  FOREIGN_CASH
-  INVESTMENT
-}
-
-enum CategoryType {
-  INCOME
-  EXPENSE
-}
-
-enum TransactionType {
-  INCOME
-  EXPENSE
-}
-
-enum CreditCardStatementStatus {
-  UNPAID
-  PARTIALLY_PAID
-  PAID
-  OVERDUE
-}
+enum InstallmentPlanStatus { ACTIVE COMPLETED CANCELLED }
+enum SplitBillStatus { DRAFT OPEN SETTLED CANCELLED }
+enum SplitBillItemMethod { EQUAL PRO_RATA }
+enum ReceivableStatus { OUTSTANDING PARTIALLY_RECEIVED RECEIVED OVERDUE }
+enum TransactionKind { STANDARD REIMBURSEMENT }
+enum WalletType { CASH BANK_ACCOUNT CREDIT_CARD DEBIT_CARD E_WALLET FOREIGN_CASH INVESTMENT }
+enum CategoryType { INCOME EXPENSE }
+enum TransactionType { INCOME EXPENSE }
+enum CreditCardStatementStatus { UNPAID PARTIALLY_PAID PAID OVERDUE }
