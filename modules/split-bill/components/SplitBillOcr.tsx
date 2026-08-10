@@ -76,7 +76,7 @@ async function prepareImage(file: File) {
   });
 
   const image = await new Promise<HTMLImageElement>((resolve, reject) => {
-    const element = new Image();
+    const element = new window.Image();
     element.onload = () => resolve(element);
     element.onerror = () => reject(new Error("Could not decode image."));
     element.src = dataUrl;
