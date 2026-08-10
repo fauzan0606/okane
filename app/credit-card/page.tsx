@@ -52,59 +52,17 @@ export default async function CreditCardPage() {
     const [statements, forecast, activeInstallments] = await Promise.all([
       getCreditCardStatements(wallet.id),
       getStatementForecast(wallet.id),
-      prisma.installmentPlan.findMany({
-        where: { status: "ACTIVE", transaction: { walletId: wallet.id, type: "EXPENSE" } },
-        include: { transaction: { select: { id: true, transactionDate: true, payee: { select: { name: true } }, category: { select: { name: true } } } } },
-        orderBy: { startDate: "asc" },
-      }),
+      prisma.installmentPlan.findMany({ where: { status: "ACTIVE", transaction: { walletId: wallet.id, type: "EXPENSE" } }, include: { transaction: { select: { id: true, transactionDate: true, payee: { select: { name: true } }, category: { select: { name: true } } } } }, orderBy: { startDate: "asc" } }),
     ]);
-    const serializedStatements: CreditCardStatementView[] = statements.map((statement) => ({
-      id: statement.id,
-      creditCardId: statement.creditCardId,
-      periodStart: statement.periodStart.toISOString(),
-      periodEnd: statement.periodEnd.toISOString(),
-      statementDate: statement.statementDate.toISOString(),
-      dueDate: statement.dueDate.toISOString(),
-      calculatedAmount: statement.calculatedAmount.toString(),
-      actualAmount: statement.actualAmount?.toString() ?? null,
-      paidAmount: statement.paidAmount.toString(),
-      paidAt: statement.paidAt?.toISOString() ?? null,
-      status: statement.status,
-      createdAt: statement.createdAt.toISOString(),
-      updatedAt: statement.updatedAt.toISOString(),
-      payments: statement.payments.map((payment) => ({ id: payment.id, amount: payment.amount.toString(), paidAt: payment.paidAt.toISOString(), note: payment.note })),
-    }));
-    const installments: InstallmentView[] = activeInstallments.flatMap((plan) => {
-      const currentInstallment = getInstallmentNumber(plan.startDate, new Date(), plan.tenorMonths);
-      const remainingInstallments = Math.max(plan.tenorMonths - currentInstallment, 0);
-      if (remainingInstallments === 0) return [];
-      return [{
-        id: plan.id,
-        transactionId: plan.transactionId,
-        merchant: plan.transaction.payee?.name ?? "Unknown merchant",
-        category: plan.transaction.category?.name ?? "Uncategorized",
-        totalAmount: plan.totalAmount.toString(),
-        feeAmount: plan.feeAmount.toString(),
-        installmentAmount: plan.installmentAmount.toString(),
-        tenorMonths: plan.tenorMonths,
-        startDate: plan.startDate.toISOString(),
-        currentInstallment,
-        remainingInstallments,
-      }];
-    });
+    const serializedStatements: CreditCardStatementView[] = statements.map((statement) => ({ id: statement.id, creditCardId: statement.creditCardId, periodStart: statement.periodStart.toISOString(), periodEnd: statement.periodEnd.toISOString(), statementDate: statement.statementDate.toISOString(), dueDate: statement.dueDate.toISOString(), calculatedAmount: statement.calculatedAmount.toString(), actualAmount: statement.actualAmount?.toString() ?? null, paidAmount: statement.paidAmount.toString(), paidAt: statement.paidAt?.toISOString() ?? null, status: statement.status, createdAt: statement.createdAt.toISOString(), updatedAt: statement.updatedAt.toISOString(), payments: statement.payments.map((payment) => ({ id: payment.id, amount: payment.amount.toString(), paidAt: payment.paidAt.toISOString(), note: payment.note })) }));
+    const installments: InstallmentView[] = activeInstallments.flatMap((plan) => { const currentInstallment = getInstallmentNumber(plan.startDate, new Date(), plan.tenorMonths); const remainingInstallments = Math.max(plan.tenorMonths - currentInstallment, 0); if (remainingInstallments === 0) return []; return [{ id: plan.id, transactionId: plan.transactionId, merchant: plan.transaction.payee?.name ?? "Unknown merchant", category: plan.transaction.category?.name ?? "Uncategorized", totalAmount: plan.totalAmount.toString(), feeAmount: plan.feeAmount.toString(), installmentAmount: plan.installmentAmount.toString(), tenorMonths: plan.tenorMonths, startDate: plan.startDate.toISOString(), currentInstallment, remainingInstallments }]; });
     const current = serializedStatements.find((statement) => statement.status !== "PAID") ?? serializedStatements[0] ?? null;
     const target = current ? Number(current.actualAmount ?? current.calculatedAmount) : 0;
     const paid = current ? Number(current.paidAmount) : 0;
     const remaining = Math.max(target - paid, 0);
     const status = current?.status ?? "UNPAID";
     const dueDate = current?.dueDate ?? forecast?.dueDate.toISOString() ?? null;
-    return {
-      wallet: { id: wallet.id, name: wallet.name, currencySymbol: wallet.currency.symbol, creditLimit: wallet.creditCard.creditLimit.toString(), rewardPoint: wallet.creditCard.rewardPoint.toString(), billingDate: wallet.creditCard.billingDate, dueDay: wallet.creditCard.dueDate },
-      statements: serializedStatements,
-      forecast: forecast ? { amount: forecast.amount, periodStart: forecast.periodStart.toISOString(), statementDate: forecast.statementDate.toISOString(), dueDate: forecast.dueDate.toISOString() } : null,
-      installments,
-      status, dueDate, remaining, priority: priority(status, dueDate),
-    } satisfies CardData;
+    return { wallet: { id: wallet.id, name: wallet.name, currencySymbol: wallet.currency.symbol, creditLimit: wallet.creditCard.creditLimit.toString(), rewardPoint: wallet.creditCard.rewardPoint.toString(), billingDate: wallet.creditCard.billingDate, dueDay: wallet.creditCard.dueDate }, statements: serializedStatements, forecast: forecast ? { amount: forecast.amount, periodStart: forecast.periodStart.toISOString(), statementDate: forecast.statementDate.toISOString(), dueDate: forecast.dueDate.toISOString() } : null, installments, status, dueDate, remaining, priority: priority(status, dueDate) } satisfies CardData;
   }));
 
   const data = rawData.filter((item): item is CardData => item !== null).sort((a, b) => a.priority - b.priority || (daysUntil(a.dueDate) ?? 9999) - (daysUntil(b.dueDate) ?? 9999));
@@ -123,7 +81,7 @@ export default async function CreditCardPage() {
             <div className="rounded-[18px] border border-amber-400/10 bg-[#0d141e] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Due Soon</p><p className="mt-1 text-xl font-semibold text-amber-300">{dueSoonCount}</p></div>
             <div className={`rounded-[18px] border px-4 py-4 ${overdueCount > 0 ? "border-red-400/20 bg-red-400/[0.04]" : "border-white/10 bg-[#0d141e]"}`}><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Overdue</p><p className={`mt-1 text-xl font-semibold ${overdueCount > 0 ? "text-red-300" : "text-emerald-300"}`}>{overdueCount}</p></div>
           </section>
-          <div className="space-y-4">{data.map((card, index) => <CreditCardAccountCard key={card.wallet.id} wallet={card.wallet} statements={card.statements} forecast={card.forecast} installments={card.installments} defaultExpanded={index === 0 && (card.status === "OVERDUE" || (daysUntil(card.dueDate) ?? 99) <= 7)} />)}</div>
+          <div className="space-y-4">{data.map((card) => <CreditCardAccountCard key={card.wallet.id} wallet={card.wallet} statements={card.statements} forecast={card.forecast} installments={card.installments} />)}</div>
         </>}
       </div>
     </AppShell>
