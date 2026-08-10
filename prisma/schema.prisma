@@ -73,7 +73,7 @@ model CreditCardStatement {
   status CreditCardStatementStatus @default(UNPAID)
   note String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
   creditCard CreditCardProfile @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
   payments CreditCardStatementPayment[]
   @@unique([creditCardId, periodStart, periodEnd])
@@ -87,7 +87,7 @@ model CreditCardStatementPayment {
   paidAt DateTime
   note String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now()) @updatedAt
   statement CreditCardStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
   @@index([statementId, paidAt])
 }
