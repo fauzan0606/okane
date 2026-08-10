@@ -33,7 +33,8 @@ function findAmount(lines: string[], pattern: RegExp) {
 }
 
 function parseReceipt(text: string): OcrResult {
-  const lines = text.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  const normalizedText = text.replace(/[|]/g, " ");
+  const lines = normalizedText.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
   const subtotal = findAmount(lines, /\bsubtotal\b/i);
   const serviceAmount = findAmount(lines, /\b(service\s*charge|service|svc)\b/i);
   const taxAmount = findAmount(lines, /\b(pbi|ppn|tax|pajak)\b/i);
@@ -50,7 +51,7 @@ function parseReceipt(text: string): OcrResult {
     const name = match[1].replace(/\s+/g, " ").trim();
     const price = amount(match[3]);
     const quantity = match[2] ? Number(match[2].replace(",", ".")) : 1;
-    if (name.length >= 2 && price > 0) items.push({ name, quantity, unitPrice: Math.round(price / quantity) });
+    if (name.length >= 2 && price > 0 && price < 100000000) items.push({ name, quantity, unitPrice: Math.round(price / quantity) });
   }
 
   const merchantIndex = lines.findIndex((line) => /\b(o[o0]toya|lotte\s+mall)\b/i.test(line));
@@ -62,35 +63,83 @@ function parseReceipt(text: string): OcrResult {
 }
 
 function detectBrightCrop(source: HTMLImageElement) {
-  const probeMax = 900;
+  const probeMax = 1000;
   const scale = Math.min(1, probeMax / Math.max(source.naturalWidth, source.naturalHeight));
   const width = Math.max(1, Math.round(source.naturalWidth * scale));
   const height = Math.max(1, Math.round(source.naturalHeight * scale));
   const probe = document.createElement("canvas");
-  probe.width = width; probe.height = height;
+  probe.width = width;
+  probe.height = height;
   const ctx = probe.getContext("2d", { willReadFrequently: true });
   if (!ctx) return null;
   ctx.drawImage(source, 0, 0, width, height);
   const data = ctx.getImageData(0, 0, width, height).data;
-  let minX = width, minY = height, maxX = -1, maxY = -1, count = 0;
-  for (let y = 0; y < height; y += 2) {
-    for (let x = 0; x < width; x += 2) {
+  const gridW = Math.ceil(width / 3);
+  const gridH = Math.ceil(height / 3);
+  const mask = new Uint8Array(gridW * gridH);
+
+  for (let gy = 0; gy < gridH; gy++) {
+    for (let gx = 0; gx < gridW; gx++) {
+      const x = Math.min(width - 1, gx * 3);
+      const y = Math.min(height - 1, gy * 3);
       const i = (y * width + x) * 4;
-      const r = data[i], g = data[i + 1], b = data[i + 2];
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
       const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
       const spread = Math.max(r, g, b) - Math.min(r, g, b);
-      if (brightness > 170 && spread < 75) {
-        minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y); count++;
-      }
+      if (brightness > 145 && spread < 90) mask[gy * gridW + gx] = 1;
     }
   }
-  if (count < width * height * 0.03 || maxX < 0) return null;
-  const padX = Math.round(width * 0.025), padY = Math.round(height * 0.025);
-  const x = Math.max(0, minX - padX), y = Math.max(0, minY - padY);
-  const right = Math.min(width, maxX + padX), bottom = Math.min(height, maxY + padY);
-  const cropW = right - x, cropH = bottom - y;
-  if (cropW < width * 0.2 || cropH < height * 0.2) return null;
-  return { x: x / scale, y: y / scale, width: cropW / scale, height: cropH / scale };
+
+  const visited = new Uint8Array(mask.length);
+  let best: { x: number; y: number; width: number; height: number; score: number } | null = null;
+  const queue = new Int32Array(mask.length);
+
+  for (let start = 0; start < mask.length; start++) {
+    if (!mask[start] || visited[start]) continue;
+    let head = 0;
+    let tail = 0;
+    queue[tail++] = start;
+    visited[start] = 1;
+    let minX = gridW, minY = gridH, maxX = -1, maxY = -1, area = 0;
+
+    while (head < tail) {
+      const current = queue[head++];
+      const gx = current % gridW;
+      const gy = Math.floor(current / gridW);
+      minX = Math.min(minX, gx); minY = Math.min(minY, gy);
+      maxX = Math.max(maxX, gx); maxY = Math.max(maxY, gy);
+      area++;
+      const neighbors = [current - 1, current + 1, current - gridW, current + gridW];
+      for (const next of neighbors) {
+        if (next < 0 || next >= mask.length || visited[next] || !mask[next]) continue;
+        const nx = next % gridW;
+        const ny = Math.floor(next / gridW);
+        if (Math.abs(nx - gx) + Math.abs(ny - gy) !== 1) continue;
+        visited[next] = 1;
+        queue[tail++] = next;
+      }
+    }
+
+    const boxWidth = maxX - minX + 1;
+    const boxHeight = maxY - minY + 1;
+    const aspect = boxHeight / Math.max(1, boxWidth);
+    const relativeArea = area / mask.length;
+    if (area < 80 || relativeArea < 0.008 || aspect < 1.15 || aspect > 5.5) continue;
+    const density = area / Math.max(1, boxWidth * boxHeight);
+    const score = area * (0.6 + density) * Math.min(aspect, 3);
+    if (!best || score > best.score) best = { x: minX, y: minY, width: boxWidth, height: boxHeight, score };
+  }
+
+  if (!best) return null;
+  const padX = Math.max(4, Math.round(best.width * 0.06));
+  const padY = Math.max(6, Math.round(best.height * 0.04));
+  const x = Math.max(0, best.x - padX);
+  const y = Math.max(0, best.y - padY);
+  const right = Math.min(gridW, best.x + best.width + padX);
+  const bottom = Math.min(gridH, best.y + best.height + padY);
+  return { x: x * 3 / scale, y: y * 3 / scale, width: (right - x) * 3 / scale, height: (bottom - y) * 3 / scale };
 }
 
 async function prepareImage(file: File) {
@@ -111,8 +160,8 @@ async function prepareImage(file: File) {
   const crop = detectBrightCrop(image);
   const sourceWidth = crop?.width ?? image.naturalWidth;
   const sourceHeight = crop?.height ?? image.naturalHeight;
-  const maxDimension = 3200;
-  const scale = Math.min(1.6, maxDimension / Math.max(sourceWidth, sourceHeight));
+  const maxDimension = 3600;
+  const scale = Math.min(2, maxDimension / Math.max(sourceWidth, sourceHeight));
   const canvas = document.createElement("canvas");
   canvas.width = Math.max(1, Math.round(sourceWidth * scale));
   canvas.height = Math.max(1, Math.round(sourceHeight * scale));
@@ -125,12 +174,18 @@ async function prepareImage(file: File) {
   const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
   for (let i = 0; i < imageData.data.length; i += 4) {
     const gray = Math.round(0.299 * imageData.data[i] + 0.587 * imageData.data[i + 1] + 0.114 * imageData.data[i + 2]);
-    const contrast = Math.max(0, Math.min(255, Math.round((gray - 128) * 1.55 + 128)));
-    const value = contrast < 185 ? contrast : 255;
-    imageData.data[i] = value; imageData.data[i + 1] = value; imageData.data[i + 2] = value;
+    const contrast = Math.max(0, Math.min(255, Math.round((gray - 128) * 1.7 + 128)));
+    const value = contrast < 205 ? contrast : 255;
+    imageData.data[i] = value;
+    imageData.data[i + 1] = value;
+    imageData.data[i + 2] = value;
   }
   context.putImageData(imageData, 0, 0);
   return canvas.toDataURL("image/png");
+}
+
+function scoreResult(result: OcrResult) {
+  return result.items.length * 4 + (result.subtotal ? 5 : 0) + (result.grandTotal ? 6 : 0) + (result.serviceAmount ? 2 : 0) + (result.taxAmount ? 2 : 0) + (result.merchantName ? 2 : 0);
 }
 
 export default function SplitBillOcr({ onUseResult }: Props) {
@@ -153,9 +208,16 @@ export default function SplitBillOcr({ onUseResult }: Props) {
       const { createWorker } = await import("tesseract.js");
       const worker = await createWorker("eng", 1, { logger: (message) => { if (typeof message.progress === "number") setProgress(Math.round(message.progress * 100)); if (message.status) setStatus(message.status); } });
       try {
-        await worker.setParameters({ preserve_interword_spaces: "1" });
-        const { data } = await worker.recognize(preparedImage);
-        setResult(parseReceipt(data.text)); setStatus("OCR complete. Review the detected values before using them."); setProgress(100);
+        await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "6" });
+        const first = await worker.recognize(preparedImage);
+        const firstResult = parseReceipt(first.data.text);
+        await worker.setParameters({ tessedit_pageseg_mode: "11" });
+        const second = await worker.recognize(preparedImage);
+        const secondResult = parseReceipt(second.data.text);
+        const best = scoreResult(secondResult) > scoreResult(firstResult) ? secondResult : firstResult;
+        setResult(best);
+        setStatus("OCR complete. Review the detected values before using them.");
+        setProgress(100);
       } finally {
         await worker.terminate();
       }
