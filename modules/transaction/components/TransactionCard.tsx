@@ -28,7 +28,7 @@ export default function TransactionCard({ transaction, wallets, categories, paye
   const dateLabel = new Date(transaction.transactionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 
   return (
-    <div className="rounded-[16px] border border-white/10 bg-[#0E151E] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition hover:border-white/15 hover:bg-[#111923]">
+    <div className="rounded-[16px] border border-white/10 bg-[#121B26] px-4 py-3 shadow-[0_8px_24px_rgba(0,0,0,0.12)] transition hover:border-white/15 hover:bg-[#172231]">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
         <div className="min-w-0 flex-1 md:min-w-[180px]">
           <div className="flex items-center gap-2"><h3 className="truncate text-sm font-semibold text-white">{transaction.payee ? transaction.payee.name : "No merchant"}</h3><span className="shrink-0 rounded-full bg-white/[0.04] px-2 py-0.5 text-[9px] font-medium text-slate-500">{formatTransactionType(transaction.type)}</span></div>
