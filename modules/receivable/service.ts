@@ -32,6 +32,7 @@ export async function getReceivables() {
         orderBy: { receivedAt: "desc" },
         include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } },
       },
+      splitBillParticipant: { select: { id: true, splitBillId: true, name: true } },
     },
     orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
   });
@@ -60,7 +61,7 @@ export async function getReceivableSummary(currencyCode = "IDR") {
   return items.reduce((sum, item) => sum + Math.max(Number(item.amount) - Number(item.receivedAmount), 0), 0);
 }
 
-export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; loanDate?: Date; dueDate?: Date | null; sourceTransactionId?: string | null }) {
+export async function createReceivable(input: { personName: string; description: string; amount: number; currencyId: string; sourceWalletId: string; loanDate?: Date; dueDate?: Date | null; sourceTransactionId?: string | null; splitBillParticipantId?: string | null }) {
   if (input.amount <= 0) throw new Error("Receivable amount must be greater than zero.");
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { id: input.sourceWalletId }, select: { id: true, currencyId: true, walletType: true, currentBalance: true, balanceAsOf: true } });
@@ -77,10 +78,11 @@ export async function createReceivable(input: { personName: string; description:
         loanDate: input.loanDate ?? new Date(),
         dueDate: input.dueDate ?? null,
         sourceTransactionId: input.sourceTransactionId ?? null,
+        ...(input.splitBillParticipantId ? { splitBillParticipant: { connect: { id: input.splitBillParticipantId } } } : {}),
       },
     });
 
-    const shouldReduceWallet = wallet.walletType !== WalletType.CREDIT_CARD;
+    const shouldReduceWallet = !input.sourceTransactionId && wallet.walletType !== WalletType.CREDIT_CARD;
     const createdAt = receivable.createdAt;
     const effectiveDate = input.loanDate ?? createdAt;
     if (shouldReduceWallet && affectsCurrentBalance(effectiveDate, createdAt, wallet.balanceAsOf)) {
@@ -104,10 +106,10 @@ export async function updateReceivable(input: { receivableId: string; personName
     if (newWallet.currencyId !== input.currencyId) throw new Error("Source wallet currency must match the receivable currency.");
 
     const oldEffective = existing.loanDate;
-    const oldApplied = oldWallet && oldWallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(oldEffective, existing.createdAt, oldWallet.balanceAsOf);
+    const oldApplied = !existing.sourceTransactionId && oldWallet && oldWallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(oldEffective, existing.createdAt, oldWallet.balanceAsOf);
     if (oldApplied && oldWallet) await tx.wallet.update({ where: { id: oldWallet.id }, data: { currentBalance: { increment: existing.amount } } });
 
-    const newApplied = newWallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(input.loanDate, existing.createdAt, newWallet.balanceAsOf);
+    const newApplied = !existing.sourceTransactionId && newWallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(input.loanDate, existing.createdAt, newWallet.balanceAsOf);
     if (newApplied) await tx.wallet.update({ where: { id: newWallet.id }, data: { currentBalance: { decrement: input.amount } } });
 
     const updated = await tx.receivable.update({
@@ -133,7 +135,7 @@ export async function deleteReceivable(receivableId: string) {
     if (!receivable) throw new Error("Receivable not found.");
     if (receivable.payments.length > 0) throw new Error("Delete the payment history first before deleting this receivable.");
 
-    if (receivable.sourceWalletId) {
+    if (receivable.sourceWalletId && !receivable.sourceTransactionId) {
       const wallet = await tx.wallet.findUnique({ where: { id: receivable.sourceWalletId }, select: { id: true, walletType: true, balanceAsOf: true } });
       if (wallet && wallet.walletType !== WalletType.CREDIT_CARD && affectsCurrentBalance(receivable.loanDate, receivable.createdAt, wallet.balanceAsOf)) {
         await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: receivable.amount } } });
