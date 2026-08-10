@@ -81,7 +81,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     if (affectsCurrentBalance(oldTransaction, existing.wallet)) await applyBalanceDelta(tx, existing.wallet.id, balanceDelta(oldTransaction).negated());
     if (affectsCurrentBalance(newTransaction, newWallet)) await applyBalanceDelta(tx, newWallet.id, balanceDelta(newTransaction));
 
-    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } }) } }, include: { wallet: true, payee: true, category: true, installmentPlan: true } });
+    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } } }) }, include: { wallet: true, payee: true, category: true, installmentPlan: true } });
   });
 }
 
