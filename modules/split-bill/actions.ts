@@ -16,7 +16,14 @@ function parseCreatePayload(formData: FormData) {
   const value = formData.get("payload");
   if (typeof value !== "string" || !value.trim()) throw new Error("Split Bill data is missing.");
   try {
-    return JSON.parse(value) as { merchantName: string; participants: { name: string; isMe: boolean }[]; items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[]; note?: string };
+    return JSON.parse(value) as {
+      merchantName: string;
+      participants: { name: string; isMe: boolean }[];
+      items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[];
+      tax?: { mode: "AMOUNT" | "PERCENT"; value: number };
+      serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number };
+      note?: string;
+    };
   } catch { throw new Error("Invalid Split Bill data."); }
 }
 
