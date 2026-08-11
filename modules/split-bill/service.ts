@@ -11,7 +11,21 @@ function balanceDelta(type: "INCOME" | "EXPENSE", amount: Prisma.Decimal) { retu
 async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: { currentBalance: delta.isPositive() ? { increment: delta } : { decrement: delta.abs() } } }); }
 function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) { if (!charge || charge.value <= 0) return new Prisma.Decimal(0); if (charge.mode === "PERCENT") { if (charge.value > 100) throw new Error("Tax and service fee percentage cannot exceed 100%."); return subtotal.mul(charge.value).div(100); } return decimal(charge.value); }
 function validateCharge(charge?: ChargeInput, label = "Charge") { if (!charge) return; if (!Number.isFinite(charge.value) || charge.value < 0) throw new Error(`${label} must be a valid non-negative value.`); if (charge.mode === "PERCENT" && charge.value > 100) throw new Error(`${label} percentage cannot exceed 100%.`); }
-function validateInput(input: SplitBillInput) { if (!input.merchantName.trim()) throw new Error("Merchant is required."); if (input.participants.length < 2) throw new Error("Add at least one friend to split the bill with you."); if (input.participants.filter((participant) => participant.isMe).length !== 1) throw new Error("Split Bill must have exactly one 'You' participant."); if (input.items.length === 0) throw new Error("Add at least one bill item."); if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name."); validateCharge(input.tax, "Tax"); validateCharge(input.serviceFee, "Service fee"); for (const item of input.items) { if (!item.name.trim() || item.quantity <= 0 || item.unitPrice < 0) throw new Error("Each item must have a name, positive quantity, and non-negative unit price."); if (item.splitMethod === "PRO_RATA" && item.units.every((unit) => Number(unit) <= 0)) throw new Error(`Set at least one share unit for '${item.name}'.`); } }
+function validateInput(input: SplitBillInput) {
+  if (!input.merchantName.trim()) throw new Error("Merchant is required.");
+  if (input.participants.length < 2) throw new Error("Add at least one friend to split the bill with you.");
+  if (input.participants.filter((participant) => participant.isMe).length !== 1) throw new Error("Split Bill must have exactly one 'You' participant.");
+  if (input.items.length === 0) throw new Error("Add at least one bill item.");
+  if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name.");
+  validateCharge(input.tax, "Tax"); validateCharge(input.serviceFee, "Service fee");
+  for (const item of input.items) {
+    if (!item.name.trim() || item.quantity <= 0 || item.unitPrice < 0) throw new Error("Each item must have a name, positive quantity, and non-negative unit price.");
+    const selectedUnits = item.units.map((unit) => Number(unit) || 0);
+    const selectedCount = selectedUnits.filter((unit) => unit > 0).length;
+    if (selectedCount === 0) throw new Error(`Choose at least one person for '${item.name}'.`);
+    if (item.splitMethod === "PRO_RATA" && selectedCount > 1 && selectedUnits.every((unit) => unit <= 0)) throw new Error(`Set at least one share unit for '${item.name}'.`);
+  }
+}
 
 export async function createSplitBill(input: SplitBillInput) {
   validateInput(input);
@@ -22,8 +36,12 @@ export async function createSplitBill(input: SplitBillInput) {
     for (const inputItem of input.items) {
       const itemAmount = decimal(inputItem.quantity).mul(decimal(inputItem.unitPrice)); subtotal = subtotal.plus(itemAmount);
       const method = inputItem.splitMethod === "PRO_RATA" ? SplitBillItemMethod.PRO_RATA : SplitBillItemMethod.EQUAL;
-      const units = method === SplitBillItemMethod.EQUAL ? participants.map(() => new Prisma.Decimal(1)) : participants.map((_, index) => decimal(inputItem.units[index] ?? 0));
-      const unitTotal = units.reduce((sum, value) => sum.plus(value), new Prisma.Decimal(0)); if (unitTotal.lte(0)) throw new Error(`Set at least one share unit for '${inputItem.name}'.`);
+      const selectedUnits = inputItem.units.map((unit) => decimal(Number(unit) || 0));
+      const selectedCount = selectedUnits.filter((unit) => unit.gt(0)).length;
+      const units = method === SplitBillItemMethod.EQUAL ? selectedUnits.map((unit) => unit.gt(0) ? new Prisma.Decimal(1) : new Prisma.Decimal(0)) : selectedUnits;
+      const unitTotal = units.reduce((sum, value) => sum.plus(value), new Prisma.Decimal(0));
+      if (unitTotal.lte(0)) throw new Error(`Choose at least one person for '${inputItem.name}'.`);
+      if (method === SplitBillItemMethod.PRO_RATA && selectedCount > 1 && unitTotal.lte(0)) throw new Error(`Set at least one share unit for '${inputItem.name}'.`);
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name: inputItem.name.trim(), quantity: inputItem.quantity, unitPrice: inputItem.unitPrice, splitMethod: method } });
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) { if (units[participantIndex].lte(0)) continue; const amount = units[participantIndex].div(unitTotal).mul(itemAmount); shareTotals[participantIndex] = shareTotals[participantIndex].plus(amount); await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: units[participantIndex], amount } }); }
     }
