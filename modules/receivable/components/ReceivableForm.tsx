@@ -7,21 +7,24 @@ import { createReceivableAction } from "../actions";
 
 type Currency = { id: string; code: string; symbol: string };
 type Wallet = { id: string; name: string; walletType: string; currency: { code: string } };
+type FormState = { success: boolean; message?: string; fieldErrors?: Record<string, string[]> };
 
-const initialState = { success: false } as { success: boolean; message?: string; fieldErrors?: Record<string, string[]> };
+const initialState: FormState = { success: false };
 const inputClass = "rounded-xl border border-[#30465D] bg-[#0A1119] px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-emerald-400/50";
 const selectClass = "rounded-xl border border-[#30465D] bg-[#0A1119] px-3 py-2.5 text-sm text-slate-300 outline-none focus:border-emerald-400/50";
 
 export default function ReceivableForm({ currencies, wallets, defaultCurrencyId, today }: { currencies: Currency[]; wallets: Wallet[]; defaultCurrencyId: string; today: string }) {
   const [open, setOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
-  const [state, formAction, pending] = useActionState(async (_prev: typeof initialState, formData: FormData) => {
-    const result = await createReceivableAction(_prev, formData);
-    if (result.success) {
+  const [state, formAction, pending] = useActionState(async (_prev: FormState, formData: FormData): Promise<FormState> => {
+    try {
+      await createReceivableAction(formData);
       setFormKey((key) => key + 1);
       setOpen(false);
+      return { success: true };
+    } catch (error) {
+      return { success: false, message: error instanceof Error ? error.message : "Unable to save receivable." };
     }
-    return result;
   }, initialState);
 
   return (
