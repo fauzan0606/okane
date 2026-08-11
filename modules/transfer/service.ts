@@ -1,4 +1,4 @@
-import { Prisma, TransferOrigin } from "@prisma/client";
+import { Prisma, TransactionType, TransferOrigin } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAsOf: Date | null) {
@@ -11,7 +11,7 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
 }
 
 export async function getTransfers() {
-  const transfers = await prisma.transfer.findMany({ include: { fromWallet: { select: { id: true, name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, toWallet: { select: { id: true, name: true, walletType: true, currency: { select: { code: true, symbol: true } } } } }, orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }] });
+  const transfers = await prisma.transfer.findMany({ include: { fromWallet: { select: { id: true, name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, toWallet: { select: { id: true, name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, feeTransaction: { select: { id: true } } }, orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }] });
   return transfers.map((transfer) => ({ ...transfer, transferDate: transfer.transferDate.toISOString(), amount: transfer.amount.toString(), feeAmount: transfer.feeAmount.toString(), createdAt: transfer.createdAt.toISOString(), updatedAt: transfer.updatedAt.toISOString() }));
 }
 
@@ -29,10 +29,17 @@ export async function createTransfer(input: { transferDate: Date; fromWalletId: 
     if (fromWallet.currencyId !== toWallet.currencyId) throw new Error("Transfer currently requires wallets with the same currency.");
     const amount = new Prisma.Decimal(input.amount);
     const fee = new Prisma.Decimal(input.feeAmount ?? 0);
-    const totalOut = amount.plus(fee);
-    if (fromWallet.currentBalance.lt(totalOut)) throw new Error(`Insufficient balance in ${fromWallet.name}.`);
-    const transfer = await tx.transfer.create({ data: { transferDate: input.transferDate, fromWalletId: input.fromWalletId, toWalletId: input.toWalletId, amount, feeAmount: fee, origin: TransferOrigin.MANUAL } });
-    if (affectsCurrentBalance(input.transferDate, transfer.createdAt, fromWallet.balanceAsOf)) await tx.wallet.update({ where: { id: fromWallet.id }, data: { currentBalance: { decrement: totalOut } } });
+    if (fromWallet.currentBalance.lt(amount.plus(fee))) throw new Error(`Insufficient balance in ${fromWallet.name}.`);
+
+    let feeTransactionId: string | undefined;
+    if (!fee.isZero()) {
+      const feeTransaction = await tx.transaction.create({ data: { transactionDate: input.transferDate, type: TransactionType.EXPENSE, amount: fee, note: "Transfer Fee", wallet: { connect: { id: fromWallet.id } } } });
+      feeTransactionId = feeTransaction.id;
+      if (affectsCurrentBalance(input.transferDate, feeTransaction.createdAt, fromWallet.balanceAsOf)) await tx.wallet.update({ where: { id: fromWallet.id }, data: { currentBalance: { decrement: fee } } });
+    }
+
+    const transfer = await tx.transfer.create({ data: { transferDate: input.transferDate, fromWalletId: input.fromWalletId, toWalletId: input.toWalletId, amount, feeAmount: fee, origin: TransferOrigin.MANUAL, ...(feeTransactionId ? { feeTransactionId } : {}) } });
+    if (affectsCurrentBalance(input.transferDate, transfer.createdAt, fromWallet.balanceAsOf)) await tx.wallet.update({ where: { id: fromWallet.id }, data: { currentBalance: { decrement: amount } } });
     if (affectsCurrentBalance(input.transferDate, transfer.createdAt, toWallet.balanceAsOf)) await tx.wallet.update({ where: { id: toWallet.id }, data: { currentBalance: { increment: amount } } });
     return transfer;
   });
