@@ -25,16 +25,16 @@ export default function NewSplitBillPanel({ currencySymbol = "Rp" }: Props) {
       </DialogTrigger>
       <DialogContent
         showCloseButton
-        className="max-h-[90vh] max-w-5xl overflow-y-auto rounded-[24px] border border-[#30465D] bg-[#0E1925] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
+        className="max-h-[92vh] max-w-6xl overflow-y-auto rounded-[24px] border border-[#30465D] bg-[#0E1925] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)]"
       >
-        <div className="p-5 md:p-6">
-          <DialogHeader className="mb-5 flex-row items-start gap-3 pr-8">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
-              <ReceiptText size={21} />
+        <div className="p-6 md:p-8">
+          <DialogHeader className="mb-6 flex-row items-start gap-3 pr-10">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400">
+              <ReceiptText size={22} />
             </div>
             <div>
-              <DialogTitle className="text-lg font-semibold text-white">New Split Bill</DialogTitle>
-              <DialogDescription className="mt-1 text-xs leading-5 text-slate-500">Start with the merchant. No transaction or wallet is required at this stage.</DialogDescription>
+              <DialogTitle className="text-xl font-semibold text-white">New Split Bill</DialogTitle>
+              <DialogDescription className="mt-1 text-sm leading-6 text-slate-500">Start with the merchant. No transaction or wallet is required at this stage.</DialogDescription>
             </div>
           </DialogHeader>
           <SplitBillForm currencySymbol={currencySymbol} />
