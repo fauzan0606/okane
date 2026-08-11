@@ -84,11 +84,34 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
 
 export async function getSplitBills() { return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } }); }
 
+function transactionAffectedBalance(transaction: { transactionDate: Date; createdAt: Date }, balanceAsOf: Date | null) {
+  return !balanceAsOf || transaction.transactionDate > balanceAsOf || (transaction.transactionDate.toDateString() === balanceAsOf.toDateString() && transaction.createdAt > balanceAsOf);
+}
+
 export async function deleteSplitBill(splitBillId: string) {
   return prisma.$transaction(async (tx) => {
-    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { participants: { include: { receivable: { include: { payments: true } } } } } }); if (!splitBill) throw new Error("Split Bill not found.");
-    if (splitBill.transactionId) throw new Error("This Split Bill is already in your financial records. Delete or correct the linked transaction and receivables from their respective modules instead.");
-    const hasPayments = splitBill.participants.some((participant) => (participant.receivable?.payments.length ?? 0) > 0); if (hasPayments) throw new Error("Remove the receivable payment history before deleting this Split Bill.");
-    const receivableIds = splitBill.participants.map((participant) => participant.receivable?.id).filter((id): id is string => Boolean(id)); if (receivableIds.length) await tx.receivable.deleteMany({ where: { id: { in: receivableIds } } }); await tx.splitBill.delete({ where: { id: splitBill.id } });
+    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } }, participants: { include: { receivable: { include: { payments: { include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } } } } } } } } } });
+    if (!splitBill) throw new Error("Split Bill not found.");
+
+    for (const participant of splitBill.participants) {
+      const receivable = participant.receivable;
+      if (!receivable) continue;
+      for (const payment of receivable.payments) {
+        if (transactionAffectedBalance(payment.transaction, payment.transaction.wallet.balanceAsOf)) {
+          await applyBalanceDelta(tx, payment.transaction.wallet.id, balanceDelta("INCOME", payment.amount).negated());
+        }
+        await tx.transaction.delete({ where: { id: payment.transaction.id } });
+      }
+      await tx.receivable.delete({ where: { id: receivable.id } });
+    }
+
+    if (splitBill.transaction) {
+      if (transactionAffectedBalance(splitBill.transaction, splitBill.transaction.wallet.balanceAsOf)) {
+        await applyBalanceDelta(tx, splitBill.transaction.wallet.id, balanceDelta("EXPENSE", splitBill.transaction.amount).negated());
+      }
+      await tx.transaction.delete({ where: { id: splitBill.transaction.id } });
+    }
+
+    await tx.splitBill.delete({ where: { id: splitBill.id } });
   });
 }
