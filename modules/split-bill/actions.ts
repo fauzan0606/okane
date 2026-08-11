@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { createSplitBill, deleteSplitBill, finalizeSplitBill } from "./service";
 import { updateSplitBillItemAllocation } from "./item-edit-service";
 
@@ -31,6 +32,7 @@ function parseCreatePayload(formData: FormData) {
 export async function createSplitBillAction(formData: FormData) {
   await createSplitBill(parseCreatePayload(formData));
   refreshAll();
+  redirect("/split-bill");
 }
 
 export async function finalizeSplitBillAction(formData: FormData) {
