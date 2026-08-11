@@ -82,7 +82,7 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
   });
 }
 
-export async function getSplitBills() { return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { createdAt: "asc" } } }, orderBy: { createdAt: "desc" } }); }
+export async function getSplitBills() { return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { id: "asc" } } }, orderBy: { createdAt: "desc" } }); }
 
 function transactionAffectedBalance(transaction: { transactionDate: Date; createdAt: Date }, balanceAsOf: Date | null) {
   return !balanceAsOf || transaction.transactionDate > balanceAsOf || (transaction.transactionDate.toDateString() === balanceAsOf.toDateString() && transaction.createdAt > balanceAsOf);
@@ -90,7 +90,7 @@ function transactionAffectedBalance(transaction: { transactionDate: Date; create
 
 export async function deleteSplitBill(splitBillId: string) {
   return prisma.$transaction(async (tx) => {
-    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } }, participants: { include: { receivable: { include: { payments: { include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } } } } } } } } } });
+    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } }, participants: { include: { receivable: { include: { payments: { include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } } } } } } } } });
     if (!splitBill) throw new Error("Split Bill not found.");
 
     for (const participant of splitBill.participants) {
