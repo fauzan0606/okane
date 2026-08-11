@@ -205,13 +205,13 @@ export default function SplitBillOcr({ onUseResult }: Props) {
     try {
       if (!selectedFile.type.startsWith("image/")) throw new Error("Please select an image file.");
       const preparedImage = await prepareImage(selectedFile);
-      const { createWorker } = await import("tesseract.js");
+      const { createWorker, PSM } = await import("tesseract.js");
       const worker = await createWorker("eng", 1, { logger: (message) => { if (typeof message.progress === "number") setProgress(Math.round(message.progress * 100)); if (message.status) setStatus(message.status); } });
       try {
-        await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: "6" });
+        await worker.setParameters({ preserve_interword_spaces: "1", tessedit_pageseg_mode: PSM.SINGLE_BLOCK });
         const first = await worker.recognize(preparedImage);
         const firstResult = parseReceipt(first.data.text);
-        await worker.setParameters({ tessedit_pageseg_mode: "11" });
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SPARSE_TEXT });
         const second = await worker.recognize(preparedImage);
         const secondResult = parseReceipt(second.data.text);
         const best = scoreResult(secondResult) > scoreResult(firstResult) ? secondResult : firstResult;
