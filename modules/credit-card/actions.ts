@@ -44,24 +44,30 @@ export async function createManualStatementAction(formData: FormData) {
 
 export async function recordStatementPaymentAction(formData: FormData) {
   const statementId = formData.get("statementId");
+  const sourceWalletId = formData.get("sourceWalletId");
   const amount = parseAmount(formData.get("amount"));
   const paidAt = parseDate(formData.get("paidAt"));
   const note = formData.get("note");
-  if (typeof statementId !== "string" || !statementId || amount === null || !paidAt) throw new Error("Please enter a valid payment.");
-  await recordStatementPayment(statementId, amount, paidAt, typeof note === "string" ? note : undefined);
+  if (typeof statementId !== "string" || !statementId || typeof sourceWalletId !== "string" || !sourceWalletId || amount === null || !paidAt) throw new Error("Please enter a valid payment and source wallet.");
+  await recordStatementPayment(statementId, sourceWalletId, amount, paidAt, typeof note === "string" ? note : undefined);
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
+  revalidatePath("/transfer");
+  revalidatePath("/");
 }
 
 export async function updateStatementPaymentAction(formData: FormData) {
   const paymentId = formData.get("paymentId");
+  const sourceWalletId = formData.get("sourceWalletId");
   const amount = parseAmount(formData.get("amount"));
   const paidAt = parseDate(formData.get("paidAt"));
   const note = formData.get("note");
-  if (typeof paymentId !== "string" || !paymentId || amount === null || !paidAt) throw new Error("Please enter a valid payment.");
-  await updateStatementPayment(paymentId, amount, paidAt, typeof note === "string" ? note : undefined);
+  if (typeof paymentId !== "string" || !paymentId || typeof sourceWalletId !== "string" || !sourceWalletId || amount === null || !paidAt) throw new Error("Please enter a valid payment and source wallet.");
+  await updateStatementPayment(paymentId, sourceWalletId, amount, paidAt, typeof note === "string" ? note : undefined);
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
+  revalidatePath("/transfer");
+  revalidatePath("/");
 }
 
 export async function deleteStatementPaymentAction(formData: FormData) {
@@ -70,6 +76,8 @@ export async function deleteStatementPaymentAction(formData: FormData) {
   await deleteStatementPayment(paymentId);
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
+  revalidatePath("/transfer");
+  revalidatePath("/");
 }
 
 export async function updateCreditCardRewardPointAction(formData: FormData) {
