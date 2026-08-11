@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSplitBill, deleteSplitBill, finalizeSplitBill } from "./service";
+import { updateSplitBillItemAllocation } from "./item-edit-service";
 
 function refreshAll() {
   revalidatePath("/split-bill");
@@ -40,6 +41,20 @@ export async function finalizeSplitBillAction(formData: FormData) {
   if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Transaction date is required.");
   if (typeof walletId !== "string" || !walletId) throw new Error("Wallet is required.");
   await finalizeSplitBill(splitBillId, { transactionDate: new Date(transactionDate), walletId });
+  refreshAll();
+}
+
+export async function updateSplitBillItemAction(formData: FormData) {
+  const splitBillId = formData.get("splitBillId");
+  const itemId = formData.get("itemId");
+  const splitMethod = formData.get("splitMethod");
+  const allocations = formData.get("allocations");
+  if (typeof splitBillId !== "string" || !splitBillId || typeof itemId !== "string" || !itemId) throw new Error("Split Bill item not found.");
+  if (splitMethod !== "EQUAL" && splitMethod !== "PRO_RATA") throw new Error("Invalid split method.");
+  if (typeof allocations !== "string") throw new Error("Item allocation data is missing.");
+  let parsed: { participantId: string; units: number }[];
+  try { parsed = JSON.parse(allocations); } catch { throw new Error("Invalid item allocation data."); }
+  await updateSplitBillItemAllocation({ splitBillId, itemId, splitMethod, allocations: parsed });
   refreshAll();
 }
 
