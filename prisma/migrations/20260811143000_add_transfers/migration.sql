@@ -25,4 +25,3 @@ CREATE INDEX "Transfer_transferDate_idx" ON "Transfer"("transferDate");
 CREATE INDEX "Transfer_fromWalletId_transferDate_idx" ON "Transfer"("fromWalletId", "transferDate");
 CREATE INDEX "Transfer_toWalletId_transferDate_idx" ON "Transfer"("toWalletId", "transferDate");
 CREATE INDEX "Transfer_origin_transferDate_idx" ON "Transfer"("origin", "transferDate");
-CREATE INDEX "CreditCardStatementPayment_statementId_paidAt_idx" ON "CreditCardStatementPayment"("statementId", "paidAt");
