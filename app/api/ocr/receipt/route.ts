@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 
-const MODEL = "gemini-2.5-flash-lite";
+// Use a current stable multimodal model. Gemini 2.5 Flash-Lite is unavailable
+// to some newly created API projects, while 3.1 Flash-Lite is the current
+// stable low-cost model for image/data extraction.
+const MODEL = "gemini-3.1-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 const responseSchema = {
@@ -44,7 +47,7 @@ Rules:
   const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64 } }] }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: responseSchema, temperature: 0 } }),
+    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64 } }] }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: responseSchema } }),
   });
 
   if (!response.ok) {
