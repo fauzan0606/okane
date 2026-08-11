@@ -39,6 +39,8 @@ model Wallet {
   transactions Transaction[]
   receivablePayments ReceivablePayment[]
   sourceReceivables Receivable[] @relation("ReceivableSourceWallet")
+  transfersFrom Transfer[] @relation("TransferFromWallet")
+  transfersTo Transfer[] @relation("TransferToWallet")
   @@index([currencyId])
 }
 
@@ -86,9 +88,11 @@ model CreditCardStatementPayment {
   amount Decimal
   paidAt DateTime
   note String?
+  transferId String? @unique
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt DateTime @updatedAt
   statement CreditCardStatement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  transfer Transfer? @relation("CreditCardPaymentTransfer", fields: [transferId], references: [id], onDelete: SetNull)
   @@index([statementId, paidAt])
 }
 
@@ -132,8 +136,30 @@ model Transaction {
   installmentPlan InstallmentPlan?
   receivablePayment ReceivablePayment?
   splitBill SplitBill?
+  transferFee Transfer? @relation("TransferFee")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model Transfer {
+  id String @id @default(uuid())
+  transferDate DateTime
+  fromWalletId String
+  toWalletId String
+  amount Decimal
+  feeAmount Decimal @default(0)
+  origin TransferOrigin @default(MANUAL)
+  feeTransactionId String? @unique
+  fromWallet Wallet @relation("TransferFromWallet", fields: [fromWalletId], references: [id])
+  toWallet Wallet @relation("TransferToWallet", fields: [toWalletId], references: [id])
+  feeTransaction Transaction? @relation("TransferFee", fields: [feeTransactionId], references: [id], onDelete: SetNull)
+  creditCardPayment CreditCardStatementPayment? @relation("CreditCardPaymentTransfer")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([transferDate])
+  @@index([fromWalletId, transferDate])
+  @@index([toWalletId, transferDate])
+  @@index([origin, transferDate])
 }
 
 model InstallmentPlan {
@@ -190,8 +216,6 @@ model SplitBillItem {
   splitMethod SplitBillItemMethod @default(EQUAL)
   splitBill SplitBill @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
   allocations SplitBillItemAllocation[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
   @@index([splitBillId])
 }
 
@@ -273,6 +297,11 @@ enum ReceivableStatus {
 enum TransactionKind {
   STANDARD
   REIMBURSEMENT
+}
+
+enum TransferOrigin {
+  MANUAL
+  CREDIT_CARD_PAYMENT
 }
 
 enum WalletType {
