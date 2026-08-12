@@ -19,6 +19,7 @@ const responseSchema = {
 function jsonError(message: string, status = 400) { return NextResponse.json({ error: message }, { status }); }
 function round(value: number) { return Math.round((value + Number.EPSILON) * 100) / 100; }
 function treatment(value: unknown): ChargeTreatment { return value === "INCLUDED" || value === "EXCLUDED" ? value : "UNKNOWN"; }
+function closeEnough(a: number, b: number, tolerance = 1) { return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance; }
 
 function normalizeResult(raw: any) {
   const items = Array.isArray(raw.items) ? raw.items.map((item: any) => {
@@ -47,11 +48,26 @@ function normalizeResult(raw: any) {
 
   const detectedDeliveryDiscount = discounts.filter((discount: any) => discount.scope === "DELIVERY").reduce((sum: number, discount: any) => sum + discount.amount, 0);
   const deliveryDiscount = deliveryFee > 0 ? Math.min(deliveryFee, round(Math.max(Number(raw.deliveryDiscountAmount) || 0, detectedDeliveryDiscount))) : 0;
+  const netDelivery = round(Math.max(deliveryFee - deliveryDiscount, 0));
   const itemSubtotal = round(items.reduce((sum: number, item: any) => sum + item.amount, 0));
+  const orderDiscount = round(discounts.filter((discount: any) => discount.scope === "ORDER").reduce((sum: number, discount: any) => sum + discount.amount, 0));
+  const discountedSubtotal = round(Math.max(itemSubtotal - orderDiscount, 0));
   const taxAmount = Number(raw.taxAmount);
   const serviceAmount = Number(raw.serviceAmount);
-  const taxMode = treatment(raw.taxMode);
-  const serviceMode = treatment(raw.serviceMode);
+  let taxMode = treatment(raw.taxMode);
+  let serviceMode = treatment(raw.serviceMode);
+  const grandTotal = raw.grandTotal !== undefined && Number.isFinite(Number(raw.grandTotal)) ? round(Number(raw.grandTotal)) : undefined;
+
+  // When a receipt prints tax as separate components but the grand total already
+  // equals the discounted merchandise subtotal, the tax is INCLUDED in that total.
+  // This is a deterministic reconciliation using printed receipt components, not
+  // a guess made merely to force an arbitrary balance.
+  if (grandTotal !== undefined && Number.isFinite(taxAmount) && taxAmount >= 0) {
+    const serviceExcluded = serviceMode === "EXCLUDED" && Number.isFinite(serviceAmount) ? round(serviceAmount) : 0;
+    const merchandiseAndTaxBase = round(grandTotal - netDelivery - serviceExcluded);
+    if (closeEnough(merchandiseAndTaxBase, discountedSubtotal)) taxMode = "INCLUDED";
+    else if (closeEnough(merchandiseAndTaxBase, round(discountedSubtotal + taxAmount))) taxMode = "EXCLUDED";
+  }
 
   return {
     ...raw,
@@ -65,7 +81,7 @@ function normalizeResult(raw: any) {
     deliveryFeeAmount: deliveryFee > 0 ? deliveryFee : undefined,
     deliveryDiscountAmount: deliveryDiscount > 0 ? deliveryDiscount : undefined,
     taxAmount: Number.isFinite(taxAmount) && taxAmount >= 0 ? round(taxAmount) : undefined,
-    grandTotal: raw.grandTotal !== undefined && Number.isFinite(Number(raw.grandTotal)) ? round(Number(raw.grandTotal)) : undefined,
+    grandTotal,
   };
 }
 
@@ -90,8 +106,7 @@ Rules:
 - Detect delivery fee and delivery discount separately.
 - Extract subtotal, tax/PBI/PPN/pajak, service charge, rounding, and grand total when visible.
 - SERVICE CHARGE RULE: Set serviceAmount/servicePercent ONLY when a service charge or service fee is explicitly printed. If none is printed, omit both.
-- TAX TREATMENT: Set taxMode to INCLUDED only when the receipt explicitly says tax is included/inclusive or the tax amount is clearly already embedded in the displayed item/subtotal prices. Set EXCLUDED when the receipt presents tax as an additional charge on top of the displayed subtotal/net sales. If the receipt does not provide enough evidence, set UNKNOWN. Never infer the mode merely to make the grand total balance.
-- SERVICE TREATMENT: Set serviceMode using the same rule. Explicitly included service charge = INCLUDED; separately added service charge = EXCLUDED; insufficient evidence = UNKNOWN.
+- TAX TREATMENT: Set taxMode to INCLUDED only when the receipt explicitly says tax is included/inclusive, or when the printed discounted merchandise total already equals the displayed net-sales amount plus its printed tax components. Set EXCLUDED when tax is an additional charge on top of the displayed discounted merchandise subtotal. If there is not enough evidence, set UNKNOWN.
 - If tax/service is INCLUDED, still extract its printed amount, but the application must not add it a second time to the bill total.
 - Preserve exact monetary values printed on the receipt.
 - Monetary values must be plain numbers without currency symbols or separators.
