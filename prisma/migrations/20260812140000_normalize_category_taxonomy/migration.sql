@@ -3,96 +3,60 @@
 -- then legacy category/subcategory rows are marked inactive rather than deleted.
 
 -- Ensure canonical expense categories exist.
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Food & Dining', 'EXPENSE', true, 0, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Food & Dining' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Housing', 'EXPENSE', true, 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Housing' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Transportation', 'EXPENSE', true, 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Transportation' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Shopping', 'EXPENSE', true, 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Shopping' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Health & Wellness', 'EXPENSE', true, 4, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Health & Wellness' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Entertainment', 'EXPENSE', true, 5, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Entertainment' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Travel', 'EXPENSE', true, 6, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Travel' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Finance & Fees', 'EXPENSE', true, 7, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Finance & Fees' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Family & Education', 'EXPENSE', true, 8, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Family & Education' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Insurance & Protection', 'EXPENSE', true, 9, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Insurance & Protection' AND "type" = 'EXPENSE');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Other', 'EXPENSE', true, 10, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Other' AND "type" = 'EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Food & Dining', 'EXPENSE', true, 0, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Food & Dining' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Housing', 'EXPENSE', true, 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Transportation', 'EXPENSE', true, 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Transportation' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Shopping', 'EXPENSE', true, 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Shopping' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Health & Wellness', 'EXPENSE', true, 4, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Health & Wellness' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Entertainment', 'EXPENSE', true, 5, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Entertainment' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Travel', 'EXPENSE', true, 6, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Travel' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Finance & Fees', 'EXPENSE', true, 7, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Finance & Fees' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Family & Education', 'EXPENSE', true, 8, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Insurance & Protection', 'EXPENSE', true, 9, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Other', 'EXPENSE', true, 10, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Other' AND "type"='EXPENSE');
 
 -- Ensure canonical income categories exist.
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Employment', 'INCOME', true, 0, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Employment' AND "type" = 'INCOME');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Business & Side Income', 'INCOME', true, 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Business & Side Income' AND "type" = 'INCOME');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Investment', 'INCOME', true, 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Investment' AND "type" = 'INCOME');
-INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt")
-SELECT lower(hex(randomblob(16))), 'Other Income', 'INCOME', true, 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
-WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name" = 'Other Income' AND "type" = 'INCOME');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Employment', 'INCOME', true, 0, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Employment' AND "type"='INCOME');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Business & Side Income', 'INCOME', true, 1, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Business & Side Income' AND "type"='INCOME');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Investment', 'INCOME', true, 2, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Investment' AND "type"='INCOME');
+INSERT INTO "Category" ("id", "name", "type", "isSystem", "sortOrder", "isActive", "createdAt", "updatedAt") SELECT lower(hex(randomblob(16))), 'Other Income', 'INCOME', true, 3, true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP WHERE NOT EXISTS (SELECT 1 FROM "Category" WHERE "name"='Other Income' AND "type"='INCOME');
 
--- Remap legacy category names whose meaning is unambiguous.
-UPDATE "Transaction" SET "categoryId" = (SELECT "id" FROM "Category" WHERE "name"='Food & Dining' AND "type"='EXPENSE' LIMIT 1)
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Food & Drinks' AND "type"='EXPENSE');
-UPDATE "Transaction" SET "categoryId" = (SELECT "id" FROM "Category" WHERE "name"='Transportation' AND "type"='EXPENSE' LIMIT 1)
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Transport' AND "type"='EXPENSE');
-UPDATE "Transaction" SET "categoryId" = (SELECT "id" FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE' LIMIT 1)
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Bills & Utilities' AND "type"='EXPENSE');
-UPDATE "Transaction" SET "categoryId" = (SELECT "id" FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE' LIMIT 1)
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Family' AND "type"='EXPENSE');
-UPDATE "Transaction" SET "categoryId" = (SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE' LIMIT 1)
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Insurance' AND "type"='EXPENSE');
+-- Create every canonical subcategory on existing databases too.
+-- Existing rows keep their IDs; missing rows are created only once.
+INSERT INTO "Subcategory" ("id","categoryId","name","isSystem","sortOrder","isActive","createdAt","updatedAt") SELECT lower(hex(randomblob(16))), c."id", v."name", true, v."sortOrder", true, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP FROM "Category" c JOIN (SELECT 'Food & Dining' category, 'Groceries' name, 0 sortOrder UNION ALL SELECT 'Food & Dining','Restaurants',1 UNION ALL SELECT 'Food & Dining','Coffee & Drinks',2 UNION ALL SELECT 'Food & Dining','Delivery & Takeaway',3 UNION ALL SELECT 'Food & Dining','Snacks & Desserts',4 UNION ALL SELECT 'Housing','Rent / Mortgage',0 UNION ALL SELECT 'Housing','Utilities',1 UNION ALL SELECT 'Housing','Household',2 UNION ALL SELECT 'Housing','Maintenance & Repairs',3 UNION ALL SELECT 'Transportation','Fuel',0 UNION ALL SELECT 'Transportation','Public Transportation',1 UNION ALL SELECT 'Transportation','Taxi / Ride-hailing',2 UNION ALL SELECT 'Transportation','Parking',3 UNION ALL SELECT 'Transportation','Toll',4 UNION ALL SELECT 'Transportation','Vehicle Maintenance',5 UNION ALL SELECT 'Shopping','Clothing',0 UNION ALL SELECT 'Shopping','Electronics',1 UNION ALL SELECT 'Shopping','Personal Items',2 UNION ALL SELECT 'Shopping','Home & Furniture',3 UNION ALL SELECT 'Shopping','Gifts',4 UNION ALL SELECT 'Health & Wellness','Medical',0 UNION ALL SELECT 'Health & Wellness','Pharmacy',1 UNION ALL SELECT 'Health & Wellness','Dental',2 UNION ALL SELECT 'Health & Wellness','Fitness',3 UNION ALL SELECT 'Health & Wellness','Personal Care',4 UNION ALL SELECT 'Entertainment','Movies & Events',0 UNION ALL SELECT 'Entertainment','Hobbies',1 UNION ALL SELECT 'Entertainment','Games',2 UNION ALL SELECT 'Entertainment','Streaming & Subscriptions',3 UNION ALL SELECT 'Travel','Flights',0 UNION ALL SELECT 'Travel','Hotels',1 UNION ALL SELECT 'Travel','Local Transport',2 UNION ALL SELECT 'Travel','Activities',3 UNION ALL SELECT 'Travel','Other Travel',4 UNION ALL SELECT 'Finance & Fees','Transfer Fee',0 UNION ALL SELECT 'Finance & Fees','Bank Fee',1 UNION ALL SELECT 'Finance & Fees','ATM Fee',2 UNION ALL SELECT 'Finance & Fees','Credit Card Fee',3 UNION ALL SELECT 'Finance & Fees','Interest',4 UNION ALL SELECT 'Finance & Fees','Tax & Government Fee',5 UNION ALL SELECT 'Family & Education','Family Support',0 UNION ALL SELECT 'Family & Education','Childcare',1 UNION ALL SELECT 'Family & Education','Education',2 UNION ALL SELECT 'Family & Education','School / Tuition',3 UNION ALL SELECT 'Insurance & Protection','Insurance',0 UNION ALL SELECT 'Insurance & Protection','Other Protection',1 UNION ALL SELECT 'Other','Charity / Donation',0 UNION ALL SELECT 'Other','Other Expense',1 UNION ALL SELECT 'Employment','Salary',0 UNION ALL SELECT 'Employment','Bonus',1 UNION ALL SELECT 'Employment','Overtime',2 UNION ALL SELECT 'Employment','Allowance',3 UNION ALL SELECT 'Business & Side Income','Business Income',0 UNION ALL SELECT 'Business & Side Income','Freelance',1 UNION ALL SELECT 'Business & Side Income','Commission',2 UNION ALL SELECT 'Business & Side Income','Rental Income',3 UNION ALL SELECT 'Investment','Dividend',0 UNION ALL SELECT 'Investment','Interest Income',1 UNION ALL SELECT 'Investment','Capital Gain',2 UNION ALL SELECT 'Other Income','Gift Received',0 UNION ALL SELECT 'Other Income','Refund',1 UNION ALL SELECT 'Other Income','Reimbursement',2 UNION ALL SELECT 'Other Income','Other Income',3) v ON v.category=c."name" WHERE NOT EXISTS (SELECT 1 FROM "Subcategory" s WHERE s."categoryId"=c."id" AND s."name"=v."name");
 
--- Move legacy Insurance subcategory from Other into Insurance & Protection where applicable.
-UPDATE "Transaction"
-SET "categoryId" = (SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE' LIMIT 1)
-WHERE "subcategoryId" IN (
-  SELECT s."id" FROM "Subcategory" s JOIN "Category" c ON c."id"=s."categoryId"
-  WHERE s."name"='Insurance' AND c."name"='Other' AND c."type"='EXPENSE'
-);
+-- Remap legacy categories. For transactions with a legacy subcategory, preserve it when the same
+-- subcategory exists in the target category; otherwise clear it rather than leaving an invalid pair.
+UPDATE "Transaction" SET "subcategoryId" = (SELECT ts."id" FROM "Subcategory" ts WHERE ts."categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Food & Dining' AND "type"='EXPENSE' LIMIT 1) AND ts."name"=(SELECT s."name" FROM "Subcategory" s WHERE s."id"="Transaction"."subcategoryId" LIMIT 1) AND ts."isActive"=true LIMIT 1), "categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Food & Dining' AND "type"='EXPENSE' LIMIT 1) WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Food & Drinks' AND "type"='EXPENSE');
+UPDATE "Transaction" SET "subcategoryId" = (SELECT ts."id" FROM "Subcategory" ts WHERE ts."categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Transportation' AND "type"='EXPENSE' LIMIT 1) AND ts."name"=(SELECT s."name" FROM "Subcategory" s WHERE s."id"="Transaction"."subcategoryId" LIMIT 1) AND ts."isActive"=true LIMIT 1), "categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Transportation' AND "type"='EXPENSE' LIMIT 1) WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Transport' AND "type"='EXPENSE');
+UPDATE "Transaction" SET "subcategoryId" = (SELECT ts."id" FROM "Subcategory" ts WHERE ts."categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE' LIMIT 1) AND ts."name"=(SELECT s."name" FROM "Subcategory" s WHERE s."id"="Transaction"."subcategoryId" LIMIT 1) AND ts."isActive"=true LIMIT 1), "categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE' LIMIT 1) WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Bills & Utilities' AND "type"='EXPENSE');
+UPDATE "Transaction" SET "subcategoryId" = (SELECT ts."id" FROM "Subcategory" ts WHERE ts."categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE' LIMIT 1) AND ts."name"=(SELECT s."name" FROM "Subcategory" s WHERE s."id"="Transaction"."subcategoryId" LIMIT 1) AND ts."isActive"=true LIMIT 1), "categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE' LIMIT 1) WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Family' AND "type"='EXPENSE');
+UPDATE "Transaction" SET "subcategoryId" = (SELECT ts."id" FROM "Subcategory" ts WHERE ts."categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE' LIMIT 1) AND ts."name"=(SELECT s."name" FROM "Subcategory" s WHERE s."id"="Transaction"."subcategoryId" LIMIT 1) AND ts."isActive"=true LIMIT 1), "categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE' LIMIT 1) WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Insurance' AND "type"='EXPENSE');
+UPDATE "Transaction" SET "subcategoryId" = (SELECT ts."id" FROM "Subcategory" ts WHERE ts."categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE' LIMIT 1) AND ts."name"='Insurance' AND ts."isActive"=true LIMIT 1), "categoryId"=(SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE' LIMIT 1) WHERE "subcategoryId" IN (SELECT s."id" FROM "Subcategory" s JOIN "Category" c ON c."id"=s."categoryId" WHERE s."name"='Insurance' AND c."name"='Other' AND c."type"='EXPENSE');
 
--- Rename canonical subcategories that were simplified in the final taxonomy.
-UPDATE "Subcategory" SET "name"='Maintenance & Repairs'
-WHERE "name"='Maintenance' AND "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE');
-UPDATE "Subcategory" SET "name"='Family Support'
-WHERE "name"='Family' AND "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE');
+-- Rename legacy subcategories that have an unambiguous canonical replacement.
+UPDATE "Subcategory" SET "name"='Maintenance & Repairs' WHERE "name"='Maintenance' AND "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE') AND NOT EXISTS (SELECT 1 FROM "Subcategory" s2 WHERE s2."categoryId"="Subcategory"."categoryId" AND s2."name"='Maintenance & Repairs');
+UPDATE "Subcategory" SET "name"='Family Support' WHERE "name"='Family' AND "categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE') AND NOT EXISTS (SELECT 1 FROM "Subcategory" s2 WHERE s2."categoryId"="Subcategory"."categoryId" AND s2."name"='Family Support');
 
 -- Mark every non-canonical category inactive. Historical transactions remain intact.
-UPDATE "Category" SET "isActive"=false
-WHERE "type"='EXPENSE' AND "name" NOT IN ('Food & Dining','Housing','Transportation','Shopping','Health & Wellness','Entertainment','Travel','Finance & Fees','Family & Education','Insurance & Protection','Other');
-UPDATE "Category" SET "isActive"=false
-WHERE "type"='INCOME' AND "name" NOT IN ('Employment','Business & Side Income','Investment','Other Income');
+UPDATE "Category" SET "isActive"=false WHERE "type"='EXPENSE' AND "name" NOT IN ('Food & Dining','Housing','Transportation','Shopping','Health & Wellness','Entertainment','Travel','Finance & Fees','Family & Education','Insurance & Protection','Other');
+UPDATE "Category" SET "isActive"=false WHERE "type"='INCOME' AND "name" NOT IN ('Employment','Business & Side Income','Investment','Other Income');
 
--- Mark non-canonical subcategories inactive. We do not delete them because historical transactions may reference them.
-UPDATE "Subcategory" SET "isActive"=false
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "type"='EXPENSE' AND "name"='Food & Dining')
-  AND "name" NOT IN ('Groceries','Restaurants','Coffee & Drinks','Delivery & Takeaway','Snacks & Desserts');
-UPDATE "Subcategory" SET "isActive"=false
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "type"='EXPENSE' AND "name"='Housing')
-  AND "name" NOT IN ('Rent / Mortgage','Utilities','Household','Maintenance & Repairs');
-UPDATE "Subcategory" SET "isActive"=false
-WHERE "categoryId" IN (SELECT "id" FROM "Category" WHERE "type"='EXPENSE' AND "name"='Transportation')
-  AND "name" NOT IN ('Fuel','Public Transportation','Taxi / Ride-hailing','Parking','Toll','Vehicle Maintenance');
-
--- Ensure the additional final-taxonomy subcategories exist via the seed on fresh databases;
--- this migration only normalizes existing records and preserves their IDs/history.
+-- Mark every non-canonical subcategory inactive; never delete historical references.
+UPDATE "Subcategory" SET "isActive"=false WHERE NOT (
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Food & Dining' AND "type"='EXPENSE') AND "name" IN ('Groceries','Restaurants','Coffee & Drinks','Delivery & Takeaway','Snacks & Desserts')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Housing' AND "type"='EXPENSE') AND "name" IN ('Rent / Mortgage','Utilities','Household','Maintenance & Repairs')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Transportation' AND "type"='EXPENSE') AND "name" IN ('Fuel','Public Transportation','Taxi / Ride-hailing','Parking','Toll','Vehicle Maintenance')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Shopping' AND "type"='EXPENSE') AND "name" IN ('Clothing','Electronics','Personal Items','Home & Furniture','Gifts')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Health & Wellness' AND "type"='EXPENSE') AND "name" IN ('Medical','Pharmacy','Dental','Fitness','Personal Care')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Entertainment' AND "type"='EXPENSE') AND "name" IN ('Movies & Events','Hobbies','Games','Streaming & Subscriptions')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Travel' AND "type"='EXPENSE') AND "name" IN ('Flights','Hotels','Local Transport','Activities','Other Travel')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Finance & Fees' AND "type"='EXPENSE') AND "name" IN ('Transfer Fee','Bank Fee','ATM Fee','Credit Card Fee','Interest','Tax & Government Fee')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Family & Education' AND "type"='EXPENSE') AND "name" IN ('Family Support','Childcare','Education','School / Tuition')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Insurance & Protection' AND "type"='EXPENSE') AND "name" IN ('Insurance','Other Protection')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Other' AND "type"='EXPENSE') AND "name" IN ('Charity / Donation','Other Expense')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Employment' AND "type"='INCOME') AND "name" IN ('Salary','Bonus','Overtime','Allowance')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Business & Side Income' AND "type"='INCOME') AND "name" IN ('Business Income','Freelance','Commission','Rental Income')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Investment' AND "type"='INCOME') AND "name" IN ('Dividend','Interest Income','Capital Gain')) OR
+  ("categoryId" IN (SELECT "id" FROM "Category" WHERE "name"='Other Income' AND "type"='INCOME') AND "name" IN ('Gift Received','Refund','Reimbursement','Other Income'))
+);
