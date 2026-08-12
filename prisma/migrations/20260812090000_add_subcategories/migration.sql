@@ -1,8 +1,11 @@
+-- Add Category/Subcategory support in an idempotent way so existing local databases
+-- that already contain the Subcategory table can be upgraded without a reset.
+
 -- AlterTable
 ALTER TABLE "Category" ADD COLUMN "isSystem" BOOLEAN NOT NULL DEFAULT false;
 
 -- CreateTable
-CREATE TABLE "Subcategory" (
+CREATE TABLE IF NOT EXISTS "Subcategory" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "categoryId" TEXT NOT NULL,
     "name" TEXT NOT NULL,
@@ -18,6 +21,6 @@ CREATE TABLE "Subcategory" (
 ALTER TABLE "Transaction" ADD COLUMN "subcategoryId" TEXT;
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Subcategory_categoryId_name_key" ON "Subcategory"("categoryId", "name");
-CREATE INDEX "Subcategory_categoryId_isActive_sortOrder_idx" ON "Subcategory"("categoryId", "isActive", "sortOrder");
-CREATE INDEX "Transaction_subcategoryId_idx" ON "Transaction"("subcategoryId");
+CREATE UNIQUE INDEX IF NOT EXISTS "Subcategory_categoryId_name_key" ON "Subcategory"("categoryId", "name");
+CREATE INDEX IF NOT EXISTS "Subcategory_categoryId_isActive_sortOrder_idx" ON "Subcategory"("categoryId", "isActive", "sortOrder");
+CREATE INDEX IF NOT EXISTS "Transaction_subcategoryId_idx" ON "Transaction"("subcategoryId");
