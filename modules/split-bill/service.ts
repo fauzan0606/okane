@@ -100,7 +100,7 @@ export async function createSplitBill(input: SplitBillInput) {
     await addProportionalCharge("Service Fee", serviceFeeAmount);
     await addDeliveryCharge(netDeliveryAmount, deliverySplitMethod);
 
-    const totalAmount = subtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount).minus(deliveryDiscountAmount);
+    const totalAmount = subtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount);
     const personalIndex = input.participants.findIndex((participant) => participant.isMe);
     await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
     for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
