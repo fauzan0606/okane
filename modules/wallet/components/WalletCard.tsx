@@ -1,15 +1,17 @@
 import type { Currency } from "@prisma/client";
 
-import type { WalletClientData } from "../repository";
+import type { WalletClientData, WalletHistoryEntry } from "../repository";
 import { formatWalletType } from "../constants";
 import WalletCardActions from "./WalletCardActions";
+import WalletHistory from "./WalletHistory";
 
 type WalletCardProps = {
   wallet: WalletClientData;
   currencies: Currency[];
+  history: WalletHistoryEntry[];
 };
 
-export default function WalletCard({ wallet, currencies }: WalletCardProps) {
+export default function WalletCard({ wallet, currencies, history }: WalletCardProps) {
   const formatter = new Intl.NumberFormat("id-ID", {
     minimumFractionDigits: wallet.currency.decimalPlaces,
     maximumFractionDigits: wallet.currency.decimalPlaces,
@@ -41,16 +43,14 @@ export default function WalletCard({ wallet, currencies }: WalletCardProps) {
 
       {isCreditCard && (
         <div className="mt-5 rounded-2xl border border-[#30465D] bg-[#0B141F] p-4">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-slate-400">Credit Limit</span>
-            <span className="font-medium text-slate-200">{wallet.currency.symbol}{formatter.format(Number(creditCard.creditLimit))}</span>
-          </div>
+          <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Credit Limit</span><span className="font-medium text-slate-200">{wallet.currency.symbol}{formatter.format(Number(creditCard.creditLimit))}</span></div>
           <div className="mt-2 flex items-center justify-between text-sm"><span className="text-slate-400">Billing Day</span><span className="text-slate-300">{creditCard.billingDate}</span></div>
           <div className="mt-1 flex items-center justify-between text-sm"><span className="text-slate-400">Due Day</span><span className="text-slate-300">{creditCard.dueDate}</span></div>
         </div>
       )}
 
       {wallet.bank && <div className="mt-4 text-sm text-slate-400">{wallet.bank}</div>}
+      <WalletHistory entries={history} symbol={wallet.currency.symbol} decimalPlaces={wallet.currency.decimalPlaces} />
     </div>
   );
 }
