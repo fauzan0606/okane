@@ -21,22 +21,23 @@ async function main() {
   }
 
   const expenseCategories = [
-    ["Food & Dining", ["Groceries", "Restaurants", "Coffee & Drinks", "Delivery & Takeaway"]],
-    ["Housing", ["Rent / Mortgage", "Utilities", "Household", "Maintenance"]],
+    ["Food & Dining", ["Groceries", "Restaurants", "Coffee & Drinks", "Delivery & Takeaway", "Snacks & Desserts"]],
+    ["Housing", ["Rent / Mortgage", "Utilities", "Household", "Maintenance & Repairs"]],
     ["Transportation", ["Fuel", "Public Transportation", "Taxi / Ride-hailing", "Parking", "Toll", "Vehicle Maintenance"]],
     ["Shopping", ["Clothing", "Electronics", "Personal Items", "Home & Furniture", "Gifts"]],
     ["Health & Wellness", ["Medical", "Pharmacy", "Dental", "Fitness", "Personal Care"]],
     ["Entertainment", ["Movies & Events", "Hobbies", "Games", "Streaming & Subscriptions"]],
     ["Travel", ["Flights", "Hotels", "Local Transport", "Activities", "Other Travel"]],
     ["Finance & Fees", ["Transfer Fee", "Bank Fee", "ATM Fee", "Credit Card Fee", "Interest", "Tax & Government Fee"]],
-    ["Family & Education", ["Family", "Childcare", "Education", "School / Tuition"]],
-    ["Other", ["Insurance", "Charity / Donation", "Other Expense"]],
+    ["Family & Education", ["Family Support", "Childcare", "Education", "School / Tuition"]],
+    ["Insurance & Protection", ["Insurance", "Other Protection"]],
+    ["Other", ["Charity / Donation", "Other Expense"]],
   ] as const;
 
   const incomeCategories = [
     ["Employment", ["Salary", "Bonus", "Overtime", "Allowance"]],
-    ["Investment", ["Dividend", "Interest Income", "Capital Gain"]],
     ["Business & Side Income", ["Business Income", "Freelance", "Commission", "Rental Income"]],
+    ["Investment", ["Dividend", "Interest Income", "Capital Gain"]],
     ["Other Income", ["Gift Received", "Refund", "Reimbursement", "Other Income"]],
   ] as const;
 
@@ -59,7 +60,17 @@ async function main() {
   for (const [index, [name, subcategories]] of expenseCategories.entries()) await seedCategory(CategoryType.EXPENSE, name, subcategories, index);
   for (const [index, [name, subcategories]] of incomeCategories.entries()) await seedCategory(CategoryType.INCOME, name, subcategories, index);
 
-  console.log("✅ Currency and category hierarchy seeded successfully.");
+  // Hide legacy categories that are not part of the canonical taxonomy.
+  await prisma.category.updateMany({
+    where: { type: CategoryType.EXPENSE, name: { notIn: expenseCategories.map(([name]) => name) } },
+    data: { isActive: false },
+  });
+  await prisma.category.updateMany({
+    where: { type: CategoryType.INCOME, name: { notIn: incomeCategories.map(([name]) => name) } },
+    data: { isActive: false },
+  });
+
+  console.log("✅ Currency and canonical category hierarchy seeded successfully.");
 }
 
 main().catch((error) => {
