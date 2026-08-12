@@ -4,15 +4,28 @@ import { findOrCreatePayeeByName } from "@/modules/payee/service";
 
 type ParticipantInput = { name: string; isMe: boolean };
 type ItemInput = { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] };
-type ChargeInput = { mode: "AMOUNT" | "PERCENT"; value: number };
+type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
+type ChargeInput = { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: ChargeTreatment };
 type DeliveryFeeInput = ChargeInput & { splitMethod?: "EQUAL" | "PRO_RATA" };
 type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
 function balanceDelta(type: "INCOME" | "EXPENSE", amount: Prisma.Decimal) { return type === "INCOME" ? amount : amount.negated(); }
 async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: delta.isPositive() ? { currentBalance: { increment: delta } } : { currentBalance: { decrement: delta.abs() } } }); }
-function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) { if (!charge || charge.value <= 0) return new Prisma.Decimal(0); if (charge.mode === "PERCENT") { if (charge.value > 100) throw new Error("Charge percentage cannot exceed 100%."); return subtotal.mul(charge.value).div(100); } return decimal(charge.value); }
-function validateCharge(charge?: ChargeInput, label = "Charge") { if (!charge) return; if (!Number.isFinite(charge.value) || charge.value < 0) throw new Error(`${label} must be a valid non-negative value.`); if (charge.mode === "PERCENT" && charge.value > 100) throw new Error(`${label} percentage cannot exceed 100%.`); }
+function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) {
+  if (!charge || charge.value <= 0) return new Prisma.Decimal(0);
+  if (charge.treatment === "INCLUDED") return new Prisma.Decimal(0);
+  if (charge.treatment === "UNKNOWN") throw new Error("Tax/service treatment must be reviewed before creating the Split Bill.");
+  if (charge.mode === "PERCENT") { if (charge.value > 100) throw new Error("Charge percentage cannot exceed 100%."); return subtotal.mul(charge.value).div(100); }
+  return decimal(charge.value);
+}
+function validateCharge(charge?: ChargeInput, label = "Charge") {
+  if (!charge) return;
+  if (!Number.isFinite(charge.value) || charge.value < 0) throw new Error(`${label} must be a valid non-negative value.`);
+  if (charge.mode === "PERCENT" && charge.value > 100) throw new Error(`${label} percentage cannot exceed 100%.`);
+  if (charge.treatment && !["INCLUDED", "EXCLUDED", "UNKNOWN"].includes(charge.treatment)) throw new Error(`Invalid ${label.toLowerCase()} treatment.`);
+  if (charge.treatment === "UNKNOWN" && charge.value > 0) throw new Error(`${label} treatment must be reviewed before creating the Split Bill.`);
+}
 function validateInput(input: SplitBillInput) {
   if (!input.merchantName.trim()) throw new Error("Merchant is required.");
   if (input.participants.length < 2) throw new Error("Add at least one friend to split the bill with you.");
