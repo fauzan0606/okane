@@ -9,6 +9,7 @@ export const transactionSchema = z.object({
   amount: z.coerce.number().positive("Amount must be greater than zero."),
   walletId: z.string().min(1, "Wallet is required."),
   categoryId: z.string().optional().transform((value) => value || undefined),
+  subcategoryId: z.string().optional().transform((value) => value || undefined),
   merchant: z.string().trim().optional().transform((value) => value || undefined),
   note: z.string().trim().optional().transform((value) => value || undefined),
   installmentEnabled: checkbox.default(false),
@@ -18,6 +19,9 @@ export const transactionSchema = z.object({
 }).superRefine((value, ctx) => {
   if (value.installmentEnabled && !value.installmentTenor) {
     ctx.addIssue({ code: "custom", path: ["installmentTenor"], message: "Installment tenor is required." });
+  }
+  if (value.subcategoryId && !value.categoryId) {
+    ctx.addIssue({ code: "custom", path: ["subcategoryId"], message: "Category is required when a subcategory is selected." });
   }
 });
 
