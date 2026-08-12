@@ -3,7 +3,13 @@ import { prisma } from "@/lib/prisma";
 
 export async function updateSplitBillItemAllocation(input: { splitBillId: string; itemId: string; splitMethod: "EQUAL" | "PRO_RATA"; allocations: { participantId: string; units: number }[] }) {
   return prisma.$transaction(async (tx) => {
-    const splitBill = await tx.splitBill.findUnique({ where: { id: input.splitBillId }, include: { participants: { include: { receivable: { include: { payments: true } } } }, items: { include: { allocations: true }, orderBy: { createdAt: "asc" } } } });
+    const splitBill = await tx.splitBill.findUnique({
+      where: { id: input.splitBillId },
+      include: {
+        participants: { include: { receivable: { include: { payments: true } } } },
+        items: { include: { allocations: true }, orderBy: { id: "asc" } },
+      },
+    });
     if (!splitBill) throw new Error("Split Bill not found.");
     if (splitBill.status !== SplitBillStatus.DRAFT && splitBill.status !== SplitBillStatus.OPEN) throw new Error("This Split Bill cannot be edited in its current status.");
     const item = splitBill.items.find((entry) => entry.id === input.itemId);
