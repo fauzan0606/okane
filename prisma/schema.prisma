@@ -75,7 +75,7 @@ model CreditCardStatement {
   status CreditCardStatementStatus @default(UNPAID)
   note String?
   createdAt DateTime @default(now())
-  updatedAt DateTime @default(now()) @updatedAt
+  updatedAt DateTime @default(now())
   creditCard CreditCardProfile @relation(fields: [creditCardId], references: [id], onDelete: Cascade)
   payments CreditCardStatementPayment[]
   @@unique([creditCardId, periodStart, periodEnd])
@@ -102,11 +102,28 @@ model Category {
   type CategoryType
   icon String?
   color String?
+  isSystem Boolean @default(false)
   sortOrder Int @default(0)
   isActive Boolean @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+  subcategories Subcategory[]
   transactions Transaction[]
+}
+
+model Subcategory {
+  id String @id @default(uuid())
+  categoryId String
+  name String
+  isSystem Boolean @default(false)
+  sortOrder Int @default(0)
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  @@unique([categoryId, name])
+  @@index([categoryId, isActive, sortOrder])
 }
 
 model Payee {
@@ -131,6 +148,8 @@ model Transaction {
   wallet Wallet @relation(fields: [walletId], references: [id])
   categoryId String?
   category Category? @relation(fields: [categoryId], references: [id])
+  subcategoryId String?
+  subcategory Subcategory? @relation(fields: [subcategoryId], references: [id])
   payeeId String?
   payee Payee? @relation(fields: [payeeId], references: [id])
   installmentPlan InstallmentPlan?
@@ -269,64 +288,13 @@ model ReceivablePayment {
   @@index([receivableId, receivedAt])
 }
 
-enum InstallmentPlanStatus {
-  ACTIVE
-  COMPLETED
-  CANCELLED
-}
-
-enum SplitBillStatus {
-  DRAFT
-  OPEN
-  SETTLED
-  CANCELLED
-}
-
-enum SplitBillItemMethod {
-  EQUAL
-  PRO_RATA
-}
-
-enum ReceivableStatus {
-  OUTSTANDING
-  PARTIALLY_RECEIVED
-  RECEIVED
-  OVERDUE
-}
-
-enum TransactionKind {
-  STANDARD
-  REIMBURSEMENT
-}
-
-enum TransferOrigin {
-  MANUAL
-  CREDIT_CARD_PAYMENT
-}
-
-enum WalletType {
-  CASH
-  BANK_ACCOUNT
-  CREDIT_CARD
-  DEBIT_CARD
-  E_WALLET
-  FOREIGN_CASH
-  INVESTMENT
-}
-
-enum CategoryType {
-  INCOME
-  EXPENSE
-}
-
-enum TransactionType {
-  INCOME
-  EXPENSE
-}
-
-enum CreditCardStatementStatus {
-  UNPAID
-  PARTIALLY_PAID
-  PAID
-  OVERDUE
-}
+enum InstallmentPlanStatus { ACTIVE COMPLETED CANCELLED }
+enum SplitBillStatus { DRAFT OPEN SETTLED CANCELLED }
+enum SplitBillItemMethod { EQUAL PRO_RATA }
+enum ReceivableStatus { OUTSTANDING PARTIALLY_RECEIVED RECEIVED OVERDUE }
+enum TransactionKind { STANDARD REIMBURSEMENT }
+enum TransferOrigin { MANUAL CREDIT_CARD_PAYMENT }
+enum WalletType { CASH BANK_ACCOUNT CREDIT_CARD DEBIT_CARD E_WALLET FOREIGN_CASH INVESTMENT }
+enum CategoryType { INCOME EXPENSE }
+enum TransactionType { INCOME EXPENSE }
+enum CreditCardStatementStatus { UNPAID PARTIALLY_PAID PAID OVERDUE }
