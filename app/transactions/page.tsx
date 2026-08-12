@@ -106,6 +106,7 @@ export default async function TransactionsPage({
           transactions={filteredTransactions}
           wallets={formData.wallets}
           categories={formData.categories}
+          subcategories={formData.subcategories}
           payees={formData.payees}
         />
       </div>
