@@ -21,6 +21,7 @@ function formValues(formData: FormData) {
     amount: formData.get("amount"),
     walletId: formData.get("walletId"),
     categoryId: formData.get("categoryId"),
+    subcategoryId: formData.get("subcategoryId"),
     merchant: formData.get("merchant"),
     note: formData.get("note"),
     installmentEnabled: formData.get("installmentEnabled"),
@@ -54,10 +55,6 @@ export async function updateTransactionAction(_prevState: TransactionActionState
   const id = formData.get("id");
   if (typeof id !== "string" || id.length === 0) return { success: false, message: "Missing transaction id." };
 
-  // The edit form submits the complete transaction form, so the full schema
-  // can be used here. Using transactionSchema.partial() is invalid because
-  // the schema contains a superRefine refinement, which Zod does not allow
-  // object.partial() to apply directly.
   const parsed = transactionSchema.safeParse(formValues(formData));
   if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
 
