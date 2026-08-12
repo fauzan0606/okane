@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import WalletList from "@/modules/wallet/components/WalletList";
 import WalletForm from "@/modules/wallet/components/WalletForm";
 
-import { listWallets, listCurrencies } from "@/modules/wallet/service";
+import { listWallets, listCurrencies, listWalletHistory } from "@/modules/wallet/service";
 import type { WalletClientData } from "@/modules/wallet/repository";
 
 function serializeWallets(wallets: Awaited<ReturnType<typeof listWallets>>): WalletClientData[] {
@@ -26,6 +26,8 @@ function serializeWallets(wallets: Awaited<ReturnType<typeof listWallets>>): Wal
 
 export default async function WalletPage() {
   const [wallets, currencies] = await Promise.all([listWallets(), listCurrencies()]);
+  const historyEntries = await Promise.all(wallets.map(async (wallet) => [wallet.id, await listWalletHistory(wallet.id)] as const));
+  const histories = Object.fromEntries(historyEntries);
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
@@ -33,19 +35,13 @@ export default async function WalletPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Wallet</h1>
-            <p className="mt-2 text-zinc-500">
-              Manage your cash, bank accounts, credit cards, e-wallets and other financial accounts.
-            </p>
+            <p className="mt-2 text-zinc-500">Manage your cash, bank accounts, credit cards, e-wallets and other financial accounts.</p>
           </div>
 
-          <WalletForm
-            mode="create"
-            currencies={currencies}
-            trigger={<Button size="lg">+ Add Wallet</Button>}
-          />
+          <WalletForm mode="create" currencies={currencies} trigger={<Button size="lg">+ Add Wallet</Button>} />
         </div>
 
-        <WalletList wallets={serializeWallets(wallets)} currencies={currencies} />
+        <WalletList wallets={serializeWallets(wallets)} currencies={currencies} histories={histories} />
       </div>
     </AppShell>
   );
