@@ -116,6 +116,27 @@ html, body {
 body { min-height: 100vh; }
 button { cursor: pointer; }
 
+/* OKANE native dropdowns: keep the opened option list opaque and readable. */
+select {
+  color-scheme: dark;
+}
+
+select option,
+select optgroup {
+  background-color: #0E1722;
+  color: #F8FAFC;
+}
+
+select option:checked {
+  background-color: #142A22;
+  color: #FFFFFF;
+}
+
+select option:hover {
+  background-color: #172333;
+  color: #FFFFFF;
+}
+
 .dark {
   --background: #05080D;
   --foreground: #F8FAFC;
