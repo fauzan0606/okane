@@ -18,32 +18,46 @@ function jsonError(message: string, status = 400) { return NextResponse.json({ e
 function round(value: number) { return Math.round((value + Number.EPSILON) * 100) / 100; }
 
 function normalizeResult(raw: any) {
-  const items = Array.isArray(raw.items) ? raw.items.map((item: any) => ({ ...item, quantity: Number(item.quantity) || 1, unitPrice: Number(item.unitPrice) || 0, amount: Number(item.amount) || (Number(item.quantity) || 1) * (Number(item.unitPrice) || 0) })) : [];
+  const items = Array.isArray(raw.items) ? raw.items.map((item: any) => {
+    const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
+    const amount = Number(item.amount) || quantity * (Number(item.unitPrice) || 0);
+    return { ...item, quantity, unitPrice: Number(item.unitPrice) || amount / quantity, amount: round(amount) };
+  }) : [];
   const grossSubtotal = round(items.reduce((sum: number, item: any) => sum + item.amount, 0));
-  const taxAmount = Number(raw.taxAmount) || 0;
-  const serviceAmount = Number(raw.serviceAmount) || 0;
-  const deliveryFee = Number(raw.deliveryFeeAmount) || 0;
-  const deliveryDiscount = Number(raw.deliveryDiscountAmount) || 0;
+  const taxAmount = Math.max(0, Number(raw.taxAmount) || 0);
+  const serviceAmount = Math.max(0, Number(raw.serviceAmount) || 0);
+  const deliveryFee = Math.max(0, Number(raw.deliveryFeeAmount) || 0);
+  const deliveryDiscount = Math.min(Math.max(0, Number(raw.deliveryDiscountAmount) || 0), deliveryFee);
   const netDelivery = round(deliveryFee - deliveryDiscount);
-  const explicitOrderDiscount = Array.isArray(raw.discounts) ? raw.discounts.filter((discount: any) => discount.scope !== "DELIVERY").reduce((sum: number, discount: any) => sum + Math.abs(Number(discount.amount) || 0), 0) : 0;
+  const orderDiscount = Array.isArray(raw.discounts)
+    ? raw.discounts.filter((discount: any) => discount.scope === "ORDER" || discount.scope === "ITEM").reduce((sum: number, discount: any) => sum + Math.abs(Number(discount.amount) || 0), 0)
+    : 0;
 
-  // The receipt total is the source of truth. Service fee is NEVER inferred merely
-  // to make the arithmetic balance; it must be explicitly printed/detected.
-  // For receipts with tax-exclusive net sales, item amounts represent the net
-  // item base after order/item discounts, while delivery is kept separate.
+  // Order/item discounts are absorbed into the item base exactly once.
+  // Delivery discounts affect delivery only and are never deducted from item prices.
   const targetItemSubtotal = raw.grandTotal !== undefined
     ? round(Number(raw.grandTotal) - taxAmount - serviceAmount - netDelivery)
-    : round(grossSubtotal - explicitOrderDiscount);
+    : round(grossSubtotal - orderDiscount);
   const safeTarget = Math.max(0, targetItemSubtotal);
-  const normalizedItems = grossSubtotal > 0 && Math.abs(grossSubtotal - safeTarget) > 0.005
-    ? items.map((item: any) => ({ ...item, unitPrice: round((item.amount / grossSubtotal) * safeTarget / item.quantity), amount: round((item.amount / grossSubtotal) * safeTarget) }))
-    : items;
+
+  let normalizedItems = items;
+  if (grossSubtotal > 0 && Math.abs(grossSubtotal - safeTarget) > 0.005) {
+    let allocated = 0;
+    normalizedItems = items.map((item: any, index: number) => {
+      const amount = index === items.length - 1 ? round(safeTarget - allocated) : round(item.amount / grossSubtotal * safeTarget);
+      allocated = round(allocated + amount);
+      return { ...item, amount, unitPrice: round(amount / item.quantity) };
+    });
+  }
+
   const normalizedSubtotal = round(normalizedItems.reduce((sum: number, item: any) => sum + item.amount, 0));
+  const normalizedGrandTotal = round(normalizedSubtotal + taxAmount + serviceAmount + netDelivery);
 
   return {
     ...raw,
     items: normalizedItems,
     subtotal: normalizedSubtotal,
+    grandTotal: raw.grandTotal !== undefined ? Number(raw.grandTotal) : normalizedGrandTotal,
     serviceAmount: serviceAmount > 0 ? serviceAmount : undefined,
     servicePercent: serviceAmount > 0 ? raw.servicePercent : undefined,
     deliveryFeeAmount: deliveryFee > 0 ? deliveryFee : undefined,
@@ -67,19 +81,15 @@ Rules:
 - Read the receipt visually. Do not invent values or charges.
 - Return the merchant name as printed, cleaned of obvious OCR artifacts.
 - Extract every purchasable food/drink/menu line with quantity, unit price, and line amount BEFORE transaction-level discounts.
-- Extract every discount, voucher, promo, coupon, or negative adjustment. Put each in discounts with its printed name, positive absolute amount, and scope: ORDER for discounts applied to the food/order subtotal, DELIVERY for delivery-fee discounts, ITEM for an item-specific discount.
-- Detect delivery fee separately when present. Detect delivery discount separately when present.
+- Extract every discount, voucher, promo, coupon, or negative adjustment. Use scope ORDER for discounts applied to the food/order subtotal, DELIVERY for delivery-fee discounts, ITEM for item-specific discounts.
+- Detect delivery fee and delivery discount separately.
 - Extract subtotal, tax/PBI/PPN/pajak, service charge, rounding, and grand total when visible.
-- SERVICE CHARGE RULE: Set serviceAmount/servicePercent ONLY when a service charge or service fee is explicitly printed on the receipt. If there is no service-fee/service-charge line, OMIT serviceAmount and servicePercent. Never infer a service fee from arithmetic, tax, delivery fee, or the difference between subtotal and total.
-- Do not reinterpret tax, PBI/PB1, PPN, net sales, delivery fee, or discounts as a service charge.
-- Preserve exact monetary amounts printed on the receipt. Do not invent a discount when none is printed.
-- If a charge is printed only as an amount, provide the amount and omit the percentage.
-- If a percentage is explicitly printed, provide the percentage and amount when both are available.
-- Rounding may be negative.
-- Date is informational only and must not be used to create a transaction date.
-- If a value is not visible or cannot be determined reliably, omit that optional field.
+- SERVICE CHARGE RULE: Set serviceAmount/servicePercent ONLY when a service charge or service fee is explicitly printed. If none is printed, OMIT both. Never infer service fee from arithmetic, tax, delivery fee, discounts, or the difference between subtotal and total.
+- Do not reinterpret tax, PBI/PB1, PPN, net sales, delivery fee, or discounts as service charge.
+- Preserve exact monetary values printed on the receipt.
 - Monetary values must be plain numbers without currency symbols or separators.
-- Do not include the grand total, delivery fee, tax, service charge, or discounts as food/drink items.`;
+- Do not include grand total, delivery fee, tax, service charge, or discounts as food/drink items.
+- The receipt grand total is the source of truth when visible.`;
 
   const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
