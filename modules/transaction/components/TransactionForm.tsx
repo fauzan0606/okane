@@ -14,9 +14,7 @@ import { TRANSACTION_TYPES, formatTransactionType } from "../constants";
 import type { TransactionActionState } from "../types";
 import type { TransactionWithRelations } from "../repository";
 
-const initialState: TransactionActionState = { success: false };
 type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
-
 type TransactionFormProps = {
   mode: "create" | "edit";
   transaction?: TransactionWithRelations;
@@ -26,6 +24,8 @@ type TransactionFormProps = {
   payees: Payee[];
   trigger: ReactElement;
 };
+
+const initialState: TransactionActionState = { success: false };
 
 function dateInputValue(value?: Date | string | null) {
   return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
@@ -97,7 +97,7 @@ export default function TransactionForm({ mode, transaction, wallets, categories
               <div className="space-y-1.5">
                 <Label htmlFor="walletId">Wallet</Label>
                 <Select name="walletId" value={walletId} onValueChange={(value) => { const nextValue = value ?? ""; setWalletId(nextValue); if (wallets.find((wallet) => wallet.id === nextValue)?.walletType !== "CREDIT_CARD") setInstallmentEnabled(false); }}>
-                  <SelectTrigger id="walletId" className="w-full"><SelectValue placeholder="Select wallet">{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select wallet"}</SelectValue></SelectTrigger>
+                  <SelectTrigger id="walletId" className="w-full"><SelectValue placeholder="Select wallet" /></SelectTrigger>
                   <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name}</SelectItem>)}</SelectContent></Select>
                 {state.fieldErrors?.walletId && <p className="text-xs text-destructive">{state.fieldErrors.walletId[0]}</p>}
               </div>
@@ -112,8 +112,8 @@ export default function TransactionForm({ mode, transaction, wallets, categories
                 {state.fieldErrors?.installmentTenor && <p className="mt-2 text-xs text-destructive">{state.fieldErrors.installmentTenor[0]}</p>}
               </div>}
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-1.5"><Label htmlFor="categoryId">Category</Label><Select name="categoryId" value={categoryId} onValueChange={(value) => { const next = value ?? ""; setCategoryId(next); setSubcategoryId(""); }}><SelectTrigger id="categoryId" className="w-full"><SelectValue placeholder="Select category">{(id: string | null) => visibleCategories.find((category) => category.id === id)?.name ?? "Select category"}</SelectValue></SelectTrigger><SelectContent>{visibleCategories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div>
-                <div className="space-y-1.5"><Label htmlFor="subcategoryId">Subcategory</Label><Select name="subcategoryId" value={subcategoryId} onValueChange={(value) => setSubcategoryId(value ?? "")} disabled={!categoryId}><SelectTrigger id="subcategoryId" className="w-full"><SelectValue placeholder={categoryId ? "Select subcategory" : "Select category first"}>{(id: string | null) => visibleSubcategories.find((subcategory) => subcategory.id === id)?.name ?? (categoryId ? "Select subcategory" : "Select category first")}</SelectValue></SelectTrigger><SelectContent>{visibleSubcategories.map((subcategory) => <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label htmlFor="categoryId">Category</Label><Select name="categoryId" value={categoryId} onValueChange={(value) => { const next = value ?? ""; setCategoryId(next); setSubcategoryId(""); }}><SelectTrigger id="categoryId" className="w-full"><SelectValue placeholder="Select category" /></SelectTrigger><SelectContent>{visibleCategories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label htmlFor="subcategoryId">Subcategory</Label><Select name="subcategoryId" value={subcategoryId} onValueChange={(value) => setSubcategoryId(value ?? "")} disabled={!categoryId}><SelectTrigger id="subcategoryId" className="w-full"><SelectValue placeholder={categoryId ? "Select subcategory" : "Select category first"} /></SelectTrigger><SelectContent>{visibleSubcategories.map((subcategory) => <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.name}</SelectItem>)}</SelectContent></Select></div>
               </div>
               <div className="space-y-1.5"><Label htmlFor="merchant">Merchant</Label><Input id="merchant" name="merchant" list="merchant-list" defaultValue={transaction?.payee?.name ?? ""} placeholder="Merchant" /><datalist id="merchant-list">{payees.map((payee) => <option key={payee.id} value={payee.name} />)}</datalist></div>
               <div className="space-y-1.5"><Label htmlFor="note">Note</Label><Textarea id="note" name="note" defaultValue={transaction?.note ?? ""} placeholder="Optional note" /></div>
