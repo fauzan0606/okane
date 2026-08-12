@@ -24,6 +24,8 @@ function parseCreatePayload(formData: FormData) {
       items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[];
       tax?: { mode: "AMOUNT" | "PERCENT"; value: number };
       serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number };
+      deliveryFee?: { mode: "AMOUNT" | "PERCENT"; value: number; splitMethod?: "EQUAL" | "PRO_RATA" };
+      deliveryDiscount?: { mode: "AMOUNT" | "PERCENT"; value: number };
       note?: string;
     };
   } catch { throw new Error("Invalid Split Bill data."); }
