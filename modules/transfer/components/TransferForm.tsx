@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { ArrowLeftRight, ArrowRight } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,10 @@ type WalletOption = { id: string; name: string; walletType: string; currentBalan
 
 function formatMoney(value: number, symbol: string) { return `${symbol}${value.toLocaleString("id-ID", { maximumFractionDigits: 2 })}`; }
 
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : "Unable to create transfer.";
+}
+
 export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
@@ -21,7 +26,12 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
     setPending(true);
     try {
       await createTransferAction(formData);
+      toast.success("Transfer created successfully.");
       setOpen(false);
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+      // Keep the dialog open so the user can correct the source wallet,
+      // amount, or fee instead of seeing a runtime error page.
     } finally {
       setPending(false);
     }
