@@ -24,15 +24,32 @@ function normalizeResult(raw: any) {
   const serviceAmount = Number(raw.serviceAmount) || 0;
   const deliveryFee = Number(raw.deliveryFeeAmount) || 0;
   const deliveryDiscount = Number(raw.deliveryDiscountAmount) || 0;
-  const netAdditionalFees = round(serviceAmount + deliveryFee - deliveryDiscount);
+  const netDelivery = round(deliveryFee - deliveryDiscount);
   const explicitOrderDiscount = Array.isArray(raw.discounts) ? raw.discounts.filter((discount: any) => discount.scope !== "DELIVERY").reduce((sum: number, discount: any) => sum + Math.abs(Number(discount.amount) || 0), 0) : 0;
-  const targetItemSubtotal = raw.grandTotal !== undefined ? round(Number(raw.grandTotal) - taxAmount - netAdditionalFees) : round(grossSubtotal - explicitOrderDiscount);
+
+  // The receipt total is the source of truth. Service fee is NEVER inferred merely
+  // to make the arithmetic balance; it must be explicitly printed/detected.
+  // For receipts with tax-exclusive net sales, item amounts represent the net
+  // item base after order/item discounts, while delivery is kept separate.
+  const targetItemSubtotal = raw.grandTotal !== undefined
+    ? round(Number(raw.grandTotal) - taxAmount - serviceAmount - netDelivery)
+    : round(grossSubtotal - explicitOrderDiscount);
   const safeTarget = Math.max(0, targetItemSubtotal);
   const normalizedItems = grossSubtotal > 0 && Math.abs(grossSubtotal - safeTarget) > 0.005
     ? items.map((item: any) => ({ ...item, unitPrice: round((item.amount / grossSubtotal) * safeTarget / item.quantity), amount: round((item.amount / grossSubtotal) * safeTarget) }))
     : items;
   const normalizedSubtotal = round(normalizedItems.reduce((sum: number, item: any) => sum + item.amount, 0));
-  return { ...raw, items: normalizedItems, subtotal: normalizedSubtotal, serviceAmount: netAdditionalFees > 0 ? netAdditionalFees : 0, deliveryFeeAmount: deliveryFee, deliveryDiscountAmount: deliveryDiscount, discounts: Array.isArray(raw.discounts) ? raw.discounts : [] };
+
+  return {
+    ...raw,
+    items: normalizedItems,
+    subtotal: normalizedSubtotal,
+    serviceAmount: serviceAmount > 0 ? serviceAmount : undefined,
+    servicePercent: serviceAmount > 0 ? raw.servicePercent : undefined,
+    deliveryFeeAmount: deliveryFee > 0 ? deliveryFee : undefined,
+    deliveryDiscountAmount: deliveryDiscount > 0 ? deliveryDiscount : undefined,
+    discounts: Array.isArray(raw.discounts) ? raw.discounts : [],
+  };
 }
 
 export async function POST(request: Request) {
@@ -47,12 +64,14 @@ export async function POST(request: Request) {
   const base64 = Buffer.from(new Uint8Array(await file.arrayBuffer())).toString("base64");
   const prompt = `Analyze this restaurant receipt image and extract the bill into the JSON schema exactly.
 Rules:
-- Read the receipt visually. Do not invent values.
+- Read the receipt visually. Do not invent values or charges.
 - Return the merchant name as printed, cleaned of obvious OCR artifacts.
 - Extract every purchasable food/drink/menu line with quantity, unit price, and line amount BEFORE transaction-level discounts.
 - Extract every discount, voucher, promo, coupon, or negative adjustment. Put each in discounts with its printed name, positive absolute amount, and scope: ORDER for discounts applied to the food/order subtotal, DELIVERY for delivery-fee discounts, ITEM for an item-specific discount.
 - Detect delivery fee separately when present. Detect delivery discount separately when present.
 - Extract subtotal, tax/PBI/PPN/pajak, service charge, rounding, and grand total when visible.
+- SERVICE CHARGE RULE: Set serviceAmount/servicePercent ONLY when a service charge or service fee is explicitly printed on the receipt. If there is no service-fee/service-charge line, OMIT serviceAmount and servicePercent. Never infer a service fee from arithmetic, tax, delivery fee, or the difference between subtotal and total.
+- Do not reinterpret tax, PBI/PB1, PPN, net sales, delivery fee, or discounts as a service charge.
 - Preserve exact monetary amounts printed on the receipt. Do not invent a discount when none is printed.
 - If a charge is printed only as an amount, provide the amount and omit the percentage.
 - If a percentage is explicitly printed, provide the percentage and amount when both are available.
