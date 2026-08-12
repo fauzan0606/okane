@@ -5,12 +5,13 @@ import { findOrCreatePayeeByName } from "@/modules/payee/service";
 type ParticipantInput = { name: string; isMe: boolean };
 type ItemInput = { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] };
 type ChargeInput = { mode: "AMOUNT" | "PERCENT"; value: number };
-type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; tax?: ChargeInput; serviceFee?: ChargeInput; note?: string };
+type DeliveryFeeInput = ChargeInput & { splitMethod?: "EQUAL" | "PRO_RATA" };
+type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
 function balanceDelta(type: "INCOME" | "EXPENSE", amount: Prisma.Decimal) { return type === "INCOME" ? amount : amount.negated(); }
 async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: delta.isPositive() ? { currentBalance: { increment: delta } } : { currentBalance: { decrement: delta.abs() } } }); }
-function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) { if (!charge || charge.value <= 0) return new Prisma.Decimal(0); if (charge.mode === "PERCENT") { if (charge.value > 100) throw new Error("Tax and service fee percentage cannot exceed 100%."); return subtotal.mul(charge.value).div(100); } return decimal(charge.value); }
+function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) { if (!charge || charge.value <= 0) return new Prisma.Decimal(0); if (charge.mode === "PERCENT") { if (charge.value > 100) throw new Error("Charge percentage cannot exceed 100%."); return subtotal.mul(charge.value).div(100); } return decimal(charge.value); }
 function validateCharge(charge?: ChargeInput, label = "Charge") { if (!charge) return; if (!Number.isFinite(charge.value) || charge.value < 0) throw new Error(`${label} must be a valid non-negative value.`); if (charge.mode === "PERCENT" && charge.value > 100) throw new Error(`${label} percentage cannot exceed 100%.`); }
 function validateInput(input: SplitBillInput) {
   if (!input.merchantName.trim()) throw new Error("Merchant is required.");
@@ -20,6 +21,9 @@ function validateInput(input: SplitBillInput) {
   if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name.");
   validateCharge(input.tax, "Tax");
   validateCharge(input.serviceFee, "Service fee");
+  validateCharge(input.deliveryFee, "Delivery fee");
+  validateCharge(input.deliveryDiscount, "Delivery discount");
+  if (input.deliveryFee?.splitMethod && !["EQUAL", "PRO_RATA"].includes(input.deliveryFee.splitMethod)) throw new Error("Invalid delivery fee split method.");
   for (const item of input.items) {
     if (!item.name.trim() || item.quantity <= 0 || item.unitPrice < 0) throw new Error("Each item must have a name, positive quantity, and non-negative unit price.");
     const selectedUnits = item.units.map((unit) => Number(unit) || 0);
@@ -54,8 +58,10 @@ export async function createSplitBill(input: SplitBillInput) {
         await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: units[participantIndex], amount } });
       }
     }
+
     const taxAmount = chargeAmount(input.tax, subtotal);
     const serviceFeeAmount = chargeAmount(input.serviceFee, subtotal);
+
     const addProportionalCharge = async (name: string, amount: Prisma.Decimal) => {
       if (amount.lte(0)) return;
       if (subtotal.lte(0)) throw new Error(`${name} cannot be added when the bill subtotal is zero.`);
@@ -68,9 +74,33 @@ export async function createSplitBill(input: SplitBillInput) {
         shareTotals[participantIndex] = shareTotals[participantIndex].plus(allocation);
       }
     };
+
+    const addDeliveryCharge = async (amount: Prisma.Decimal, splitMethod: "EQUAL" | "PRO_RATA") => {
+      if (amount.lte(0)) return;
+      const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name: "Delivery Fee", quantity: 1, unitPrice: amount, splitMethod: splitMethod === "PRO_RATA" ? SplitBillItemMethod.PRO_RATA : SplitBillItemMethod.EQUAL } });
+      const eligible = participants.map((_, index) => shareTotals[index].gt(0));
+      const eligibleCount = eligible.filter(Boolean).length;
+      if (eligibleCount === 0) throw new Error("Delivery fee cannot be allocated when no participant has an item share.");
+      const baseTotal = shareTotals.reduce((sum, value) => sum.plus(value), new Prisma.Decimal(0));
+      for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
+        if (!eligible[participantIndex]) continue;
+        const allocation = splitMethod === "EQUAL" ? amount.div(eligibleCount) : amount.mul(shareTotals[participantIndex]).div(baseTotal);
+        const units = splitMethod === "EQUAL" ? new Prisma.Decimal(1) : shareTotals[participantIndex];
+        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units, amount: allocation } });
+        shareTotals[participantIndex] = shareTotals[participantIndex].plus(allocation);
+      }
+    };
+
+    const deliveryFeeAmount = chargeAmount(input.deliveryFee, subtotal);
+    const deliveryDiscountAmount = chargeAmount(input.deliveryDiscount, subtotal).min(deliveryFeeAmount);
+    const netDeliveryAmount = deliveryFeeAmount.minus(deliveryDiscountAmount);
+    const deliverySplitMethod = input.deliveryFee?.splitMethod ?? "EQUAL";
+
     await addProportionalCharge("Tax / PPN", taxAmount);
     await addProportionalCharge("Service Fee", serviceFeeAmount);
-    const totalAmount = subtotal.plus(taxAmount).plus(serviceFeeAmount);
+    await addDeliveryCharge(netDeliveryAmount, deliverySplitMethod);
+
+    const totalAmount = subtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount).minus(deliveryDiscountAmount);
     const personalIndex = input.participants.findIndex((participant) => participant.isMe);
     await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
     for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
@@ -101,70 +131,17 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
 }
 
 export async function getSplitBills() {
-  return prisma.splitBill.findMany({
-    include: {
-      transaction: {
-        include: {
-          wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } },
-          payee: { select: { name: true } },
-          category: { select: { name: true } },
-        },
-      },
-      participants: {
-        include: { receivable: { include: { payments: { select: { amount: true } } } } },
-        orderBy: { isMe: "desc" },
-      },
-      items: {
-        include: { allocations: true },
-        orderBy: { id: "asc" },
-      },
-    },
-    orderBy: { createdAt: "desc" },
-  });
+  return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { id: "asc" } } }, orderBy: { createdAt: "desc" } });
 }
 
-function transactionAffectedBalance(transaction: { transactionDate: Date; createdAt: Date }, balanceAsOf: Date | null) {
-  return !balanceAsOf || transaction.transactionDate > balanceAsOf || (transaction.transactionDate.toDateString() === balanceAsOf.toDateString() && transaction.createdAt > balanceAsOf);
-}
+function transactionAffectedBalance(transaction: { transactionDate: Date; createdAt: Date }, balanceAsOf: Date | null) { return !balanceAsOf || transaction.transactionDate > balanceAsOf || (transaction.transactionDate.toDateString() === balanceAsOf.toDateString() && transaction.createdAt > balanceAsOf); }
 
 export async function deleteSplitBill(splitBillId: string) {
   return prisma.$transaction(async (tx) => {
-    const splitBill = await tx.splitBill.findUnique({
-      where: { id: splitBillId },
-      include: {
-        transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } },
-        participants: {
-          include: {
-            receivable: {
-              include: {
-                payments: {
-                  include: {
-                    transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } },
-                  },
-                },
-              },
-            },
-          },
-        },
-      },
-    });
+    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } }, participants: { include: { receivable: { include: { payments: { include: { transaction: { include: { wallet: { select: { id: true, balanceAsOf: true } } } } } } } } } } } });
     if (!splitBill) throw new Error("Split Bill not found.");
-
-    for (const participant of splitBill.participants) {
-      const receivable = participant.receivable;
-      if (!receivable) continue;
-      for (const payment of receivable.payments) {
-        if (transactionAffectedBalance(payment.transaction, payment.transaction.wallet.balanceAsOf)) await applyBalanceDelta(tx, payment.transaction.wallet.id, balanceDelta("INCOME", payment.amount).negated());
-        await tx.transaction.delete({ where: { id: payment.transaction.id } });
-      }
-      await tx.receivable.delete({ where: { id: receivable.id } });
-    }
-
-    if (splitBill.transaction) {
-      if (transactionAffectedBalance(splitBill.transaction, splitBill.transaction.wallet.balanceAsOf)) await applyBalanceDelta(tx, splitBill.transaction.wallet.id, balanceDelta("EXPENSE", splitBill.transaction.amount).negated());
-      await tx.transaction.delete({ where: { id: splitBill.transaction.id } });
-    }
-
+    for (const participant of splitBill.participants) { const receivable = participant.receivable; if (!receivable) continue; for (const payment of receivable.payments) { if (transactionAffectedBalance(payment.transaction, payment.transaction.wallet.balanceAsOf)) await applyBalanceDelta(tx, payment.transaction.wallet.id, balanceDelta("INCOME", payment.amount).negated()); await tx.transaction.delete({ where: { id: payment.transaction.id } }); } await tx.receivable.delete({ where: { id: receivable.id } }); }
+    if (splitBill.transaction) { if (transactionAffectedBalance(splitBill.transaction, splitBill.transaction.wallet.balanceAsOf)) await applyBalanceDelta(tx, splitBill.transaction.wallet.id, balanceDelta("EXPENSE", splitBill.transaction.amount).negated()); await tx.transaction.delete({ where: { id: splitBill.transaction.id } }); }
     await tx.splitBill.delete({ where: { id: splitBill.id } });
   });
 }
