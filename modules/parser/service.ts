@@ -15,6 +15,18 @@ export function parseTransactionText(
   text: string,
   context: ParserContext
 ): ParsedTransaction {
+  const category = findCategory(text, context);
+
+  const confidence = category
+    ? {
+        level: "MEDIUM" as const,
+        reason: "Based on merchant and transaction pattern analysis.",
+      }
+    : {
+        level: "LOW" as const,
+        reason: "No strong category pattern was found. Please review the suggestion.",
+      };
+
   return {
     tokens: tokenize(text),
 
@@ -26,8 +38,10 @@ export function parseTransactionText(
 
     merchant: findMerchant(text),
 
-    category: findCategory(text, context),
+    category,
 
     type: detectTransactionType(text),
+
+    confidence,
   };
 }
