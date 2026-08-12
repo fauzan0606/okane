@@ -20,6 +20,16 @@ function affectsCurrentBalance(transaction: BalanceTransaction, wallet: BalanceW
 function balanceDelta(transaction: BalanceTransaction) { return transaction.type === "INCOME" ? transaction.amount : transaction.amount.negated(); }
 async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: { currentBalance: delta.isPositive() ? { increment: delta } : { decrement: delta.abs() } } }); }
 
+async function validateCategorySelection(tx: Prisma.TransactionClient, categoryId?: string, subcategoryId?: string) {
+  if (!categoryId && subcategoryId) throw new Error("Category is required when a subcategory is selected.");
+  if (!categoryId) return;
+  const category = await tx.category.findUnique({ where: { id: categoryId }, select: { id: true, isActive: true } });
+  if (!category || !category.isActive) throw new Error("Category not found or inactive.");
+  if (!subcategoryId) return;
+  const subcategory = await tx.subcategory.findFirst({ where: { id: subcategoryId, categoryId, isActive: true }, select: { id: true } });
+  if (!subcategory) throw new Error("Subcategory does not belong to the selected category.");
+}
+
 async function buildInstallmentPlan(tx: Prisma.TransactionClient, walletId: string, input: CreateTransactionInput) {
   const installment = input.installment;
   if (!installment?.enabled) return null;
@@ -42,8 +52,9 @@ export async function createTransactionService(input: CreateTransactionInput) {
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true } });
     if (!wallet) throw new Error("Wallet not found.");
+    await validateCategorySelection(tx, input.categoryId, input.subcategoryId);
     const plan = await buildInstallmentPlan(tx, input.walletId, input);
-    const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: input.type, amount: input.amount, note: input.note ?? null, wallet: { connect: { id: input.walletId } }, ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } } }), ...(plan && { installmentPlan: { create: plan } }) }, include: { wallet: true, payee: true, category: true, installmentPlan: true } });
+    const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: input.type, amount: input.amount, note: input.note ?? null, wallet: { connect: { id: input.walletId } }, ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(input.subcategoryId && { subcategory: { connect: { id: input.subcategoryId } } }), ...(payee && { payee: { connect: { id: payee.id } } }), ...(plan && { installmentPlan: { create: plan } }) }, include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true } });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     return transaction;
   });
@@ -59,6 +70,9 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     const newWalletId = input.walletId ?? existing.walletId;
     const newWallet = newWalletId === existing.wallet.id ? existing.wallet : await tx.wallet.findUnique({ where: { id: newWalletId }, select: { id: true, balanceAsOf: true, walletType: true } });
     if (!newWallet) throw new Error("Wallet not found.");
+    const newCategoryId = input.categoryId !== undefined ? input.categoryId : existing.categoryId ?? undefined;
+    const newSubcategoryId = input.subcategoryId !== undefined ? input.subcategoryId : existing.subcategoryId ?? undefined;
+    await validateCategorySelection(tx, newCategoryId, newSubcategoryId);
     const oldTransaction: BalanceTransaction = { transactionDate: existing.transactionDate, type: existing.type, amount: existing.amount, createdAt: existing.createdAt };
     const newTransaction: BalanceTransaction = { transactionDate: input.transactionDate ?? existing.transactionDate, type: input.type ?? existing.type, amount: input.amount !== undefined ? new Prisma.Decimal(input.amount) : existing.amount, createdAt: existing.createdAt };
 
@@ -81,7 +95,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     if (affectsCurrentBalance(oldTransaction, existing.wallet)) await applyBalanceDelta(tx, existing.wallet.id, balanceDelta(oldTransaction).negated());
     if (affectsCurrentBalance(newTransaction, newWallet)) await applyBalanceDelta(tx, newWallet.id, balanceDelta(newTransaction));
 
-    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), ...(input.categoryId && { category: { connect: { id: input.categoryId } } }), ...(payee && { payee: { connect: { id: payee.id } } }) }, include: { wallet: true, payee: true, category: true, installmentPlan: true } });
+    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), category: newCategoryId ? { connect: { id: newCategoryId } } : { disconnect: true }, subcategory: newSubcategoryId ? { connect: { id: newSubcategoryId } } : { disconnect: true }, ...(payee ? { payee: { connect: { id: payee.id } } } : { payee: { disconnect: true } }) }, include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true } });
   });
 }
 
@@ -97,6 +111,11 @@ export async function deleteTransactionService(id: string) {
 }
 
 export async function transactionFormData() {
-  const [wallets, categories, payees] = await Promise.all([prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true }, orderBy: { name: "asc" } }), prisma.category.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }), prisma.payee.findMany({ where: { isActive: true }, orderBy: { name: "asc" } })]);
-  return { wallets, categories, payees };
+  const [wallets, categories, subcategories, payees] = await Promise.all([
+    prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true }, orderBy: { name: "asc" } }),
+    prisma.category.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.subcategory.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    prisma.payee.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+  ]);
+  return { wallets, categories, subcategories, payees };
 }
