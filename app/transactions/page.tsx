@@ -55,6 +55,7 @@ export default async function TransactionsPage({
             mode="create"
             wallets={formData.wallets}
             categories={formData.categories}
+            subcategories={formData.subcategories}
             payees={formData.payees}
             trigger={<Button size="lg">+ Add Transaction</Button>}
           />
