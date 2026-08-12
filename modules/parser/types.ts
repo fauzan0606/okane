@@ -27,6 +27,13 @@ export type ParserContext = {
   }[];
 };
 
+export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
+
+export type ParserConfidence = {
+  level: ConfidenceLevel;
+  reason: string;
+};
+
 export type ParsedTransaction = {
   tokens: Token[];
 
@@ -41,6 +48,8 @@ export type ParsedTransaction = {
   category?: ParserCategory;
 
   type: "INCOME" | "EXPENSE";
+
+  confidence: ParserConfidence;
 };
 
 export type SmartTransactionResult = {
