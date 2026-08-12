@@ -8,33 +8,42 @@ import SplitBillOcr, { type OcrResult } from "./SplitBillOcr";
 type Props = { currencySymbol?: string };
 type Participant = { name: string; isMe: boolean };
 type Item = { name: string; quantity: string; unitPrice: string; splitMethod: "EQUAL" | "PRO_RATA"; units: string[] };
-type Charge = { mode: "AMOUNT" | "PERCENT"; value: string };
-
+type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
+type Charge = { mode: "AMOUNT" | "PERCENT"; value: string; treatment?: ChargeTreatment };
+type OcrDiscount = { name: string; amount: number; percent?: number; scope: "ORDER" | "DELIVERY" | "ITEM" };
 type DeliverySplitMethod = "EQUAL" | "PRO_RATA";
 
 const inputClass = "w-full rounded-xl border border-[#30465D] bg-[#0A1119] px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600 focus:border-emerald-400/50";
 function money(value: number, symbol: string) { return `${symbol}${value.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`; }
 function roundedMoney(value: number) { return Math.round((value + Number.EPSILON) * 100) / 100; }
-function chargeAmount(charge: Charge, subtotal: number) { const value = Number(charge.value) || 0; return value > 0 ? (charge.mode === "PERCENT" ? subtotal * value / 100 : value) : 0; }
+function chargeAmount(charge: Charge, subtotal: number) {
+  const value = Number(charge.value) || 0;
+  if (value <= 0 || charge.treatment === "INCLUDED") return 0;
+  return charge.mode === "PERCENT" ? subtotal * value / 100 : value;
+}
 
 export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
   const [merchantName, setMerchantName] = useState("");
   const [participants, setParticipants] = useState<Participant[]>([{ name: "You", isMe: true }, { name: "", isMe: false }]);
   const [items, setItems] = useState<Item[]>([{ name: "", quantity: "1", unitPrice: "", splitMethod: "EQUAL", units: ["", ""] }]);
-  const [tax, setTax] = useState<Charge>({ mode: "PERCENT", value: "" });
-  const [serviceFee, setServiceFee] = useState<Charge>({ mode: "PERCENT", value: "" });
+  const [orderDiscount, setOrderDiscount] = useState<Charge>({ mode: "AMOUNT", value: "" });
+  const [tax, setTax] = useState<Charge>({ mode: "PERCENT", value: "", treatment: "EXCLUDED" });
+  const [serviceFee, setServiceFee] = useState<Charge>({ mode: "PERCENT", value: "", treatment: "EXCLUDED" });
   const [deliveryFee, setDeliveryFee] = useState<Charge>({ mode: "AMOUNT", value: "" });
   const [deliveryDiscount, setDeliveryDiscount] = useState<Charge>({ mode: "AMOUNT", value: "" });
   const [deliverySplitMethod, setDeliverySplitMethod] = useState<DeliverySplitMethod>("EQUAL");
+  const [ocrDiscounts, setOcrDiscounts] = useState<OcrDiscount[]>([]);
   const [note, setNote] = useState("");
 
   const subtotal = useMemo(() => roundedMoney(items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0)), [items]);
-  const taxAmount = useMemo(() => roundedMoney(chargeAmount(tax, subtotal)), [tax, subtotal]);
-  const serviceFeeAmount = useMemo(() => roundedMoney(chargeAmount(serviceFee, subtotal)), [serviceFee, subtotal]);
+  const orderDiscountAmount = useMemo(() => Math.min(roundedMoney(chargeAmount(orderDiscount, subtotal)), subtotal), [orderDiscount, subtotal]);
+  const discountedSubtotal = useMemo(() => roundedMoney(Math.max(subtotal - orderDiscountAmount, 0)), [subtotal, orderDiscountAmount]);
+  const taxAmount = useMemo(() => roundedMoney(chargeAmount(tax, discountedSubtotal)), [tax, discountedSubtotal]);
+  const serviceFeeAmount = useMemo(() => roundedMoney(chargeAmount(serviceFee, discountedSubtotal)), [serviceFee, discountedSubtotal]);
   const deliveryFeeAmount = useMemo(() => roundedMoney(chargeAmount(deliveryFee, subtotal)), [deliveryFee, subtotal]);
   const deliveryDiscountAmount = useMemo(() => Math.min(roundedMoney(chargeAmount(deliveryDiscount, subtotal)), deliveryFeeAmount), [deliveryDiscount, subtotal, deliveryFeeAmount]);
   const netDeliveryAmount = useMemo(() => roundedMoney(Math.max(deliveryFeeAmount - deliveryDiscountAmount, 0)), [deliveryFeeAmount, deliveryDiscountAmount]);
-  const itemTotal = roundedMoney(subtotal + taxAmount + serviceFeeAmount + netDeliveryAmount);
+  const itemTotal = roundedMoney(discountedSubtotal + taxAmount + serviceFeeAmount + netDeliveryAmount);
 
   const itemShares = useMemo(() => {
     const totals = participants.map(() => 0);
@@ -49,31 +58,39 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
     return totals;
   }, [items, participants]);
 
+  const discountedItemShares = useMemo(() => {
+    if (orderDiscountAmount <= 0 || subtotal <= 0) return [...itemShares];
+    return itemShares.map((value) => roundedMoney(value * discountedSubtotal / subtotal));
+  }, [itemShares, orderDiscountAmount, subtotal, discountedSubtotal]);
+
   const shares = useMemo(() => {
-    const totals = [...itemShares];
+    const totals = [...discountedItemShares];
     const addProportionalCharge = (amount: number) => {
-      if (!amount || subtotal <= 0) return;
-      itemShares.forEach((value, index) => { totals[index] += value / subtotal * amount; });
+      if (!amount || discountedSubtotal <= 0) return;
+      discountedItemShares.forEach((value, index) => { totals[index] += value / discountedSubtotal * amount; });
     };
     addProportionalCharge(taxAmount);
     addProportionalCharge(serviceFeeAmount);
     if (netDeliveryAmount > 0) {
-      const eligible = itemShares.map((value) => value > 0);
+      const eligible = discountedItemShares.map((value) => value > 0);
       const eligibleCount = eligible.filter(Boolean).length;
-      const baseTotal = itemShares.reduce((sum, value) => sum + value, 0);
-      itemShares.forEach((value, index) => {
+      const baseTotal = discountedItemShares.reduce((sum, value) => sum + value, 0);
+      discountedItemShares.forEach((value, index) => {
         if (!eligible[index]) return;
         totals[index] += deliverySplitMethod === "EQUAL" ? netDeliveryAmount / eligibleCount : baseTotal > 0 ? netDeliveryAmount * value / baseTotal : 0;
       });
     }
     return totals;
-  }, [itemShares, subtotal, taxAmount, serviceFeeAmount, netDeliveryAmount, deliverySplitMethod]);
+  }, [discountedItemShares, discountedSubtotal, taxAmount, serviceFeeAmount, netDeliveryAmount, deliverySplitMethod]);
 
   const personalIndex = participants.findIndex((participant) => participant.isMe);
   const personalShare = personalIndex >= 0 ? shares[personalIndex] : 0;
   const receivable = shares.reduce((sum, value, index) => sum + (index === personalIndex ? 0 : value), 0);
-  const validCharge = (charge: Charge) => { const value = Number(charge.value); return !charge.value || (Number.isFinite(value) && value >= 0 && (charge.mode === "AMOUNT" || value <= 100)); };
-  const valid = merchantName.trim().length > 0 && participants.filter((participant) => !participant.isMe && participant.name.trim()).length >= 1 && items.length > 0 && validCharge(tax) && validCharge(serviceFee) && validCharge(deliveryFee) && validCharge(deliveryDiscount) && items.every((item) => {
+  const validCharge = (charge: Charge) => {
+    const value = Number(charge.value);
+    return !charge.value || (Number.isFinite(value) && value >= 0 && (charge.mode === "AMOUNT" || value <= 100));
+  };
+  const valid = merchantName.trim().length > 0 && participants.filter((participant) => !participant.isMe && participant.name.trim()).length >= 1 && items.length > 0 && validCharge(orderDiscount) && validCharge(tax) && validCharge(serviceFee) && validCharge(deliveryFee) && validCharge(deliveryDiscount) && items.every((item) => {
     const selected = item.units.map((unit) => Number(unit) || 0).filter((unit) => unit > 0);
     return item.name.trim() && Number(item.quantity) > 0 && Number(item.unitPrice) >= 0 && selected.length > 0 && (selected.length <= 1 || item.splitMethod === "EQUAL" || selected.every((unit) => unit > 0));
   });
@@ -96,14 +113,24 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
   function updateUnit(itemIndex: number, participantIndex: number, value: string) { setItems((current) => current.map((item, index) => index === itemIndex ? { ...item, units: item.units.map((unit, pIndex) => pIndex === participantIndex ? value : unit) } : item)); }
 
   function useOcrResult(result: OcrResult) {
+    const enriched = result as OcrResult & { discounts?: OcrDiscount[]; taxMode?: ChargeTreatment; serviceMode?: ChargeTreatment };
     setMerchantName(result.merchantName);
     if (result.items.length > 0) setItems(result.items.map((item) => ({ name: item.name, quantity: String(item.quantity), unitPrice: String(item.unitPrice), splitMethod: "EQUAL", units: participants.map(() => "") })));
-    if (result.taxAmount !== undefined) setTax({ mode: "AMOUNT", value: String(result.taxAmount) });
-    else if (result.taxPercent !== undefined) setTax({ mode: "PERCENT", value: String(result.taxPercent) });
-    if (result.serviceAmount !== undefined) setServiceFee({ mode: "AMOUNT", value: String(result.serviceAmount) });
-    else if (result.servicePercent !== undefined) setServiceFee({ mode: "PERCENT", value: String(result.servicePercent) });
+    const discounts = Array.isArray(enriched.discounts) ? enriched.discounts : [];
+    setOcrDiscounts(discounts);
+    const orderDiscounts = discounts.filter((discount) => discount.scope === "ORDER");
+    const orderDiscountTotal = roundedMoney(orderDiscounts.reduce((sum, discount) => sum + Math.abs(Number(discount.amount) || 0), 0));
+    setOrderDiscount({ mode: "AMOUNT", value: orderDiscountTotal > 0 ? String(orderDiscountTotal) : "" });
+    if (result.taxAmount !== undefined) setTax({ mode: "AMOUNT", value: String(result.taxAmount), treatment: enriched.taxMode ?? "UNKNOWN" });
+    else if (result.taxPercent !== undefined) setTax({ mode: "PERCENT", value: String(result.taxPercent), treatment: enriched.taxMode ?? "UNKNOWN" });
+    else setTax({ mode: "PERCENT", value: "", treatment: enriched.taxMode ?? "EXCLUDED" });
+    if (result.serviceAmount !== undefined) setServiceFee({ mode: "AMOUNT", value: String(result.serviceAmount), treatment: enriched.serviceMode ?? "UNKNOWN" });
+    else if (result.servicePercent !== undefined) setServiceFee({ mode: "PERCENT", value: String(result.servicePercent), treatment: enriched.serviceMode ?? "UNKNOWN" });
+    else setServiceFee({ mode: "PERCENT", value: "", treatment: enriched.serviceMode ?? "EXCLUDED" });
     if (result.deliveryFeeAmount !== undefined) setDeliveryFee({ mode: "AMOUNT", value: String(result.deliveryFeeAmount) });
+    else setDeliveryFee({ mode: "AMOUNT", value: "" });
     if (result.deliveryDiscountAmount !== undefined) setDeliveryDiscount({ mode: "AMOUNT", value: String(result.deliveryDiscountAmount) });
+    else setDeliveryDiscount({ mode: "AMOUNT", value: "" });
     setDeliverySplitMethod("EQUAL");
   }
 
@@ -112,8 +139,9 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
     merchantName,
     participants: participants.map((participant) => ({ name: participant.name, isMe: participant.isMe })),
     items: items.map((item) => ({ name: item.name, quantity: Number(item.quantity), unitPrice: Number(item.unitPrice), splitMethod: item.splitMethod, units: item.units.map((unit) => Number(unit) || 0) })),
-    tax: tax.value ? { mode: tax.mode, value: Number(tax.value) } : undefined,
-    serviceFee: serviceFee.value ? { mode: serviceFee.mode, value: Number(serviceFee.value) } : undefined,
+    orderDiscount: orderDiscount.value ? { mode: orderDiscount.mode, value: Number(orderDiscount.value) } : undefined,
+    tax: tax.value ? { mode: tax.mode, value: Number(tax.value), treatment: tax.treatment } : undefined,
+    serviceFee: serviceFee.value ? { mode: serviceFee.mode, value: Number(serviceFee.value), treatment: serviceFee.treatment } : undefined,
     deliveryFee: deliveryFee.value ? { mode: deliveryFee.mode, value: Number(deliveryFee.value), splitMethod: deliverySplitMethod } : undefined,
     deliveryDiscount: deliveryDiscount.value ? { mode: deliveryDiscount.mode, value: Number(deliveryDiscount.value) } : undefined,
     note,
@@ -136,14 +164,15 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
       <div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px]"><span className="text-slate-500">Item total: <span className="font-semibold text-slate-300">{money((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), currencySymbol)}</span></span><span className={selectedCount === 0 ? "text-amber-300" : "text-slate-500"}>{selectedCount === 0 ? "Select at least one person" : selectedCount === 1 ? "One person" : item.splitMethod === "EQUAL" ? `Equal across ${selectedCount} people` : "Pro-rata by units"}</span></div>
     </div>; })}</div></section>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div><h2 className="text-base font-semibold text-white">4. Charges</h2><p className="mt-1 text-xs text-slate-400">Tax and service fee are allocated proportionally. Delivery fee defaults to Equal, but you can switch it to Pro-rata.</p></div><div className="mt-4 grid gap-3 md:grid-cols-2">
-      <div className="rounded-xl border border-white/10 bg-[#0B141F] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-300">Tax / PPN</span><span className="text-[10px] text-slate-600">{money(taxAmount, currencySymbol)}</span></div><div className="mt-2 flex gap-2"><select value={tax.mode} onChange={(event) => setTax((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="PERCENT">%</option><option value="AMOUNT">Amount</option></select><input value={tax.value} onChange={(event) => setTax((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder={tax.mode === "PERCENT" ? "e.g. 11" : "e.g. 55000"} className={inputClass} /></div></div>
-      <div className="rounded-xl border border-white/10 bg-[#0B141F] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-300">Service Fee</span><span className="text-[10px] text-slate-600">{money(serviceFeeAmount, currencySymbol)}</span></div><div className="mt-2 flex gap-2"><select value={serviceFee.mode} onChange={(event) => setServiceFee((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="PERCENT">%</option><option value="AMOUNT">Amount</option></select><input value={serviceFee.value} onChange={(event) => setServiceFee((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder={serviceFee.mode === "PERCENT" ? "e.g. 5" : "e.g. 25000"} className={inputClass} /></div></div>
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div><h2 className="text-base font-semibold text-white">4. Charges</h2><p className="mt-1 text-xs text-slate-400">Order discounts reduce the item subtotal first. Tax and service are allocated proportionally. Delivery defaults to Equal, but you can switch it to Pro-rata.</p></div><div className="mt-4 grid gap-3 md:grid-cols-2">
+      <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.03] p-3 md:col-span-2"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-300">Order Discount</span><span className="text-[10px] text-slate-600">-{money(orderDiscountAmount, currencySymbol)}</span></div><div className="mt-2 flex gap-2"><select value={orderDiscount.mode} onChange={(event) => setOrderDiscount((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="AMOUNT">Amount</option><option value="PERCENT">%</option></select><input value={orderDiscount.value} onChange={(event) => setOrderDiscount((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder="e.g. 15500" className={inputClass} /></div>{ocrDiscounts.filter((discount) => discount.scope === "ORDER").length > 0 && <p className="mt-2 text-[10px] text-slate-500">{ocrDiscounts.filter((discount) => discount.scope === "ORDER").map((discount) => discount.name).join(" · ")}</p>}</div>
+      <div className="rounded-xl border border-white/10 bg-[#0B141F] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-300">Tax / PPN</span><span className="text-[10px] text-slate-600">{money(taxAmount, currencySymbol)}{tax.treatment === "INCLUDED" && " · Included"}</span></div><div className="mt-2 flex gap-2"><select value={tax.mode} onChange={(event) => setTax((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="PERCENT">%</option><option value="AMOUNT">Amount</option></select><input value={tax.value} onChange={(event) => setTax((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder={tax.mode === "PERCENT" ? "e.g. 11" : "e.g. 55000"} className={inputClass} /></div><select value={tax.treatment ?? "EXCLUDED"} onChange={(event) => setTax((current) => ({ ...current, treatment: event.target.value as ChargeTreatment }))} className={`${inputClass} mt-2`}><option value="EXCLUDED">Tax excluded</option><option value="INCLUDED">Tax included</option><option value="UNKNOWN">Tax treatment unknown</option></select></div>
+      <div className="rounded-xl border border-white/10 bg-[#0B141F] p-3"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-300">Service Fee</span><span className="text-[10px] text-slate-600">{money(serviceFeeAmount, currencySymbol)}{serviceFee.treatment === "INCLUDED" && " · Included"}</span></div><div className="mt-2 flex gap-2"><select value={serviceFee.mode} onChange={(event) => setServiceFee((current) => ({ ...current, mode: event.target.value as Charge["mode"]))} className={`${inputClass} w-28`}><option value="PERCENT">%</option><option value="AMOUNT">Amount</option></select><input value={serviceFee.value} onChange={(event) => setServiceFee((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder={serviceFee.mode === "PERCENT" ? "e.g. 5" : "e.g. 25000"} className={inputClass} /></div><select value={serviceFee.treatment ?? "EXCLUDED"} onChange={(event) => setServiceFee((current) => ({ ...current, treatment: event.target.value as ChargeTreatment }))} className={`${inputClass} mt-2`}><option value="EXCLUDED">Service excluded</option><option value="INCLUDED">Service included</option><option value="UNKNOWN">Service treatment unknown</option></select></div>
       <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.03] p-3 md:col-span-2"><div className="flex flex-wrap items-center justify-between gap-2"><div><span className="text-xs font-semibold text-slate-200">Delivery Fee</span><p className="mt-1 text-[10px] text-slate-500">Shared charge. Default allocation is Equal among people with items.</p></div><span className="text-xs font-semibold text-slate-200">{money(netDeliveryAmount, currencySymbol)}</span></div><div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]"><div className="flex gap-2"><select value={deliveryFee.mode} onChange={(event) => setDeliveryFee((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="AMOUNT">Amount</option><option value="PERCENT">%</option></select><input value={deliveryFee.value} onChange={(event) => setDeliveryFee((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder="e.g. 14000" className={inputClass} /></div><div className="flex gap-2"><span className="flex items-center text-[10px] text-slate-500">Discount</span><input value={deliveryDiscount.value} onChange={(event) => setDeliveryDiscount((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder="e.g. 12000" className={inputClass} /></div><div className="flex rounded-lg border border-white/10 bg-[#0B141F] p-0.5"><button type="button" onClick={() => setDeliverySplitMethod("EQUAL")} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold ${deliverySplitMethod === "EQUAL" ? "bg-emerald-400/10 text-emerald-300" : "text-slate-500"}`}>Equal</button><button type="button" onClick={() => setDeliverySplitMethod("PRO_RATA")} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold ${deliverySplitMethod === "PRO_RATA" ? "bg-emerald-400/10 text-emerald-300" : "text-slate-500"}`}>Pro-rata</button></div></div><p className="mt-2 text-[10px] text-slate-600">Delivery {money(deliveryFeeAmount, currencySymbol)} · Discount {money(deliveryDiscountAmount, currencySymbol)} · Net {money(netDeliveryAmount, currencySymbol)} · {deliverySplitMethod === "EQUAL" ? "equal across eligible participants" : "pro-rata by item share"}</p></div>
     </div></section>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-white">5. Split summary</h2><p className="mt-1 text-xs text-slate-400">Review each participant&apos;s share before saving the Split Bill.</p></div><div className="rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-right"><p className="text-[9px] uppercase tracking-[0.1em] text-slate-600">Allocated</p><p className="mt-0.5 text-xs font-bold text-white">{money(shares.reduce((sum, value) => sum + value, 0), currencySymbol)}</p></div></div><div className="mt-4 overflow-hidden rounded-xl border border-white/10"><div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#0B141F] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-600"><span>Participant</span><span>Share</span><span>Share %</span></div>{participantSummaries.map((participant, index) => <div key={index} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-white/5 bg-[#101B28] px-3 py-2.5 text-xs"><span className="truncate font-medium text-slate-300">{participant.name || `Person ${index + 1}`}{participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}</span><span className="font-semibold text-white">{money(participant.share, currencySymbol)}</span><span className="w-14 text-right text-[10px] text-slate-500">{participant.percentage.toFixed(1)}%</span></div>)}</div><div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500"><span>Bill total includes subtotal + tax + service + net delivery.</span><span className={Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "text-emerald-300" : "text-amber-300"}>{Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "✓ Fully allocated" : "Allocation pending"}</span></div></section>
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-white">5. Split summary</h2><p className="mt-1 text-xs text-slate-400">Review each participant&apos;s share before saving the Split Bill.</p></div><div className="rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-right"><p className="text-[9px] uppercase tracking-[0.1em] text-slate-600">Allocated</p><p className="mt-0.5 text-xs font-bold text-white">{money(shares.reduce((sum, value) => sum + value, 0), currencySymbol)}</p></div></div><div className="mt-4 overflow-hidden rounded-xl border border-white/10"><div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#0B141F] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-600"><span>Participant</span><span>Share</span><span>Share %</span></div>{participantSummaries.map((participant, index) => <div key={index} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-white/5 bg-[#101B28] px-3 py-2.5 text-xs"><span className="truncate font-medium text-slate-300">{participant.name || `Person ${index + 1}`}{participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}</span><span className="font-semibold text-white">{money(participant.share, currencySymbol)}</span><span className="w-14 text-right text-[10px] text-slate-500">{participant.percentage.toFixed(1)}%</span></div>)}</div><div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500"><span>Bill total includes discounted subtotal + tax + service + net delivery.</span><span className={Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "text-emerald-300" : "text-amber-300"}>{Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "✓ Fully allocated" : "Allocation pending"}</span></div></section>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="grid gap-4 md:grid-cols-3"><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Bill total</p><p className="mt-1 text-xl font-bold text-white">{money(itemTotal, currencySymbol)}</p><p className="mt-1 text-[10px] text-slate-600">Subtotal {money(subtotal, currencySymbol)} · Tax {money(taxAmount, currencySymbol)} · Service {money(serviceFeeAmount, currencySymbol)} · Delivery {money(netDeliveryAmount, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Your share</p><p className="mt-1 text-xl font-bold text-white">{money(personalShare, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">To receive</p><p className="mt-1 text-xl font-bold text-emerald-300">{money(receivable, currencySymbol)}</p></div></div><label className="mt-4 block"><span className="text-xs font-medium text-slate-300">Note <span className="text-slate-600">(optional)</span></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Dinner at Sushi Hiro" className={`${inputClass} mt-2`} /></label><div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-4"><p className="text-[10px] text-slate-500">Save this Split Bill first. Date, wallet, transaction and receivables will be created only when you finalize it.</p><button type="submit" disabled={!valid} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] disabled:cursor-not-allowed disabled:opacity-40">Save Split Bill</button></div></section>
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="grid gap-4 md:grid-cols-3"><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Bill total</p><p className="mt-1 text-xl font-bold text-white">{money(itemTotal, currencySymbol)}</p><p className="mt-1 text-[10px] text-slate-600">Subtotal {money(subtotal, currencySymbol)} · Discount {money(orderDiscountAmount, currencySymbol)} · Tax {money(taxAmount, currencySymbol)}{tax.treatment === "INCLUDED" ? " included" : ""} · Service {money(serviceFeeAmount, currencySymbol)} · Delivery {money(netDeliveryAmount, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Your share</p><p className="mt-1 text-xl font-bold text-white">{money(personalShare, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">To receive</p><p className="mt-1 text-xl font-bold text-emerald-300">{money(receivable, currencySymbol)}</p></div></div><label className="mt-4 block"><span className="text-xs font-medium text-slate-300">Note <span className="text-slate-600">(optional)</span></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Dinner at Sushi Hiro" className={`${inputClass} mt-2`} /></label><div className="mt-4 flex items-center justify-between gap-3 border-t border-white/5 pt-4"><p className="text-[10px] text-slate-500">Save this Split Bill first. Date, wallet, transaction and receivables will be created only when you finalize it.</p><button type="submit" disabled={!valid} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] disabled:cursor-not-allowed disabled:opacity-40">Save Split Bill</button></div></section>
   </form>;
 }
