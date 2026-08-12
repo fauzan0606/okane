@@ -2,7 +2,7 @@
 
 import { useActionState, useState, type ReactElement } from "react";
 import { toast } from "sonner";
-import type { Category, Payee } from "@prisma/client";
+import type { Category, Payee, Subcategory } from "@prisma/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ type TransactionFormProps = {
   transaction?: TransactionWithRelations;
   wallets: WalletOption[];
   categories: Category[];
+  subcategories: Subcategory[];
   payees: Payee[];
   trigger: ReactElement;
 };
@@ -30,21 +31,26 @@ function dateInputValue(value?: Date | string | null) {
   return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10);
 }
 
-export default function TransactionForm({ mode, transaction, wallets, categories, payees, trigger }: TransactionFormProps) {
+export default function TransactionForm({ mode, transaction, wallets, categories, subcategories, payees, trigger }: TransactionFormProps) {
   const [open, setOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [walletId, setWalletId] = useState(transaction?.walletId ?? "");
+  const [type, setType] = useState(transaction?.type ?? TRANSACTION_TYPES[0]);
+  const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? "");
+  const [subcategoryId, setSubcategoryId] = useState(transaction?.subcategoryId ?? "");
   const [amount, setAmount] = useState(transaction?.amount?.toString() ?? "");
   const [installmentEnabled, setInstallmentEnabled] = useState(Boolean(transaction?.installmentPlan));
   const [installmentTenor, setInstallmentTenor] = useState(transaction?.installmentPlan?.tenorMonths?.toString() ?? "6");
   const [installmentStartDate, setInstallmentStartDate] = useState(dateInputValue(transaction?.installmentPlan?.startDate ?? transaction?.transactionDate));
   const [installmentFee, setInstallmentFee] = useState(transaction?.installmentPlan?.feeAmount?.toString() ?? "0");
   const selectedWallet = wallets.find((wallet) => wallet.id === walletId);
-  const canInstallment = selectedWallet?.walletType === "CREDIT_CARD" && (transaction?.type ?? "EXPENSE") === "EXPENSE";
+  const canInstallment = selectedWallet?.walletType === "CREDIT_CARD" && type === "EXPENSE";
   const fee = Number(installmentFee || 0);
   const tenor = Number(installmentTenor || 0);
   const principal = Number(amount || 0);
   const monthlyAmount = tenor > 1 ? (principal + fee) / tenor : 0;
+  const visibleCategories = categories.filter((category) => category.type === type);
+  const visibleSubcategories = subcategories.filter((subcategory) => subcategory.categoryId === categoryId);
   const baseAction = mode === "create" ? createTransactionAction : updateTransactionAction;
   const [state, formAction, isPending] = useActionState(async (prevState: TransactionActionState, formData: FormData) => {
     const result = await baseAction(prevState, formData);
@@ -59,6 +65,9 @@ export default function TransactionForm({ mode, transaction, wallets, categories
   function resetCreateForm() {
     setFormKey((k) => k + 1);
     setWalletId("");
+    setType(TRANSACTION_TYPES[0]);
+    setCategoryId("");
+    setSubcategoryId("");
     setAmount("");
     setInstallmentEnabled(false);
     setInstallmentTenor("6");
@@ -82,12 +91,12 @@ export default function TransactionForm({ mode, transaction, wallets, categories
             <div className="space-y-4 p-4 sm:space-y-5 sm:p-6">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5"><Label htmlFor="transactionDate">Date</Label><Input id="transactionDate" name="transactionDate" type="date" defaultValue={dateInputValue(transaction?.transactionDate)} required />{state.fieldErrors?.transactionDate && <p className="text-xs text-destructive">{state.fieldErrors.transactionDate[0]}</p>}</div>
-                <div className="space-y-1.5"><Label htmlFor="type">Type</Label><Select name="type" defaultValue={transaction?.type ?? TRANSACTION_TYPES[0]}><SelectTrigger id="type" className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{TRANSACTION_TYPES.map((type) => <SelectItem key={type} value={type}>{formatTransactionType(type)}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label htmlFor="type">Type</Label><Select name="type" value={type} onValueChange={(value) => { const next = value ?? "EXPENSE"; setType(next as typeof type); setCategoryId(""); setSubcategoryId(""); }}><SelectTrigger id="type" className="w-full"><SelectValue placeholder="Select type" /></SelectTrigger><SelectContent>{TRANSACTION_TYPES.map((transactionType) => <SelectItem key={transactionType} value={transactionType}>{formatTransactionType(transactionType)}</SelectItem>)}</SelectContent></Select></div>
               </div>
               <div className="space-y-1.5"><Label htmlFor="amount">Amount</Label><Input id="amount" name="amount" type="number" step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} placeholder="100000" required />{state.fieldErrors?.amount && <p className="text-xs text-destructive">{state.fieldErrors.amount[0]}</p>}</div>
               <div className="space-y-1.5">
                 <Label htmlFor="walletId">Wallet</Label>
-                <Select name="walletId" defaultValue={transaction?.walletId ?? ""} onValueChange={(value) => { const nextValue = value ?? ""; setWalletId(nextValue); if (wallets.find((wallet) => wallet.id === nextValue)?.walletType !== "CREDIT_CARD") setInstallmentEnabled(false); }}>
+                <Select name="walletId" value={walletId} onValueChange={(value) => { const nextValue = value ?? ""; setWalletId(nextValue); if (wallets.find((wallet) => wallet.id === nextValue)?.walletType !== "CREDIT_CARD") setInstallmentEnabled(false); }}>
                   <SelectTrigger id="walletId" className="w-full"><SelectValue placeholder="Select wallet">{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select wallet"}</SelectValue></SelectTrigger>
                   <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name}</SelectItem>)}</SelectContent></Select>
                 {state.fieldErrors?.walletId && <p className="text-xs text-destructive">{state.fieldErrors.walletId[0]}</p>}
@@ -102,8 +111,13 @@ export default function TransactionForm({ mode, transaction, wallets, categories
                 </div>}
                 {state.fieldErrors?.installmentTenor && <p className="mt-2 text-xs text-destructive">{state.fieldErrors.installmentTenor[0]}</p>}
               </div>}
-              <div className="grid gap-4 md:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="categoryId">Category</Label><Select name="categoryId" defaultValue={transaction?.categoryId ?? ""}><SelectTrigger id="categoryId" className="w-full"><SelectValue placeholder="Optional">{(categoryId: string | null) => categories.find((category) => category.id === categoryId)?.name ?? "Optional"}</SelectValue></SelectTrigger><SelectContent>{categories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1.5"><Label htmlFor="merchant">Merchant</Label><Input id="merchant" name="merchant" list="merchant-list" defaultValue={transaction?.payee?.name ?? ""} placeholder="Merchant" /><datalist id="merchant-list">{payees.map((payee) => <option key={payee.id} value={payee.name} />)}</datalist></div></div>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5"><Label htmlFor="categoryId">Category</Label><Select name="categoryId" value={categoryId} onValueChange={(value) => { const next = value ?? ""; setCategoryId(next); setSubcategoryId(""); }}><SelectTrigger id="categoryId" className="w-full"><SelectValue placeholder="Select category">{(id: string | null) => visibleCategories.find((category) => category.id === id)?.name ?? "Select category"}</SelectValue></SelectTrigger><SelectContent>{visibleCategories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div>
+                <div className="space-y-1.5"><Label htmlFor="subcategoryId">Subcategory</Label><Select name="subcategoryId" value={subcategoryId} onValueChange={(value) => setSubcategoryId(value ?? "")} disabled={!categoryId}><SelectTrigger id="subcategoryId" className="w-full"><SelectValue placeholder={categoryId ? "Select subcategory" : "Select category first"}>{(id: string | null) => visibleSubcategories.find((subcategory) => subcategory.id === id)?.name ?? (categoryId ? "Select subcategory" : "Select category first")}</SelectValue></SelectTrigger><SelectContent>{visibleSubcategories.map((subcategory) => <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.name}</SelectItem>)}</SelectContent></Select></div>
+              </div>
+              <div className="space-y-1.5"><Label htmlFor="merchant">Merchant</Label><Input id="merchant" name="merchant" list="merchant-list" defaultValue={transaction?.payee?.name ?? ""} placeholder="Merchant" /><datalist id="merchant-list">{payees.map((payee) => <option key={payee.id} value={payee.name} />)}</datalist></div>
               <div className="space-y-1.5"><Label htmlFor="note">Note</Label><Textarea id="note" name="note" defaultValue={transaction?.note ?? ""} placeholder="Optional note" /></div>
+              {state.fieldErrors?.subcategoryId && <p className="text-xs text-destructive">{state.fieldErrors.subcategoryId[0]}</p>}
               {state.message && <p className="text-xs text-destructive">{state.message}</p>}
             </div>
             <DialogFooter className="border-t border-[#30465D] bg-[#0E1925] p-4 sm:p-5"><Button type="button" variant="outline" onClick={() => { if (mode === "create") resetCreateForm(); else setOpen(false); }} disabled={isPending}>Cancel</Button><Button type="submit" disabled={isPending}>{isPending ? "Saving..." : mode === "create" ? "Create Transaction" : "Save Changes"}</Button></DialogFooter>
