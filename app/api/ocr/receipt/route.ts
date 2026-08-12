@@ -18,51 +18,61 @@ function jsonError(message: string, status = 400) { return NextResponse.json({ e
 function round(value: number) { return Math.round((value + Number.EPSILON) * 100) / 100; }
 
 function normalizeResult(raw: any) {
+  // IMPORTANT: OCR preview is a transcription layer, not a pricing/recalculation layer.
+  // Keep the receipt's printed line-item amounts and unit prices exactly as detected.
+  // Never proportionally allocate order discounts into item prices here.
   const items = Array.isArray(raw.items) ? raw.items.map((item: any) => {
     const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-    const amount = Number(item.amount) || quantity * (Number(item.unitPrice) || 0);
-    return { ...item, quantity, unitPrice: Number(item.unitPrice) || amount / quantity, amount: round(amount) };
+    const amount = Number(item.amount);
+    const unitPrice = Number(item.unitPrice);
+    const safeAmount = Number.isFinite(amount) ? round(amount) : round(quantity * (Number.isFinite(unitPrice) ? unitPrice : 0));
+    const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : round(safeAmount / quantity);
+    return { ...item, quantity, unitPrice: safeUnitPrice, amount: safeAmount };
   }) : [];
-  const grossSubtotal = round(items.reduce((sum: number, item: any) => sum + item.amount, 0));
-  const taxAmount = Math.max(0, Number(raw.taxAmount) || 0);
-  const serviceAmount = Math.max(0, Number(raw.serviceAmount) || 0);
+
   const deliveryFee = Math.max(0, Number(raw.deliveryFeeAmount) || 0);
-  const deliveryDiscount = Math.min(Math.max(0, Number(raw.deliveryDiscountAmount) || 0), deliveryFee);
-  const netDelivery = round(deliveryFee - deliveryDiscount);
-  const orderDiscount = Array.isArray(raw.discounts)
-    ? raw.discounts.filter((discount: any) => discount.scope === "ORDER" || discount.scope === "ITEM").reduce((sum: number, discount: any) => sum + Math.abs(Number(discount.amount) || 0), 0)
-    : 0;
+  let discounts = Array.isArray(raw.discounts) ? raw.discounts.map((discount: any) => ({
+    ...discount,
+    amount: Math.abs(Number(discount.amount) || 0),
+    scope: discount.scope === "DELIVERY" || discount.scope === "ITEM" ? discount.scope : "ORDER",
+  })) : [];
 
-  // Order/item discounts are absorbed into the item base exactly once.
-  // Delivery discounts affect delivery only and are never deducted from item prices.
-  const targetItemSubtotal = raw.grandTotal !== undefined
-    ? round(Number(raw.grandTotal) - taxAmount - serviceAmount - netDelivery)
-    : round(grossSubtotal - orderDiscount);
-  const safeTarget = Math.max(0, targetItemSubtotal);
-
-  let normalizedItems = items;
-  if (grossSubtotal > 0 && Math.abs(grossSubtotal - safeTarget) > 0.005) {
-    let allocated = 0;
-    normalizedItems = items.map((item: any, index: number) => {
-      const amount = index === items.length - 1 ? round(safeTarget - allocated) : round(item.amount / grossSubtotal * safeTarget);
-      allocated = round(allocated + amount);
-      return { ...item, amount, unitPrice: round(amount / item.quantity) };
+  // Receipts commonly print delivery vouchers as "Ongkir", "Delivery", "Shipping", etc.
+  // Gemini can occasionally classify them as ORDER; correct that deterministically without
+  // changing any item price.
+  if (deliveryFee > 0) {
+    discounts = discounts.map((discount: any) => {
+      const name = String(discount.name || "").toLowerCase();
+      const looksLikeDelivery = /(ongkir|delivery|shipping|shipment|freight|delivery fee)/i.test(name);
+      return looksLikeDelivery ? { ...discount, scope: "DELIVERY" } : discount;
     });
   }
 
-  const normalizedSubtotal = round(normalizedItems.reduce((sum: number, item: any) => sum + item.amount, 0));
-  const normalizedGrandTotal = round(normalizedSubtotal + taxAmount + serviceAmount + netDelivery);
+  const detectedDeliveryDiscount = discounts
+    .filter((discount: any) => discount.scope === "DELIVERY")
+    .reduce((sum: number, discount: any) => sum + discount.amount, 0);
+  const deliveryDiscount = deliveryFee > 0
+    ? Math.min(deliveryFee, round(Math.max(Number(raw.deliveryDiscountAmount) || 0, detectedDeliveryDiscount)))
+    : 0;
+
+  // For preview, subtotal is the sum of the printed line items BEFORE separately shown
+  // discounts. This makes the preview faithful to the invoice instead of silently changing prices.
+  const itemSubtotal = round(items.reduce((sum: number, item: any) => sum + item.amount, 0));
+  const taxAmount = Number(raw.taxAmount);
+  const serviceAmount = Number(raw.serviceAmount);
 
   return {
     ...raw,
-    items: normalizedItems,
-    subtotal: normalizedSubtotal,
-    grandTotal: raw.grandTotal !== undefined ? Number(raw.grandTotal) : normalizedGrandTotal,
-    serviceAmount: serviceAmount > 0 ? serviceAmount : undefined,
-    servicePercent: serviceAmount > 0 ? raw.servicePercent : undefined,
+    items,
+    discounts,
+    subtotal: itemSubtotal,
+    serviceAmount: Number.isFinite(serviceAmount) && serviceAmount > 0 ? round(serviceAmount) : undefined,
+    servicePercent: Number.isFinite(serviceAmount) && serviceAmount > 0 ? raw.servicePercent : undefined,
     deliveryFeeAmount: deliveryFee > 0 ? deliveryFee : undefined,
     deliveryDiscountAmount: deliveryDiscount > 0 ? deliveryDiscount : undefined,
-    discounts: Array.isArray(raw.discounts) ? raw.discounts : [],
+    taxAmount: Number.isFinite(taxAmount) && taxAmount >= 0 ? round(taxAmount) : undefined,
+    grandTotal: raw.grandTotal !== undefined && Number.isFinite(Number(raw.grandTotal)) ? round(Number(raw.grandTotal)) : undefined,
+    discounts,
   };
 }
 
@@ -76,20 +86,22 @@ export async function POST(request: Request) {
   if (file.size > 12 * 1024 * 1024) return jsonError("Receipt image must be 12 MB or smaller.");
 
   const base64 = Buffer.from(new Uint8Array(await file.arrayBuffer())).toString("base64");
-  const prompt = `Analyze this restaurant receipt image and extract the bill into the JSON schema exactly.
+  const prompt = `Analyze this restaurant receipt image and transcribe the bill into the JSON schema exactly.
 Rules:
-- Read the receipt visually. Do not invent values or charges.
-- Return the merchant name as printed, cleaned of obvious OCR artifacts.
-- Extract every purchasable food/drink/menu line with quantity, unit price, and line amount BEFORE transaction-level discounts.
-- Extract every discount, voucher, promo, coupon, or negative adjustment. Use scope ORDER for discounts applied to the food/order subtotal, DELIVERY for delivery-fee discounts, ITEM for item-specific discounts.
+- This is a TRANSCRIPTION task. Do not recalculate, normalize, rebalance, or redistribute prices.
+- Return the merchant name as printed, cleaned only of obvious OCR artifacts.
+- Extract every purchasable food/drink/menu line with quantity, unit price, and line amount exactly as printed on the receipt.
+- CRITICAL: Never reduce or increase a line-item price to make the grand total balance.
+- CRITICAL: Never allocate an order voucher/discount proportionally into line-item prices.
+- Keep discounts as separate records with positive absolute amount and scope ORDER, DELIVERY, or ITEM.
+- A voucher mentioning Ongkir, Delivery, Shipping, or similar is DELIVERY, not ORDER.
 - Detect delivery fee and delivery discount separately.
 - Extract subtotal, tax/PBI/PPN/pajak, service charge, rounding, and grand total when visible.
 - SERVICE CHARGE RULE: Set serviceAmount/servicePercent ONLY when a service charge or service fee is explicitly printed. If none is printed, OMIT both. Never infer service fee from arithmetic, tax, delivery fee, discounts, or the difference between subtotal and total.
-- Do not reinterpret tax, PBI/PB1, PPN, net sales, delivery fee, or discounts as service charge.
 - Preserve exact monetary values printed on the receipt.
 - Monetary values must be plain numbers without currency symbols or separators.
 - Do not include grand total, delivery fee, tax, service charge, or discounts as food/drink items.
-- The receipt grand total is the source of truth when visible.`;
+- The grand total is informational source-of-truth and must be returned separately; it must never be used to alter line-item prices.`;
 
   const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
     method: "POST",
