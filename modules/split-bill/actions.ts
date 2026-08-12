@@ -22,8 +22,8 @@ function parseCreatePayload(formData: FormData) {
       merchantName: string;
       participants: { name: string; isMe: boolean }[];
       items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[];
-      tax?: { mode: "AMOUNT" | "PERCENT"; value: number };
-      serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number };
+      tax?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
+      serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
       deliveryFee?: { mode: "AMOUNT" | "PERCENT"; value: number; splitMethod?: "EQUAL" | "PRO_RATA" };
       deliveryDiscount?: { mode: "AMOUNT" | "PERCENT"; value: number };
       note?: string;
