@@ -1,46 +1,36 @@
 import type { Currency } from "@prisma/client";
-
-import type { WalletClientData, WalletHistoryEntry } from "../repository";
+import type { WalletClientData } from "../repository";
 import { formatWalletType } from "../constants";
 import WalletCardActions from "./WalletCardActions";
-import WalletHistory from "./WalletHistory";
 
 type WalletCardProps = {
   wallet: WalletClientData;
   currencies: Currency[];
-  history: WalletHistoryEntry[];
+  selected?: boolean;
+  onSelect?: () => void;
 };
 
-export default function WalletCard({ wallet, currencies, history }: WalletCardProps) {
-  const formatter = new Intl.NumberFormat("id-ID", {
-    minimumFractionDigits: wallet.currency.decimalPlaces,
-    maximumFractionDigits: wallet.currency.decimalPlaces,
-  });
+export default function WalletCard({ wallet, currencies, selected = false, onSelect }: WalletCardProps) {
+  const formatter = new Intl.NumberFormat("id-ID", { minimumFractionDigits: wallet.currency.decimalPlaces, maximumFractionDigits: wallet.currency.decimalPlaces });
   const creditCard = wallet.creditCard;
   const isCreditCard = wallet.walletType === "CREDIT_CARD" && creditCard;
 
   return (
-    <div className="rounded-[20px] border border-[#30465D] bg-[#172A3D] p-6 shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition hover:border-[#405A74] hover:bg-[#1D3145]">
+    <button type="button" onClick={onSelect} className={`w-full rounded-[20px] border p-6 text-left shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition ${selected ? "border-emerald-400/50 bg-[#1D3145] ring-1 ring-emerald-400/20" : "border-[#30465D] bg-[#172A3D] hover:border-[#405A74] hover:bg-[#1D3145]"}`}>
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">{wallet.name}</h3>
           <p className="mt-1 text-sm text-slate-400">{formatWalletType(wallet.walletType)}</p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="rounded-full border border-white/10 bg-[#0B141F] px-3 py-1 text-xs font-medium text-slate-300">
-            {wallet.currency.name} ({wallet.currency.code})
-          </span>
+        <div className="flex items-center gap-2" onClick={(event) => event.stopPropagation()}>
+          <span className="rounded-full border border-white/10 bg-[#0B141F] px-3 py-1 text-xs font-medium text-slate-300">{wallet.currency.name} ({wallet.currency.code})</span>
           <WalletCardActions wallet={wallet} currencies={currencies} />
         </div>
       </div>
-
       <div className="mt-6">
         <p className="text-sm text-slate-400">{isCreditCard ? "Outstanding" : "Current Balance"}</p>
-        <p className="mt-1 text-2xl font-bold tracking-tight text-white">
-          {wallet.currency.symbol}{formatter.format(Number(wallet.currentBalance))}
-        </p>
+        <p className="mt-1 text-2xl font-bold tracking-tight text-white">{wallet.currency.symbol}{formatter.format(Number(wallet.currentBalance))}</p>
       </div>
-
       {isCreditCard && (
         <div className="mt-5 rounded-2xl border border-[#30465D] bg-[#0B141F] p-4">
           <div className="flex items-center justify-between text-sm"><span className="text-slate-400">Credit Limit</span><span className="font-medium text-slate-200">{wallet.currency.symbol}{formatter.format(Number(creditCard.creditLimit))}</span></div>
@@ -48,9 +38,8 @@ export default function WalletCard({ wallet, currencies, history }: WalletCardPr
           <div className="mt-1 flex items-center justify-between text-sm"><span className="text-slate-400">Due Day</span><span className="text-slate-300">{creditCard.dueDate}</span></div>
         </div>
       )}
-
       {wallet.bank && <div className="mt-4 text-sm text-slate-400">{wallet.bank}</div>}
-      <WalletHistory entries={history} symbol={wallet.currency.symbol} decimalPlaces={wallet.currency.decimalPlaces} />
-    </div>
+      <div className={`mt-5 border-t pt-3 text-[11px] font-semibold ${selected ? "border-emerald-400/20 text-emerald-300" : "border-white/5 text-slate-500"}`}>{selected ? "Selected · View history below" : "Click to view history"}</div>
+    </button>
   );
 }
