@@ -288,13 +288,64 @@ model ReceivablePayment {
   @@index([receivableId, receivedAt])
 }
 
-enum InstallmentPlanStatus { ACTIVE COMPLETED CANCELLED }
-enum SplitBillStatus { DRAFT OPEN SETTLED CANCELLED }
-enum SplitBillItemMethod { EQUAL PRO_RATA }
-enum ReceivableStatus { OUTSTANDING PARTIALLY_RECEIVED RECEIVED OVERDUE }
-enum TransactionKind { STANDARD REIMBURSEMENT }
-enum TransferOrigin { MANUAL CREDIT_CARD_PAYMENT }
-enum WalletType { CASH BANK_ACCOUNT CREDIT_CARD DEBIT_CARD E_WALLET FOREIGN_CASH INVESTMENT }
-enum CategoryType { INCOME EXPENSE }
-enum TransactionType { INCOME EXPENSE }
-enum CreditCardStatementStatus { UNPAID PARTIALLY_PAID PAID OVERDUE }
+enum InstallmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum SplitBillStatus {
+  DRAFT
+  OPEN
+  SETTLED
+  CANCELLED
+}
+
+enum SplitBillItemMethod {
+  EQUAL
+  PRO_RATA
+}
+
+enum ReceivableStatus {
+  OUTSTANDING
+  PARTIALLY_RECEIVED
+  RECEIVED
+  OVERDUE
+}
+
+enum TransactionKind {
+  STANDARD
+  REIMBURSEMENT
+}
+
+enum TransferOrigin {
+  MANUAL
+  CREDIT_CARD_PAYMENT
+}
+
+enum WalletType {
+  CASH
+  BANK_ACCOUNT
+  CREDIT_CARD
+  DEBIT_CARD
+  E_WALLET
+  FOREIGN_CASH
+  INVESTMENT
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum CreditCardStatementStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
