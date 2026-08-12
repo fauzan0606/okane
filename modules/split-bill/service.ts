@@ -7,7 +7,7 @@ type ItemInput = { name: string; quantity: number; unitPrice: number; splitMetho
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
 type ChargeInput = { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: ChargeTreatment };
 type DeliveryFeeInput = ChargeInput & { splitMethod?: "EQUAL" | "PRO_RATA" };
-type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
+type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; orderDiscount?: ChargeInput; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
 function balanceDelta(type: "INCOME" | "EXPENSE", amount: Prisma.Decimal) { return type === "INCOME" ? amount : amount.negated(); }
@@ -32,6 +32,7 @@ function validateInput(input: SplitBillInput) {
   if (input.participants.filter((participant) => participant.isMe).length !== 1) throw new Error("Split Bill must have exactly one 'You' participant.");
   if (input.items.length === 0) throw new Error("Add at least one bill item.");
   if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name.");
+  validateCharge(input.orderDiscount, "Order discount");
   validateCharge(input.tax, "Tax");
   validateCharge(input.serviceFee, "Service fee");
   validateCharge(input.deliveryFee, "Delivery fee");
@@ -72,17 +73,35 @@ export async function createSplitBill(input: SplitBillInput) {
       }
     }
 
-    const taxAmount = chargeAmount(input.tax, subtotal);
-    const serviceFeeAmount = chargeAmount(input.serviceFee, subtotal);
+    const orderDiscountAmount = chargeAmount(input.orderDiscount, subtotal).min(subtotal);
+    const discountedSubtotal = subtotal.minus(orderDiscountAmount);
+
+    const addDiscount = async (amount: Prisma.Decimal) => {
+      if (amount.lte(0)) return;
+      if (subtotal.lte(0)) throw new Error("Order discount cannot be added when the bill subtotal is zero.");
+      const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name: "Order Discount", quantity: 1, unitPrice: amount.negated(), splitMethod: SplitBillItemMethod.PRO_RATA } });
+      for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
+        const baseShare = shareTotals[participantIndex];
+        if (baseShare.lte(0)) continue;
+        const allocation = baseShare.div(subtotal).mul(amount);
+        shareTotals[participantIndex] = shareTotals[participantIndex].minus(allocation);
+        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: baseShare, amount: allocation.negated() } });
+      }
+    };
+
+    await addDiscount(orderDiscountAmount);
+
+    const taxAmount = chargeAmount(input.tax, discountedSubtotal);
+    const serviceFeeAmount = chargeAmount(input.serviceFee, discountedSubtotal);
 
     const addProportionalCharge = async (name: string, amount: Prisma.Decimal) => {
       if (amount.lte(0)) return;
-      if (subtotal.lte(0)) throw new Error(`${name} cannot be added when the bill subtotal is zero.`);
+      if (discountedSubtotal.lte(0)) throw new Error(`${name} cannot be added when the discounted bill subtotal is zero.`);
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name, quantity: 1, unitPrice: amount, splitMethod: SplitBillItemMethod.PRO_RATA } });
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
         const units = shareTotals[participantIndex];
         if (units.lte(0)) continue;
-        const allocation = units.div(subtotal).mul(amount);
+        const allocation = units.div(discountedSubtotal).mul(amount);
         await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units, amount: allocation } });
         shareTotals[participantIndex] = shareTotals[participantIndex].plus(allocation);
       }
@@ -113,7 +132,7 @@ export async function createSplitBill(input: SplitBillInput) {
     await addProportionalCharge("Service Fee", serviceFeeAmount);
     await addDeliveryCharge(netDeliveryAmount, deliverySplitMethod);
 
-    const totalAmount = subtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount);
+    const totalAmount = discountedSubtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount);
     const personalIndex = input.participants.findIndex((participant) => participant.isMe);
     await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
     for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
