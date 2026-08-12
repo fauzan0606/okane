@@ -16,7 +16,13 @@ export default function WalletCard({ wallet, currencies, selected = false, onSel
   const isCreditCard = wallet.walletType === "CREDIT_CARD" && creditCard;
 
   return (
-    <button type="button" onClick={onSelect} className={`w-full rounded-[20px] border p-6 text-left shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition ${selected ? "border-emerald-400/50 bg-[#1D3145] ring-1 ring-emerald-400/20" : "border-[#30465D] bg-[#172A3D] hover:border-[#405A74] hover:bg-[#1D3145]"}`}>
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onSelect}
+      onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); onSelect?.(); } }}
+      className={`w-full cursor-pointer rounded-[20px] border p-6 text-left shadow-[0_12px_35px_rgba(0,0,0,0.22)] transition outline-none ${selected ? "border-emerald-400/50 bg-[#1D3145] ring-1 ring-emerald-400/20" : "border-[#30465D] bg-[#172A3D] hover:border-[#405A74] hover:bg-[#1D3145]"}`}
+    >
       <div className="flex items-start justify-between">
         <div>
           <h3 className="text-lg font-semibold text-white">{wallet.name}</h3>
@@ -40,6 +46,6 @@ export default function WalletCard({ wallet, currencies, selected = false, onSel
       )}
       {wallet.bank && <div className="mt-4 text-sm text-slate-400">{wallet.bank}</div>}
       <div className={`mt-5 border-t pt-3 text-[11px] font-semibold ${selected ? "border-emerald-400/20 text-emerald-300" : "border-white/5 text-slate-500"}`}>{selected ? "Selected · View history below" : "Click to view history"}</div>
-    </button>
+    </div>
   );
 }
