@@ -13,6 +13,7 @@ export interface CreateTransactionInput {
   amount: number;
   walletId: string;
   categoryId?: string;
+  subcategoryId?: string;
   merchant?: string;
   note?: string;
   installment?: InstallmentInput;
