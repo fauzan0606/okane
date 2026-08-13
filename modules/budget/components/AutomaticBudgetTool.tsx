@@ -27,8 +27,6 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
 
   const apply = () => {
     if (!suggestion || !mode) return;
-    if (mode === "OVERALL" && suggestion.recommendedTotalBudget <= 0) { toast.error("Overall budget must be greater than zero."); return; }
-    if (mode === "CATEGORY" && suggestion.items.every((item) => item.recommendedAmount <= 0)) { toast.error("Set at least one category budget before applying."); return; }
     start(async () => {
       const form = new FormData();
       form.set("suggestion", JSON.stringify(suggestion));
@@ -67,7 +65,7 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
               <div className="mt-4 grid gap-3 md:grid-cols-4"><div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Income estimate</p><p className="mt-1 text-sm font-semibold text-white">{currencySymbol}{money(suggestion.incomeEstimate)}</p></div><div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Historical spending</p><p className="mt-1 text-sm font-semibold text-white">{currencySymbol}{money(suggestion.historicalExpenseAverage)}</p></div><div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Previous budget</p><p className="mt-1 text-sm font-semibold text-white">{currencySymbol}{money(suggestion.previousBudgetTotal)}</p></div><div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Recommended total</p><p className="mt-1 text-sm font-semibold text-emerald-300">{currencySymbol}{money(suggestion.recommendedTotalBudget)}</p></div></div>
               <p className="mt-3 text-[10px] text-slate-500">Confidence: <span className="font-semibold text-slate-300">{suggestion.confidence}</span></p>
               {mode === "OVERALL" ? (
-                <div className="mt-4 rounded-xl border border-blue-400/10 bg-[#0D1722] p-3"><label className="block"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Budget amount</span><input type="number" min="1" step="1000" value={suggestion.recommendedTotalBudget} onChange={(event) => setSuggestion({ ...suggestion, recommendedTotalBudget: Number(event.target.value) || 0 })} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-200 outline-none" /></label></div>
+                <div className="mt-4 rounded-xl border border-blue-400/10 bg-[#0D1722] p-3"><label className="block"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Budget amount</span><input type="number" min="0" step="1000" value={suggestion.recommendedTotalBudget} onChange={(event) => setSuggestion({ ...suggestion, recommendedTotalBudget: Number(event.target.value) || 0 })} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-200 outline-none" /></label></div>
               ) : (
                 <div className="mt-4 rounded-xl border border-blue-400/10 bg-[#0D1722] p-3">
                   <div className="flex items-center justify-between"><p className="text-xs font-semibold text-white">Category recommendations</p><p className="text-[10px] text-slate-500">Review and adjust before applying</p></div>
@@ -76,7 +74,7 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
                   </div>
                 </div>
               )}
-              <div className="mt-4 flex justify-end"><button type="button" onClick={apply} disabled={busy || (mode === "OVERALL" ? suggestion.recommendedTotalBudget <= 0 : suggestion.items.every((item) => item.recommendedAmount <= 0))} className="rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-[#07110b] disabled:opacity-50">{busy ? "Applying…" : mode === "OVERALL" ? "Use this overall budget" : "Use these category budgets"}</button></div>
+              <div className="mt-4 flex justify-end"><button type="button" onClick={apply} disabled={busy} className="rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-[#07110b] disabled:opacity-50">{busy ? "Applying…" : mode === "OVERALL" ? "Use this overall budget" : "Use these category budgets"}</button></div>
             </div>
           )}
         </>
