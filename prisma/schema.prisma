@@ -17,6 +17,7 @@ model Currency {
   updatedAt DateTime @updatedAt
   wallets Wallet[]
   receivables Receivable[]
+  budgets Budget[]
 }
 
 model Wallet {
@@ -109,6 +110,7 @@ model Category {
   updatedAt DateTime @updatedAt
   subcategories Subcategory[]
   transactions Transaction[]
+  budgetItems BudgetItem[]
 }
 
 model Subcategory {
@@ -122,6 +124,7 @@ model Subcategory {
   updatedAt DateTime @updatedAt
   category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   transactions Transaction[]
+  budgetItems BudgetItem[]
   @@unique([categoryId, name])
   @@index([categoryId, isActive, sortOrder])
 }
@@ -286,6 +289,36 @@ model ReceivablePayment {
   wallet Wallet @relation(fields: [walletId], references: [id])
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   @@index([receivableId, receivedAt])
+}
+
+model Budget {
+  id String @id @default(uuid())
+  name String
+  currencyId String
+  periodStart DateTime
+  periodEnd DateTime
+  note String?
+  currency Currency @relation(fields: [currencyId], references: [id])
+  items BudgetItem[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([currencyId, periodStart, periodEnd])
+  @@index([currencyId, periodStart, periodEnd])
+}
+
+model BudgetItem {
+  id String @id @default(uuid())
+  budgetId String
+  categoryId String
+  subcategoryId String?
+  amount Decimal
+  budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  subcategory Subcategory? @relation(fields: [subcategoryId], references: [id], onDelete: Restrict)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([budgetId, categoryId])
+  @@index([budgetId, subcategoryId])
 }
 
 enum InstallmentPlanStatus {
