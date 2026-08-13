@@ -26,9 +26,19 @@ function fields(formData: FormData) {
   };
 }
 
+function validationState(parsed: { error: { flatten: () => { fieldErrors: Record<string, string[]> } } }): WalletActionState {
+  const fieldErrors = parsed.error.flatten().fieldErrors;
+  const firstError = Object.values(fieldErrors).flat()[0];
+  return {
+    success: false,
+    fieldErrors,
+    message: firstError ?? "Please check the wallet details and try again.",
+  };
+}
+
 export async function createWalletAction(_prevState: WalletActionState, formData: FormData): Promise<WalletActionState> {
   const parsed = walletCreditCardSchema.safeParse(fields(formData));
-  if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
+  if (!parsed.success) return validationState(parsed);
   try { await createWalletService(parsed.data); }
   catch (error) { return { success: false, message: error instanceof Error ? error.message : "Failed to create wallet." }; }
   revalidateFinancialViews();
@@ -39,7 +49,7 @@ export async function updateWalletAction(_prevState: WalletActionState, formData
   const id = formData.get("id");
   if (typeof id !== "string" || !id) return { success: false, message: "Missing wallet id." };
   const parsed = updateWalletSchema.safeParse(fields(formData));
-  if (!parsed.success) return { success: false, fieldErrors: parsed.error.flatten().fieldErrors };
+  if (!parsed.success) return validationState(parsed);
   try { await updateWalletService(id, parsed.data); }
   catch (error) { return { success: false, message: error instanceof Error ? error.message : "Failed to update wallet." }; }
   revalidateFinancialViews();
