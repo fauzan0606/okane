@@ -5,6 +5,24 @@ import { getInstallmentNumber } from "../installment";
 import TransactionCardActions from "./TransactionCardActions";
 
 type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
+type ClientTransaction = Omit<TransactionWithRelations, "installmentPlan" | "splitBill"> & {
+  installmentPlan: {
+    id: string;
+    transactionId: string;
+    totalAmount: string;
+    feeAmount: string;
+    installmentAmount: string;
+    tenorMonths: number;
+    startDate: string;
+    status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+  } | null;
+  splitBill: {
+    id: string;
+    totalAmount: string;
+    personalAmount: string;
+    status: "DRAFT" | "OPEN" | "SETTLED" | "CANCELLED";
+  } | null;
+};
 type TransactionCardProps = { transaction: TransactionWithRelations; wallets: WalletOption[]; categories: Category[]; subcategories: Subcategory[]; payees: Payee[] };
 
 export default function TransactionCard({ transaction, wallets, categories, subcategories, payees }: TransactionCardProps) {
@@ -14,7 +32,74 @@ export default function TransactionCard({ transaction, wallets, categories, subc
   const plan = transaction.installmentPlan;
   const currentInstallment = plan ? getInstallmentNumber(new Date(plan.startDate), new Date(), plan.tenorMonths) : 0;
   const remainingInstallments = plan ? Math.max(plan.tenorMonths - currentInstallment, 0) : 0;
-  const transactionForClient: TransactionWithRelations = { ...transaction, transactionDate: String(transaction.transactionDate), amount: String(transaction.amount), installmentPlan: plan ? { ...plan, totalAmount: String(plan.totalAmount), feeAmount: String(plan.feeAmount), installmentAmount: String(plan.installmentAmount), startDate: String(plan.startDate) } : null, splitBill: splitBill ? { ...splitBill, totalAmount: String(splitBill.totalAmount), personalAmount: String(splitBill.personalAmount) } : null };
+
+  const transactionForClient: ClientTransaction = {
+    id: String(transaction.id),
+    transactionDate: String(transaction.transactionDate),
+    type: transaction.type,
+    amount: String(transaction.amount),
+    note: transaction.note ?? null,
+    walletId: String(transaction.walletId),
+    categoryId: transaction.categoryId ? String(transaction.categoryId) : null,
+    subcategoryId: transaction.subcategoryId ? String(transaction.subcategoryId) : null,
+    payeeId: transaction.payeeId ? String(transaction.payeeId) : null,
+    wallet: {
+      id: String(transaction.wallet.id),
+      name: String(transaction.wallet.name),
+      walletType: transaction.wallet.walletType,
+      currency: {
+        id: String(transaction.wallet.currency.id),
+        code: String(transaction.wallet.currency.code),
+        name: String(transaction.wallet.currency.name),
+        symbol: String(transaction.wallet.currency.symbol),
+        decimalPlaces: Number(transaction.wallet.currency.decimalPlaces),
+      },
+    },
+    category: transaction.category
+      ? {
+          id: String(transaction.category.id),
+          name: String(transaction.category.name),
+          type: transaction.category.type,
+          icon: transaction.category.icon ?? null,
+          color: transaction.category.color ?? null,
+        }
+      : null,
+    subcategory: transaction.subcategory
+      ? {
+          id: String(transaction.subcategory.id),
+          name: String(transaction.subcategory.name),
+          categoryId: String(transaction.subcategory.categoryId),
+        }
+      : null,
+    payee: transaction.payee
+      ? {
+          id: String(transaction.payee.id),
+          name: String(transaction.payee.name),
+          note: transaction.payee.note ?? null,
+        }
+      : null,
+    installmentPlan: plan
+      ? {
+          id: String(plan.id),
+          transactionId: String(plan.transactionId),
+          totalAmount: String(plan.totalAmount),
+          feeAmount: String(plan.feeAmount),
+          installmentAmount: String(plan.installmentAmount),
+          tenorMonths: Number(plan.tenorMonths),
+          startDate: String(plan.startDate),
+          status: plan.status,
+        }
+      : null,
+    splitBill: splitBill
+      ? {
+          id: String(splitBill.id),
+          totalAmount: String(splitBill.totalAmount),
+          personalAmount: String(splitBill.personalAmount),
+          status: splitBill.status,
+        }
+      : null,
+  };
+
   const dateLabel = new Date(transaction.transactionDate).toLocaleDateString("id-ID", { day: "2-digit", month: "short", year: "numeric" });
 
   return (
