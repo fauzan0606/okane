@@ -50,7 +50,7 @@ export async function getBudgetFormData(currencyCode = "IDR") {
 }
 
 export async function upsertOverallBudget(input: { month: string; currencyCode: string; amount: number }) {
-  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Overall budget must be greater than zero.");
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error("Overall budget cannot be negative.");
   const { start, end } = monthBounds(input.month);
   const currency = await prisma.currency.findUnique({ where: { code: input.currencyCode } });
   if (!currency) throw new Error("Currency not found.");
@@ -58,7 +58,7 @@ export async function upsertOverallBudget(input: { month: string; currencyCode: 
 }
 
 export async function upsertBudgetItem(input: { month: string; currencyCode: string; categoryId: string; subcategoryId?: string; amount: number }) {
-  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Budget amount must be greater than zero.");
+  if (!Number.isFinite(input.amount) || input.amount < 0) throw new Error("Budget amount cannot be negative.");
   const { start, end } = monthBounds(input.month);
   const currency = await prisma.currency.findUnique({ where: { code: input.currencyCode } });
   if (!currency) throw new Error("Currency not found.");
