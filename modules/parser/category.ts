@@ -1,19 +1,8 @@
-import type {
-  ParserCategory,
-  ParserContext,
-  ParserSubcategory,
-} from "./types";
+import type { ParserCategory, ParserContext, ParserSubcategory } from "./types";
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
-  food: [
-    "makan", "makan siang", "makan malam", "kantin", "warung", "restoran",
-    "restaurant", "kopi", "coffee", "cafe", "starbucks", "grabfood", "gofood",
-    "snack", "dessert", "groceries", "supermarket", "minimarket",
-  ],
-  transport: [
-    "transport", "grab", "gojek", "ojek", "taxi", "taksi", "bensin", "parkir",
-    "tol", "kereta", "bus", "fuel", "ride-hailing",
-  ],
+  food: ["makan", "kantin", "warung", "restoran", "restaurant", "kopi", "coffee", "cafe", "starbucks", "grabfood", "gofood", "snack", "dessert", "groceries", "supermarket", "minimarket"],
+  transport: ["transport", "grab", "gojek", "ojek", "taxi", "taksi", "bensin", "parkir", "tol", "kereta", "bus", "fuel", "ride-hailing"],
   shopping: ["belanja", "shopping", "shop", "tokopedia", "shopee", "lazada"],
   housing: ["sewa", "rent", "mortgage", "listrik", "air", "internet", "wifi", "rumah", "kos", "maintenance"],
   health: ["dokter", "hospital", "rumah sakit", "obat", "pharmacy", "apotek", "dental", "gym", "fitness", "salon"],
@@ -75,20 +64,10 @@ const SUBCATEGORY_KEYWORDS: Record<string, string[]> = {
   "School / Tuition": ["school", "sekolah", "tuition", "spp"],
   Insurance: ["insurance", "asuransi"],
   "Charity / Donation": ["donasi", "charity", "donation", "sedekah"],
-  Salary: ["gaji", "salary"],
-  Bonus: ["bonus", "thr"],
-  Overtime: ["overtime", "lembur"],
-  Allowance: ["allowance", "tunjangan"],
-  "Business Income": ["business income", "usaha"],
-  Freelance: ["freelance"],
-  Commission: ["commission", "komisi"],
-  "Rental Income": ["rental income", "sewa diterima"],
-  Dividend: ["dividend", "dividen"],
-  "Interest Income": ["interest income", "bunga diterima"],
-  "Capital Gain": ["capital gain", "keuntungan investasi"],
-  "Gift Received": ["gift received", "hadiah diterima"],
-  Refund: ["refund", "pengembalian dana"],
-  Reimbursement: ["reimbursement", "penggantian biaya"],
+  Salary: ["gaji", "salary"], Bonus: ["bonus", "thr"], Overtime: ["overtime", "lembur"], Allowance: ["allowance", "tunjangan"],
+  "Business Income": ["business income", "usaha"], Freelance: ["freelance"], Commission: ["commission", "komisi"], "Rental Income": ["rental income", "sewa diterima"],
+  Dividend: ["dividend", "dividen"], "Interest Income": ["interest income", "bunga diterima"], "Capital Gain": ["capital gain", "keuntungan investasi"],
+  "Gift Received": ["gift received", "hadiah diterima"], Refund: ["refund", "pengembalian dana"], Reimbursement: ["reimbursement", "penggantian biaya"],
 };
 
 function getCategoryGroup(name: string) {
@@ -116,36 +95,25 @@ function normalize(value: string) {
 }
 
 function scoreSubcategory(subcategory: ParserSubcategory, input: string) {
-  const name = normalize(subcategory.name);
-  const keywords = SUBCATEGORY_KEYWORDS[subcategory.name] ?? [];
-  const candidates = [name, ...keywords.map(normalize)];
-  return candidates.reduce((score, keyword) => {
-    if (!keyword) return score;
-    return input.includes(keyword) ? Math.max(score, keyword.length) : score;
-  }, 0);
+  const candidates = [normalize(subcategory.name), ...(SUBCATEGORY_KEYWORDS[subcategory.name] ?? []).map(normalize)];
+  return candidates.reduce((score, keyword) => keyword && input.includes(keyword) ? Math.max(score, keyword.length) : score, 0);
 }
 
 export function findCategory(text: string, context: ParserContext): ParserCategory | undefined {
   const input = normalize(text);
   for (const category of context.categories) {
-    const group = getCategoryGroup(category.name);
-    const keywords = CATEGORY_KEYWORDS[group] ?? [];
+    const keywords = CATEGORY_KEYWORDS[getCategoryGroup(category.name)] ?? [];
     if (keywords.some((keyword) => input.includes(normalize(keyword)))) return category;
   }
   return undefined;
 }
 
-export function findSubcategory(
-  text: string,
-  category: ParserCategory | undefined,
-  context: ParserContext
-): ParserSubcategory | undefined {
+export function findSubcategory(text: string, category: ParserCategory | undefined, context: ParserContext): ParserSubcategory | undefined {
   if (!category) return undefined;
   const input = normalize(text);
-  const candidates = context.subcategories
-    .filter((subcategory) => subcategory.categoryId === category.id && subcategory.isActive !== false)
+  return context.subcategories
+    .filter((subcategory) => subcategory.categoryId === category.id)
     .map((subcategory) => ({ subcategory, score: scoreSubcategory(subcategory, input) }))
     .filter((candidate) => candidate.score > 0)
-    .sort((a, b) => b.score - a.score);
-  return candidates[0]?.subcategory;
+    .sort((a, b) => b.score - a.score)[0]?.subcategory;
 }
