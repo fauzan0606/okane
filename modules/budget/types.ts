@@ -1,10 +1,10 @@
 export type BudgetItemView = {
   id: string;
-  categoryId: string;
-  categoryName: string;
+  categoryId: string | null;
+  categoryName: string | null;
   subcategoryId: string | null;
   subcategoryName: string | null;
-  budgetAmount: number;
+  amount: number;
   actualAmount: number;
   remainingAmount: number;
   percentage: number;
@@ -19,5 +19,28 @@ export type BudgetOverview = {
   totalActual: number;
   totalRemaining: number;
   unbudgetedActual: number;
+  incomeEstimate: number;
+  recommendedTotalBudget: number;
   items: BudgetItemView[];
+};
+
+export type BudgetSuggestionItem = {
+  categoryId: string | null;
+  categoryName: string | null;
+  subcategoryId: string | null;
+  subcategoryName: string | null;
+  recommendedAmount: number;
+  historicalAverage: number;
+  previousBudget: number;
+};
+
+export type BudgetSuggestion = {
+  month: string;
+  currencyCode: string;
+  incomeEstimate: number;
+  historicalExpenseAverage: number;
+  previousBudgetTotal: number;
+  recommendedTotalBudget: number;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  items: BudgetSuggestionItem[];
 };
