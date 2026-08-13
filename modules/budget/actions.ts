@@ -1,7 +1,8 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { deleteBudgetItem, getBudgetSuggestion, applyBudgetSuggestion, clearOverallBudget, upsertBudgetItem, upsertOverallBudget } from "./service";
+import { deleteBudgetItem, applyBudgetSuggestion, clearOverallBudget, upsertBudgetItem, upsertOverallBudget } from "./service";
+import { getBudgetSuggestionV2 } from "./suggestion-service";
 
 function text(value: FormDataEntryValue | null) { return typeof value === "string" ? value : ""; }
 
@@ -37,7 +38,7 @@ export async function clearOverallBudgetAction(formData: FormData) {
 
 export async function getBudgetSuggestionAction(formData: FormData) {
   try {
-    const suggestion = await getBudgetSuggestion(text(formData.get("month")), text(formData.get("currencyCode")));
+    const suggestion = await getBudgetSuggestionV2(text(formData.get("month")), text(formData.get("currencyCode")));
     return { success: true, suggestion };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Failed to calculate budget suggestion." };
