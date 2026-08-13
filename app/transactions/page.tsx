@@ -11,24 +11,92 @@ import {
   listTransactions,
   transactionFormData,
 } from "@/modules/transaction/service";
+import type { TransactionWithRelations } from "@/modules/transaction/repository";
+import type { Category, Payee, Subcategory } from "@prisma/client";
+
+type ClientTransaction = TransactionWithRelations;
+type ClientCategory = Pick<Category, "id" | "name" | "type" | "icon" | "color">;
+type ClientSubcategory = Pick<Subcategory, "id" | "categoryId" | "name" | "isActive" | "sortOrder">;
+type ClientPayee = Pick<Payee, "id" | "name" | "note">;
+
+type ClientTransactionFormData = {
+  wallets: Awaited<ReturnType<typeof transactionFormData>>["wallets"];
+  categories: ClientCategory[];
+  subcategories: ClientSubcategory[];
+  payees: ClientPayee[];
+};
+
+function serializeTransactionList(transactions: TransactionWithRelations[]): ClientTransaction[] {
+  return transactions.map((transaction) => ({
+    ...transaction,
+    transactionDate: String(transaction.transactionDate),
+    amount: String(transaction.amount),
+    note: transaction.note ?? null,
+    walletId: String(transaction.walletId),
+    categoryId: transaction.categoryId ? String(transaction.categoryId) : null,
+    subcategoryId: transaction.subcategoryId ? String(transaction.subcategoryId) : null,
+    payeeId: transaction.payeeId ? String(transaction.payeeId) : null,
+    installmentPlan: transaction.installmentPlan
+      ? {
+          ...transaction.installmentPlan,
+          totalAmount: String(transaction.installmentPlan.totalAmount),
+          feeAmount: String(transaction.installmentPlan.feeAmount),
+          installmentAmount: String(transaction.installmentPlan.installmentAmount),
+          startDate: String(transaction.installmentPlan.startDate),
+        }
+      : null,
+  }));
+}
+
+function serializeFormData(formData: Awaited<ReturnType<typeof transactionFormData>>): ClientTransactionFormData {
+  return {
+    wallets: formData.wallets.map((wallet) => ({
+      id: String(wallet.id),
+      name: String(wallet.name),
+      walletType: wallet.walletType,
+    })),
+    categories: formData.categories.map((category) => ({
+      id: String(category.id),
+      name: String(category.name),
+      type: category.type,
+      icon: category.icon ?? null,
+      color: category.color ?? null,
+    })),
+    subcategories: formData.subcategories.map((subcategory) => ({
+      id: String(subcategory.id),
+      categoryId: String(subcategory.categoryId),
+      name: String(subcategory.name),
+      isActive: Boolean(subcategory.isActive),
+      sortOrder: Number(subcategory.sortOrder),
+    })),
+    payees: formData.payees.map((payee) => ({
+      id: String(payee.id),
+      name: String(payee.name),
+      note: payee.note ?? null,
+    })),
+  };
+}
 
 export default async function TransactionsPage({
   searchParams,
 }: {
   searchParams: Promise<{ category?: string; wallet?: string; from?: string; to?: string }>;
 }) {
-  const [transactions, formData, params] = await Promise.all([
+  const [transactions, rawFormData, params] = await Promise.all([
     listTransactions(),
     transactionFormData(),
     searchParams,
   ]);
+
+  const formData = serializeFormData(rawFormData);
+  const clientTransactions = serializeTransactionList(transactions);
 
   const categoryId = params.category ?? "";
   const walletId = params.wallet ?? "";
   const from = params.from ?? "";
   const to = params.to ?? "";
 
-  const filteredTransactions = transactions.filter((transaction) => {
+  const filteredTransactions = clientTransactions.filter((transaction) => {
     const transactionDay = transaction.transactionDate.slice(0, 10);
     if (categoryId && transaction.categoryId !== categoryId) return false;
     if (walletId && transaction.walletId !== walletId) return false;
@@ -40,10 +108,7 @@ export default async function TransactionsPage({
   const hasFilters = Boolean(categoryId || walletId || from || to);
 
   return (
-    <AppShell
-      sidebar={<Sidebar />}
-      header={<Header />}
-    >
+    <AppShell sidebar={<Sidebar />} header={<Header />}>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
@@ -98,7 +163,7 @@ export default async function TransactionsPage({
 
         {hasFilters && (
           <div className="flex items-center justify-between text-xs text-slate-500">
-            <span>Showing {filteredTransactions.length} of {transactions.length} transactions</span>
+            <span>Showing {filteredTransactions.length} of {clientTransactions.length} transactions</span>
           </div>
         )}
 
