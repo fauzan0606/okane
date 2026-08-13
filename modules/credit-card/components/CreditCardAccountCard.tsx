@@ -10,7 +10,7 @@ import CreditCardRewardPointForm from "./CreditCardRewardPointForm";
 type ForecastData = { amount: number; periodStart: string; statementDate: string; dueDate: string } | null;
 type InstallmentView = { id: string; transactionId: string; merchant: string; category: string; totalAmount: string; feeAmount: string; installmentAmount: string; tenorMonths: number; startDate: string; currentInstallment: number; remainingInstallments: number };
 type PaymentWallet = { id: string; name: string; currencyCode: string; currencySymbol: string; walletType: string };
-type CreditCardAccountCardProps = { wallet: { id: string; name: string; currencySymbol: string; creditLimit: string; rewardPoint: string; billingDate: number; dueDay: number }; statements: CreditCardStatementView[]; forecast: ForecastData; installments: InstallmentView[]; paymentWallets: PaymentWallet[]; defaultExpanded?: boolean };
+type CreditCardAccountCardProps = { wallet: { id: string; name: string; currencySymbol: string; creditLimit: string; rewardPoint: string; billingDate: number; dueDay: number; outstanding: number }; statements: CreditCardStatementView[]; forecast: ForecastData; installments: InstallmentView[]; paymentWallets: PaymentWallet[]; defaultExpanded?: boolean };
 
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
 function formatDate(value: string | Date, options?: Intl.DateTimeFormatOptions) { return new Intl.DateTimeFormat("id-ID", options ?? { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)); }
@@ -35,13 +35,10 @@ function dueLabel(dueDate: string | null, status: CreditCardStatementView["statu
 export default function CreditCardAccountCard({ wallet, statements, forecast, installments, paymentWallets, defaultExpanded = false }: CreditCardAccountCardProps) {
   const [expanded, setExpanded] = useState(defaultExpanded);
   const currentStatement = useMemo(() => statements.find((statement) => statement.status !== "PAID") ?? statements[0] ?? null, [statements]);
-  const targetAmount = currentStatement ? Number(currentStatement.actualAmount ?? currentStatement.calculatedAmount) : 0;
-  const paidAmount = currentStatement ? Number(currentStatement.paidAmount) : 0;
-  const remaining = Math.max(targetAmount - paidAmount, 0);
   const status = currentStatement?.status ?? "UNPAID";
   const meta = statusMeta(status);
   const dueDate = currentStatement ? currentStatement.dueDate : forecast?.dueDate ?? null;
-  const outstanding = status === "PAID" ? 0 : remaining;
+  const outstanding = Math.max(Number(wallet.outstanding), 0);
   const utilization = Number(wallet.creditLimit) > 0 ? Math.min((outstanding / Number(wallet.creditLimit)) * 100, 100) : 0;
 
   return (
