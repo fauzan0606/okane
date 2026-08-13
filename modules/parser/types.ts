@@ -14,6 +14,12 @@ export type ParserCategory = {
   name: string;
 };
 
+export type ParserSubcategory = {
+  id: string;
+  name: string;
+  categoryId: string;
+};
+
 export type ParserContext = {
   wallets: {
     id: string;
@@ -25,6 +31,8 @@ export type ParserContext = {
     id: string;
     name: string;
   }[];
+
+  subcategories: ParserSubcategory[];
 };
 
 export type ConfidenceLevel = "HIGH" | "MEDIUM" | "LOW";
@@ -36,33 +44,26 @@ export type ParserConfidence = {
 
 export type ParsedTransaction = {
   tokens: Token[];
-
   transactionDate: string;
-
   merchant?: string;
-
   amount?: number;
-
   wallet?: ParserWallet;
-
   category?: ParserCategory;
-
+  subcategory?: ParserSubcategory;
   type: "INCOME" | "EXPENSE";
-
   confidence: ParserConfidence;
 };
 
 export type SmartTransactionResult = {
   parsed: ParsedTransaction;
-
   wallets: {
     id: string;
     name: string;
     bank?: string | null;
   }[];
-
   categories: {
     id: string;
     name: string;
   }[];
+  subcategories: ParserSubcategory[];
 };
