@@ -1,6 +1,5 @@
-import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import type { BudgetSuggestion } from "./budget/types";
+import type { BudgetSuggestion } from "./types";
 
 function monthBounds(month: string) {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
@@ -53,7 +52,6 @@ async function monthExpenseStats(month: string, currencyId: string) {
 export async function getBudgetSuggestionV2(month: string, currencyCode: string): Promise<BudgetSuggestion> {
   const currency = await prisma.currency.findUnique({ where: { code: currencyCode } });
   if (!currency) throw new Error("Currency not found.");
-
   const historyMonths = historicalMonths(month);
   const current = await monthExpenseStats(month, currency.id);
   const [history, previousBudget, categories] = await Promise.all([
@@ -85,13 +83,10 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
 
   const categoryMap = new Map<string, { historical: number[]; current: number; previous: number }>();
   for (const category of categories) categoryMap.set(category.id, { historical: [], current: 0, previous: 0 });
-
-  for (const stats of history) {
-    for (const tx of stats.expenses) {
-      if (!tx.categoryId) continue;
-      const entry = categoryMap.get(tx.categoryId);
-      if (entry) entry.historical.push(Number(tx.amount));
-    }
+  for (const stats of history) for (const tx of stats.expenses) {
+    if (!tx.categoryId) continue;
+    const entry = categoryMap.get(tx.categoryId);
+    if (entry) entry.historical.push(Number(tx.amount));
   }
   for (const tx of current.expenses) {
     if (!tx.categoryId) continue;
@@ -107,18 +102,8 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
   const raw = categories.map((category) => {
     const entry = categoryMap.get(category.id)!;
     const historicalAverage = entry.historical.length ? entry.historical.reduce((a, b) => a + b, 0) / entry.historical.length : 0;
-    const currentMonth = entry.current;
-    const previousBudget = entry.previous;
-    const recommended = historicalAverage * 0.55 + currentMonth * 0.15 + previousBudget * 0.30;
-    return {
-      categoryId: category.id,
-      categoryName: category.name,
-      subcategoryId: null,
-      subcategoryName: null,
-      recommendedAmountRaw: recommended,
-      historicalAverage,
-      previousBudget,
-    };
+    const recommended = historicalAverage * 0.55 + entry.current * 0.15 + entry.previous * 0.30;
+    return { categoryId: category.id, categoryName: category.name, subcategoryId: null, subcategoryName: null, recommendedAmountRaw: recommended, historicalAverage, previousBudget: entry.previous };
   });
 
   const positiveTotal = raw.reduce((sum, item) => sum + item.recommendedAmountRaw, 0);
@@ -134,14 +119,5 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
   }));
 
   const coverage = history.filter((item) => item.expenses.length > 0).length;
-  return {
-    month,
-    currencyCode,
-    incomeEstimate: roundBudget(incomeEstimate),
-    historicalExpenseAverage: roundBudget(historicalExpenseAverage),
-    previousBudgetTotal: roundBudget(previousBudgetTotal),
-    recommendedTotalBudget,
-    confidence: coverage >= 5 ? "HIGH" : coverage >= 3 ? "MEDIUM" : "LOW",
-    items,
-  };
+  return { month, currencyCode, incomeEstimate: roundBudget(incomeEstimate), historicalExpenseAverage: roundBudget(historicalExpenseAverage), previousBudgetTotal: roundBudget(previousBudgetTotal), recommendedTotalBudget, confidence: coverage >= 5 ? "HIGH" : coverage >= 3 ? "MEDIUM" : "LOW", items };
 }
