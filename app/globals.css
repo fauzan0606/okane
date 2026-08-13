@@ -90,7 +90,6 @@
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
   --color-muted: var(--muted);
-  --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-muted-foreground: var(--muted-foreground);
   --radius-sm: calc(var(--radius) * 0.6);
@@ -117,24 +116,16 @@ body { min-height: 100vh; }
 button { cursor: pointer; }
 
 /* OKANE native dropdowns: keep the opened option list opaque and readable. */
-select {
-  color-scheme: dark;
-}
-
+select { color-scheme: dark; }
 select option,
-select optgroup {
-  background-color: #0E1722;
-  color: #F8FAFC;
-}
+select optgroup { background-color: #0E1722; color: #F8FAFC; }
+select option:checked { background-color: #142A22; color: #FFFFFF; }
+select option:hover { background-color: #172333; color: #FFFFFF; }
 
-select option:checked {
-  background-color: #142A22;
-  color: #FFFFFF;
-}
-
-select option:hover {
-  background-color: #172333;
-  color: #FFFFFF;
+/* Dashboard monthly calendar: keep the 7-column structure even when utility generation is affected. */
+.grid.grid-cols-7 {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
 }
 
 .dark {
