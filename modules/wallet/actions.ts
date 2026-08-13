@@ -11,18 +11,23 @@ function revalidateFinancialViews() {
   revalidatePath("/credit-card");
 }
 
+function optionalField(formData: FormData, name: string) {
+  const value = formData.get(name);
+  return value === null ? undefined : value;
+}
+
 function fields(formData: FormData) {
   return {
-    name: formData.get("name"),
-    walletType: formData.get("walletType"),
-    currencyCode: formData.get("currencyCode"),
-    currentBalance: formData.get("currentBalance"),
-    creditLimit: formData.get("creditLimit"),
-    billingDate: formData.get("billingDate"),
-    dueDate: formData.get("dueDate"),
-    rewardPoint: formData.get("rewardPoint"),
-    bank: formData.get("bank"),
-    note: formData.get("note"),
+    name: optionalField(formData, "name"),
+    walletType: optionalField(formData, "walletType"),
+    currencyCode: optionalField(formData, "currencyCode"),
+    currentBalance: optionalField(formData, "currentBalance"),
+    creditLimit: optionalField(formData, "creditLimit"),
+    billingDate: optionalField(formData, "billingDate"),
+    dueDate: optionalField(formData, "dueDate"),
+    rewardPoint: optionalField(formData, "rewardPoint"),
+    bank: optionalField(formData, "bank"),
+    note: optionalField(formData, "note"),
   };
 }
 
