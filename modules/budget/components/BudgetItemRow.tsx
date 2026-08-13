@@ -1,15 +1,16 @@
 "use client";
 
+import Link from "next/link";
 import { useTransition } from "react";
 import { toast } from "sonner";
 import { deleteBudgetItemAction } from "../actions";
 import type { BudgetItemView } from "../types";
 
-type Props = { item: BudgetItemView; currencySymbol: string };
+type Props = { item: BudgetItemView; currencySymbol: string; editHref: string };
 
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
 
-export default function BudgetItemRow({ item, currencySymbol }: Props) {
+export default function BudgetItemRow({ item, currencySymbol, editHref }: Props) {
   const [isDeleting, startDeleting] = useTransition();
   const progress = Math.min(item.percentage, 100);
   const over = item.actualAmount > item.budgetAmount;
@@ -39,7 +40,10 @@ export default function BudgetItemRow({ item, currencySymbol }: Props) {
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-[#0A121B]"><div className={`h-full rounded-full ${over ? "bg-red-400" : item.percentage >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${progress}%` }} /></div>
       <div className="mt-2 flex items-center justify-between gap-3 text-[10px] text-slate-500">
         <span>{Math.round(item.percentage)}% used</span>
-        <button type="button" disabled={isDeleting} onClick={handleDelete} className="text-slate-500 hover:text-red-300 disabled:opacity-50">{isDeleting ? "Removing…" : "Remove"}</button>
+        <div className="flex items-center gap-3">
+          <Link href={editHref} className="text-slate-300 hover:text-white">Edit</Link>
+          <button type="button" disabled={isDeleting} onClick={handleDelete} className="text-slate-500 hover:text-red-300 disabled:opacity-50">{isDeleting ? "Removing…" : "Delete"}</button>
+        </div>
       </div>
     </div>
   );
