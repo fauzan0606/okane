@@ -10,6 +10,7 @@ type DeliveryFeeInput = ChargeInput & { splitMethod?: "EQUAL" | "PRO_RATA" };
 type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; orderDiscount?: ChargeInput; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
+function capDecimal(value: Prisma.Decimal, maximum: Prisma.Decimal) { return value.lte(maximum) ? value : maximum; }
 function balanceDelta(type: "INCOME" | "EXPENSE", amount: Prisma.Decimal) { return type === "INCOME" ? amount : amount.negated(); }
 async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: delta.isPositive() ? { currentBalance: { increment: delta } } : { currentBalance: { decrement: delta.abs() } } }); }
 function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) {
@@ -73,7 +74,7 @@ export async function createSplitBill(input: SplitBillInput) {
       }
     }
 
-    const orderDiscountAmount = chargeAmount(input.orderDiscount, subtotal).min(subtotal);
+    const orderDiscountAmount = capDecimal(chargeAmount(input.orderDiscount, subtotal), subtotal);
     const discountedSubtotal = subtotal.minus(orderDiscountAmount);
 
     const addDiscount = async (amount: Prisma.Decimal) => {
@@ -124,7 +125,7 @@ export async function createSplitBill(input: SplitBillInput) {
     };
 
     const deliveryFeeAmount = chargeAmount(input.deliveryFee, subtotal);
-    const deliveryDiscountAmount = chargeAmount(input.deliveryDiscount, subtotal).min(deliveryFeeAmount);
+    const deliveryDiscountAmount = capDecimal(chargeAmount(input.deliveryDiscount, subtotal), deliveryFeeAmount);
     const netDeliveryAmount = deliveryFeeAmount.minus(deliveryDiscountAmount);
     const deliverySplitMethod = input.deliveryFee?.splitMethod ?? "EQUAL";
 
