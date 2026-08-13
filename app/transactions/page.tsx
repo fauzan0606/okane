@@ -5,6 +5,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 
 import TransactionForm from "@/modules/transaction/components/TransactionForm";
+import TransactionImport from "@/modules/transaction/components/TransactionImport";
 import TransactionList from "@/modules/transaction/components/TransactionList";
 
 import {
@@ -116,14 +117,17 @@ export default async function TransactionsPage({
             <p className="mt-2 text-zinc-500">Record income and expenses.</p>
           </div>
 
-          <TransactionForm
-            mode="create"
-            wallets={formData.wallets}
-            categories={formData.categories}
-            subcategories={formData.subcategories}
-            payees={formData.payees}
-            trigger={<Button size="lg">+ Add Transaction</Button>}
-          />
+          <div className="flex flex-wrap items-center gap-2">
+            <TransactionImport wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} />
+            <TransactionForm
+              mode="create"
+              wallets={formData.wallets}
+              categories={formData.categories}
+              subcategories={formData.subcategories}
+              payees={formData.payees}
+              trigger={<Button size="lg">+ Add Transaction</Button>}
+            />
+          </div>
         </div>
 
         <section className="rounded-[18px] border border-white/10 bg-[#0d141e] p-4">
