@@ -3,8 +3,7 @@ import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import BudgetItemRow from "@/modules/budget/components/BudgetItemRow";
-import AutomaticBudgetTool from "@/modules/budget/components/AutomaticBudgetTool";
-import ManualBudgetTool from "@/modules/budget/components/ManualBudgetTool";
+import BudgetPlannerTool from "@/modules/budget/components/BudgetPlannerTool";
 import { currentMonthKey, getBudgetFormData, getBudgetOverview } from "@/modules/budget/service";
 
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
@@ -25,55 +24,14 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
     <AppShell sidebar={<Sidebar />} header={<Header />}>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Budget</h1>
-            <p className="mt-2 text-slate-400">Plan a monthly spending limit automatically from your income and history, or set it yourself.</p>
-          </div>
-          <form method="get" className="flex flex-wrap items-end gap-2">
-            <label className="block"><span className="mb-1 block text-[9px] uppercase tracking-[0.12em] text-slate-500">Month</span><input type="month" name="month" defaultValue={month} className="rounded-xl border border-white/10 bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200" /></label>
-            <label className="block"><span className="mb-1 block text-[9px] uppercase tracking-[0.12em] text-slate-500">Currency</span><select name="currency" defaultValue={overview.currency.code} className="rounded-xl border border-white/10 bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200">{formData.currencies.map((item) => <option key={item.id} value={item.code}>{item.code}</option>)}</select></label>
-            <button type="submit" className="rounded-xl border border-white/10 bg-[#0d141e] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/[0.04]">View</button>
-          </form>
+          <div><h1 className="text-3xl font-bold text-white">Budget</h1><p className="mt-2 text-slate-400">Plan a monthly spending limit automatically from your income and history, or set it yourself.</p></div>
+          <form method="get" className="flex flex-wrap items-end gap-2"><label className="block"><span className="mb-1 block text-[9px] uppercase tracking-[0.12em] text-slate-500">Month</span><input type="month" name="month" defaultValue={month} className="rounded-xl border border-white/10 bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200" /></label><label className="block"><span className="mb-1 block text-[9px] uppercase tracking-[0.12em] text-slate-500">Currency</span><select name="currency" defaultValue={overview.currency.code} className="rounded-xl border border-white/10 bg-[#0d141e] px-3 py-2.5 text-sm text-slate-200">{formData.currencies.map((item) => <option key={item.id} value={item.code}>{item.code}</option>)}</select></label><button type="submit" className="rounded-xl border border-white/10 bg-[#0d141e] px-4 py-2.5 text-sm font-semibold text-slate-200 hover:bg-white/[0.04]">View</button></form>
         </div>
-
-        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0d141e] px-4 py-3">
-          <Link href={`/budget?month=${previous}&currency=${overview.currency.code}`} className="text-sm text-slate-400 hover:text-white">← Previous</Link>
-          <div className="text-center"><p className="text-sm font-semibold text-white">{overview.name.replace("Budget ", "")}</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.15em] text-slate-600">Monthly plan</p></div>
-          <Link href={`/budget?month=${next}&currency=${overview.currency.code}`} className="text-sm text-slate-400 hover:text-white">Next →</Link>
-        </div>
-
-        <section className="rounded-[20px] border border-[#26384B] bg-[#0D1722] p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Monthly progress</p><h2 className="mt-1 text-lg font-semibold text-white">{Math.round(totalProgress)}% of planned budget used</h2></div><p className="text-xs text-slate-500">{overview.items.length} category {overview.items.length === 1 ? "item" : "items"}</p></div>
-          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#091018]"><div className={`h-full rounded-full ${overBudget ? "bg-red-400" : totalProgress >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${totalProgress}%` }} /></div>
-        </section>
-
-        <section className="grid gap-3 md:grid-cols-5">
-          <div className="rounded-[18px] border border-[#26384B] bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Budget</p><p className="mt-1 text-xl font-semibold text-white">{overview.currency.symbol}{formatMoney(overview.totalBudget)}</p></div>
-          <div className="rounded-[18px] border border-[#26384B] bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Actual spending</p><p className="mt-1 text-xl font-semibold text-white">{overview.currency.symbol}{formatMoney(overview.totalActual)}</p></div>
-          <div className={`rounded-[18px] border px-4 py-4 ${overBudget ? "border-red-400/20 bg-[#211416]" : "border-emerald-400/15 bg-[#0E1722]"}`}><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">{overBudget ? "Over budget" : "Remaining"}</p><p className={`mt-1 text-xl font-semibold ${overBudget ? "text-red-300" : "text-emerald-300"}`}>{overview.currency.symbol}{formatMoney(Math.abs(overview.totalRemaining))}</p></div>
-          <div className="rounded-[18px] border border-amber-400/20 bg-[#171B1C] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Unbudgeted spending</p><p className="mt-1 text-xl font-semibold text-amber-300">{overview.currency.symbol}{formatMoney(overview.unbudgetedActual)}</p></div>
-          <div className="rounded-[18px] border border-blue-400/15 bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Income reference</p><p className="mt-1 text-xl font-semibold text-blue-200">{overview.currency.symbol}{formatMoney(overview.incomeEstimate)}</p></div>
-        </section>
-
-        <AutomaticBudgetTool month={month} currencyCode={overview.currency.code} currencySymbol={overview.currency.symbol} />
-
-        <ManualBudgetTool
-          month={month}
-          currencyCode={overview.currency.code}
-          currencySymbol={overview.currency.symbol}
-          currentOverall={hasOverall ? overview.totalBudget : null}
-          categories={formData.categories}
-          subcategories={formData.subcategories}
-          initialCategoryId={editingItem?.categoryId ?? undefined}
-          initialSubcategoryId={editingItem?.subcategoryId ?? undefined}
-          initialAmount={editingItem?.amount}
-        />
-
-        <section className="space-y-3">
-          {overview.items.length === 0 ? (
-            <div className="rounded-[20px] border border-dashed border-white/10 bg-[#0d141e] p-10 text-center"><p className="text-sm font-semibold text-white">{hasOverall ? "Overall budget is active" : "No category budgets for this month yet"}</p><p className="mt-1 text-xs text-slate-500">{hasOverall ? "All expense categories are tracked against the single overall limit above." : "Choose the automatic planner or add a category limit manually."}</p></div>
-          ) : overview.items.map((item) => <BudgetItemRow key={item.id} item={item} currencySymbol={overview.currency.symbol} editHref={`/budget?month=${month}&currency=${overview.currency.code}&edit=${item.id}`} />)}
-        </section>
+        <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-[#0d141e] px-4 py-3"><Link href={`/budget?month=${previous}&currency=${overview.currency.code}`} className="text-sm text-slate-400 hover:text-white">← Previous</Link><div className="text-center"><p className="text-sm font-semibold text-white">{overview.name.replace("Budget ", "")}</p><p className="mt-0.5 text-[10px] uppercase tracking-[0.15em] text-slate-600">Monthly plan</p></div><Link href={`/budget?month=${next}&currency=${overview.currency.code}`} className="text-sm text-slate-400 hover:text-white">Next →</Link></div>
+        <section className="rounded-[20px] border border-[#26384B] bg-[#0D1722] p-5 md:p-6"><div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Monthly progress</p><h2 className="mt-1 text-lg font-semibold text-white">{Math.round(totalProgress)}% of planned budget used</h2></div><p className="text-xs text-slate-500">{overview.items.length} category {overview.items.length === 1 ? "item" : "items"}</p></div><div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#091018]"><div className={`h-full rounded-full ${overBudget ? "bg-red-400" : totalProgress >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${totalProgress}%` }} /></div></section>
+        <section className="grid gap-3 md:grid-cols-5"><div className="rounded-[18px] border border-[#26384B] bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Budget</p><p className="mt-1 text-xl font-semibold text-white">{overview.currency.symbol}{formatMoney(overview.totalBudget)}</p></div><div className="rounded-[18px] border border-[#26384B] bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Actual spending</p><p className="mt-1 text-xl font-semibold text-white">{overview.currency.symbol}{formatMoney(overview.totalActual)}</p></div><div className={`rounded-[18px] border px-4 py-4 ${overBudget ? "border-red-400/20 bg-[#211416]" : "border-emerald-400/15 bg-[#0E1722]"}`}><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">{overBudget ? "Over budget" : "Remaining"}</p><p className={`mt-1 text-xl font-semibold ${overBudget ? "text-red-300" : "text-emerald-300"}`}>{overview.currency.symbol}{formatMoney(Math.abs(overview.totalRemaining))}</p></div><div className="rounded-[18px] border border-amber-400/20 bg-[#171B1C] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Unbudgeted spending</p><p className="mt-1 text-xl font-semibold text-amber-300">{overview.currency.symbol}{formatMoney(overview.unbudgetedActual)}</p></div><div className="rounded-[18px] border border-blue-400/15 bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Income reference</p><p className="mt-1 text-xl font-semibold text-blue-200">{overview.currency.symbol}{formatMoney(overview.incomeEstimate)}</p></div></section>
+        <BudgetPlannerTool month={month} currencyCode={overview.currency.code} currencySymbol={overview.currency.symbol} currentOverall={hasOverall ? overview.totalBudget : null} categories={formData.categories} subcategories={formData.subcategories} initialCategoryId={editingItem?.categoryId ?? undefined} initialSubcategoryId={editingItem?.subcategoryId ?? undefined} initialAmount={editingItem?.amount} />
+        <section className="space-y-3">{overview.items.length === 0 ? <div className="rounded-[20px] border border-dashed border-white/10 bg-[#0d141e] p-10 text-center"><p className="text-sm font-semibold text-white">{hasOverall ? "Overall budget is active" : "No category budgets for this month yet"}</p><p className="mt-1 text-xs text-slate-500">{hasOverall ? "All expense categories are tracked against the single overall limit above." : "Choose the automatic planner or add a category limit manually."}</p></div> : overview.items.map((item) => <BudgetItemRow key={item.id} item={item} currencySymbol={overview.currency.symbol} editHref={`/budget?month=${month}&currency=${overview.currency.code}&edit=${item.id}`} />)}</section>
       </div>
     </AppShell>
   );
