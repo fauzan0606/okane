@@ -42,6 +42,11 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
           <Link href={`/budget?month=${next}&currency=${overview.currency.code}`} className="text-sm text-slate-400 hover:text-white">Next →</Link>
         </div>
 
+        <section className="rounded-[20px] border border-[#26384B] bg-[#0D1722] p-5 md:p-6">
+          <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Monthly progress</p><h2 className="mt-1 text-lg font-semibold text-white">{Math.round(totalProgress)}% of planned budget used</h2></div><p className="text-xs text-slate-500">{overview.items.length} category {overview.items.length === 1 ? "item" : "items"}</p></div>
+          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#091018]"><div className={`h-full rounded-full ${overBudget ? "bg-red-400" : totalProgress >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${totalProgress}%` }} /></div>
+        </section>
+
         <section className="grid gap-3 md:grid-cols-5">
           <div className="rounded-[18px] border border-[#26384B] bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Budget</p><p className="mt-1 text-xl font-semibold text-white">{overview.currency.symbol}{formatMoney(overview.totalBudget)}</p></div>
           <div className="rounded-[18px] border border-[#26384B] bg-[#0E1722] px-4 py-4"><p className="text-[10px] uppercase tracking-[0.12em] text-slate-400">Actual spending</p><p className="mt-1 text-xl font-semibold text-white">{overview.currency.symbol}{formatMoney(overview.totalActual)}</p></div>
@@ -63,11 +68,6 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
           initialSubcategoryId={editingItem?.subcategoryId ?? undefined}
           initialAmount={editingItem?.amount}
         />
-
-        <section className="rounded-[20px] border border-[#26384B] bg-[#0D1722] p-5 md:p-6">
-          <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Monthly progress</p><h2 className="mt-1 text-lg font-semibold text-white">{Math.round(totalProgress)}% of planned budget used</h2></div><p className="text-xs text-slate-500">{overview.items.length} category {overview.items.length === 1 ? "item" : "items"}</p></div>
-          <div className="mt-4 h-2.5 overflow-hidden rounded-full bg-[#091018]"><div className={`h-full rounded-full ${overBudget ? "bg-red-400" : totalProgress >= 80 ? "bg-amber-400" : "bg-emerald-500"}`} style={{ width: `${totalProgress}%` }} /></div>
-        </section>
 
         <section className="space-y-3">
           {overview.items.length === 0 ? (
