@@ -21,31 +21,31 @@ async function main() {
   }
 
   const expenseCategories = [
-    ["Food & Dining", ["Groceries", "Restaurants", "Coffee & Drinks", "Delivery & Takeaway", "Snacks & Desserts"]],
-    ["Housing", ["Rent / Mortgage", "Utilities", "Household", "Maintenance & Repairs"]],
-    ["Transportation", ["Fuel", "Public Transportation", "Taxi / Ride-hailing", "Parking", "Toll", "Vehicle Maintenance"]],
-    ["Shopping", ["Clothing", "Electronics", "Personal Items", "Home & Furniture", "Gifts"]],
-    ["Health & Wellness", ["Medical", "Pharmacy", "Dental", "Fitness", "Personal Care"]],
-    ["Entertainment", ["Movies & Events", "Hobbies", "Games", "Streaming & Subscriptions"]],
-    ["Travel", ["Flights", "Hotels", "Local Transport", "Activities", "Other Travel"]],
-    ["Finance & Fees", ["Transfer Fee", "Bank Fee", "ATM Fee", "Credit Card Fee", "Interest", "Tax & Government Fee"]],
-    ["Family & Education", ["Family Support", "Childcare", "Education", "School / Tuition"]],
-    ["Insurance & Protection", ["Insurance", "Other Protection"]],
-    ["Other", ["Charity / Donation", "Other Expense"]],
+    ["Food & Dining", ["Groceries", "Restaurants", "Coffee & Drinks", "Delivery & Takeaway", "Snacks & Desserts"], "#22C55E", "🍽️"],
+    ["Housing", ["Rent / Mortgage", "Utilities", "Household", "Maintenance & Repairs"], "#F59E0B", "🏠"],
+    ["Transportation", ["Fuel", "Public Transportation", "Taxi / Ride-hailing", "Parking", "Toll", "Vehicle Maintenance"], "#3B82F6", "🚗"],
+    ["Shopping", ["Clothing", "Electronics", "Personal Items", "Home & Furniture", "Gifts"], "#8B5CF6", "🛍️"],
+    ["Health & Wellness", ["Medical", "Pharmacy", "Dental", "Fitness", "Personal Care"], "#EF4444", "❤️"],
+    ["Entertainment", ["Movies & Events", "Hobbies", "Games", "Streaming & Subscriptions"], "#EC4899", "🎬"],
+    ["Travel", ["Flights", "Hotels", "Local Transport", "Activities", "Other Travel"], "#06B6D4", "✈️"],
+    ["Finance & Fees", ["Transfer Fee", "Bank Fee", "ATM Fee", "Credit Card Fee", "Interest", "Tax & Government Fee"], "#F97316", "💳"],
+    ["Family & Education", ["Family Support", "Childcare", "Education", "School / Tuition"], "#14B8A6", "👨‍👩‍👧‍👦"],
+    ["Insurance & Protection", ["Insurance", "Other Protection"], "#64748B", "🛡️"],
+    ["Other", ["Charity / Donation", "Other Expense"], "#94A3B8", "📦"],
   ] as const;
 
   const incomeCategories = [
-    ["Employment", ["Salary", "Bonus", "Overtime", "Allowance"]],
-    ["Business & Side Income", ["Business Income", "Freelance", "Commission", "Rental Income"]],
-    ["Investment", ["Dividend", "Interest Income", "Capital Gain"]],
-    ["Other Income", ["Gift Received", "Refund", "Reimbursement", "Other Income"]],
+    ["Employment", ["Salary", "Bonus", "Overtime", "Allowance"], "#10B981", "💼"],
+    ["Business & Side Income", ["Business Income", "Freelance", "Commission", "Rental Income"], "#06B6D4", "🚀"],
+    ["Investment", ["Dividend", "Interest Income", "Capital Gain"], "#A855F7", "📈"],
+    ["Other Income", ["Gift Received", "Refund", "Reimbursement", "Other Income"], "#14B8A6", "✨"],
   ] as const;
 
-  async function seedCategory(type: CategoryType, name: string, subcategoryNames: readonly string[], sortOrder: number) {
+  async function seedCategory(type: CategoryType, name: string, subcategoryNames: readonly string[], color: string, icon: string, sortOrder: number) {
     const existing = await prisma.category.findFirst({ where: { name, type } });
     const category = existing
-      ? await prisma.category.update({ where: { id: existing.id }, data: { isSystem: true, isActive: true, sortOrder } })
-      : await prisma.category.create({ data: { name, type, isSystem: true, sortOrder } });
+      ? await prisma.category.update({ where: { id: existing.id }, data: { isSystem: true, isActive: true, sortOrder, color, icon } })
+      : await prisma.category.create({ data: { name, type, isSystem: true, sortOrder, color, icon } });
 
     for (const [index, subcategoryName] of subcategoryNames.entries()) {
       const existingSubcategory = await prisma.subcategory.findUnique({ where: { categoryId_name: { categoryId: category.id, name: subcategoryName } } });
@@ -57,10 +57,9 @@ async function main() {
     }
   }
 
-  for (const [index, [name, subcategories]] of expenseCategories.entries()) await seedCategory(CategoryType.EXPENSE, name, subcategories, index);
-  for (const [index, [name, subcategories]] of incomeCategories.entries()) await seedCategory(CategoryType.INCOME, name, subcategories, index);
+  for (const [index, [name, subcategories, color, icon]] of expenseCategories.entries()) await seedCategory(CategoryType.EXPENSE, name, subcategories, color, icon, index);
+  for (const [index, [name, subcategories, color, icon]] of incomeCategories.entries()) await seedCategory(CategoryType.INCOME, name, subcategories, color, icon, index);
 
-  // Hide legacy categories that are not part of the canonical taxonomy.
   await prisma.category.updateMany({
     where: { type: CategoryType.EXPENSE, name: { notIn: expenseCategories.map(([name]) => name) } },
     data: { isActive: false },
