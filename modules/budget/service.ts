@@ -37,7 +37,8 @@ export async function getBudgetOverview(month = currentMonthKey(), currencyCode 
   const totalRemaining = totalBudget - budgetedActual;
   const unbudgetedActual = overallBudgetAmount !== null ? 0 : Math.max(totalActual.toNumber() - budgetedActual, 0);
   const recommendedTotalBudget = await recommendTotalBudget(month, currency.id, totalIncome.toNumber(), totalActual.toNumber());
-  return { budgetId: budget.id, name: budget.name, month, currency: { id: currency.id, code: currency.code, name: currency.name, symbol: currency.symbol, decimalPlaces: currency.decimalPlaces }, totalBudget, totalActual: totalActual.toNumber(), totalRemaining, unbudgetedActual, incomeEstimate: totalIncome.toNumber(), recommendedTotalBudget, items };
+  const mode: BudgetOverview["mode"] = overallBudgetAmount !== null ? "OVERALL" : items.length > 0 ? "CATEGORY" : "NONE";
+  return { budgetId: budget.id, name: budget.name, month, mode, currency: { id: currency.id, code: currency.code, name: currency.name, symbol: currency.symbol, decimalPlaces: currency.decimalPlaces }, totalBudget, totalActual: totalActual.toNumber(), totalRemaining, unbudgetedActual, incomeEstimate: totalIncome.toNumber(), recommendedTotalBudget, items };
 }
 
 export async function getBudgetFormData(currencyCode = "IDR") {
