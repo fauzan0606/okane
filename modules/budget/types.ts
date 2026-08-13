@@ -14,6 +14,7 @@ export type BudgetOverview = {
   budgetId: string;
   name: string;
   month: string;
+  mode: "NONE" | "OVERALL" | "CATEGORY";
   currency: { id: string; code: string; name: string; symbol: string; decimalPlaces: number };
   totalBudget: number;
   totalActual: number;
