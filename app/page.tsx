@@ -1,7 +1,7 @@
 import AppShell from "@/components/layout/AppShell";
 import Sidebar from "@/components/layout/Sidebar";
 import { getDashboard } from "@/modules/dashboard";
-import DashboardView from "@/modules/dashboard/components/DashboardView";
+import DashboardView from "@/modules/dashboard/components/DashboardViewV2";
 import type { DashboardPeriod } from "@/modules/dashboard";
 
 const periods: DashboardPeriod[] = ["THIS_MONTH", "LAST_MONTH", "THIS_YEAR"];
