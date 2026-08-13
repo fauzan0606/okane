@@ -60,7 +60,7 @@ export default function BudgetItemForm({ month, currencyCode, categories, subcat
       </label>
       <label className="block">
         <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Monthly limit</span>
-        <input required min="1" step="1" name="amount" type="number" inputMode="numeric" defaultValue={initialAmount ?? ""} placeholder="500000" className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-200 outline-none" />
+        <input required min="0" step="1" name="amount" type="number" inputMode="numeric" defaultValue={initialAmount ?? ""} placeholder="500000" className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-200 outline-none" />
       </label>
       <button type="submit" disabled={isSaving} className="rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-[#07110b] disabled:opacity-50">{isSaving ? "Saving…" : initialAmount !== undefined ? "Update budget" : "Save budget"}</button>
     </form>
