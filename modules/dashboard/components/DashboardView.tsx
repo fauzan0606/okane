@@ -65,7 +65,7 @@ function DashboardCalendar({ calendar, currencyCode }: { calendar: DashboardData
         </div>
         <div className="rounded-2xl border border-blue-300/40 bg-blue-500/10 px-5 py-3 text-sm font-semibold text-blue-200">Income / Expense</div>
       </div>
-      <div className="mt-8 grid grid-cols-7 gap-2 text-center md:gap-3">
+      <div className="mt-8 grid gap-2 text-center md:gap-3" style={{ gridTemplateColumns: "repeat(7, minmax(0, 1fr))" }}>
         {weekdays.map((day) => <div key={day} className="pb-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-400 md:text-sm">{day}</div>)}
         {cells.map((day, index) => {
           if (!day) return <div key={`blank-${index}`} className="min-h-[86px] md:min-h-[108px]" />;
