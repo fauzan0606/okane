@@ -77,7 +77,6 @@
   --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar: var(--sidebar);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -87,7 +86,6 @@
   --color-input: var(--input);
   --color-destructive: var(--destructive);
   --color-accent-foreground: var(--accent-foreground);
-  --color-accent: var(--accent);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);
   --color-muted: var(--muted);
@@ -127,6 +125,12 @@ select option:hover { background-color: #172333; color: #FFFFFF; }
   display: grid !important;
   grid-template-columns: repeat(7, minmax(0, 1fr)) !important;
   grid-auto-flow: row !important;
+}
+
+/* Dashboard: place the monthly calendar before the financial assessment on desktop. */
+@media (min-width: 1024px) {
+  section[class*="lg:grid-cols-[1.05fr_0.95fr]"] > :first-child { order: 2; }
+  section[class*="lg:grid-cols-[1.05fr_0.95fr]"] > :nth-child(2) { order: 1; }
 }
 
 .dark {
