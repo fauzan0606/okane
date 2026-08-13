@@ -24,38 +24,125 @@ export type TransactionWithRelations = {
   splitBill: { id: string; totalAmount: string; personalAmount: string; status: "DRAFT" | "OPEN" | "SETTLED" | "CANCELLED" } | null;
 };
 
-type RawTransaction = Prisma.TransactionGetPayload<{ include: { wallet: { include: { currency: true } }; category: true; subcategory: true; payee: true; installmentPlan: true; splitBill: true } }>;
+type RawTransaction = Prisma.TransactionGetPayload<{
+  include: {
+    wallet: { include: { currency: true } };
+    category: true;
+    subcategory: true;
+    payee: true;
+    installmentPlan: true;
+    splitBill: true;
+  };
+}>;
 
 function serializeTransaction(transaction: RawTransaction): TransactionWithRelations {
   return {
-    id: transaction.id,
+    id: String(transaction.id),
     transactionDate: transaction.transactionDate.toISOString(),
     type: transaction.type,
     amount: transaction.amount.toString(),
-    note: transaction.note,
-    walletId: transaction.walletId,
-    categoryId: transaction.categoryId,
-    subcategoryId: transaction.subcategoryId,
-    payeeId: transaction.payeeId,
-    wallet: { id: transaction.wallet.id, name: transaction.wallet.name, walletType: transaction.wallet.walletType, currency: { id: transaction.wallet.currency.id, code: transaction.wallet.currency.code, name: transaction.wallet.currency.name, symbol: transaction.wallet.currency.symbol, decimalPlaces: transaction.wallet.currency.decimalPlaces } },
-    category: transaction.category ? { id: transaction.category.id, name: transaction.category.name, type: transaction.category.type, icon: transaction.category.icon, color: transaction.category.color } : null,
-    subcategory: transaction.subcategory ? { id: transaction.subcategory.id, name: transaction.subcategory.name, categoryId: transaction.subcategory.categoryId } : null,
-    payee: transaction.payee ? { id: transaction.payee.id, name: transaction.payee.name, note: transaction.payee.note } : null,
-    installmentPlan: transaction.installmentPlan ? { id: transaction.installmentPlan.id, transactionId: transaction.installmentPlan.transactionId, totalAmount: transaction.installmentPlan.totalAmount.toString(), feeAmount: transaction.installmentPlan.feeAmount.toString(), installmentAmount: transaction.installmentPlan.installmentAmount.toString(), tenorMonths: transaction.installmentPlan.tenorMonths, startDate: transaction.installmentPlan.startDate.toISOString(), status: transaction.installmentPlan.status } : null,
-    splitBill: transaction.splitBill ? { id: transaction.splitBill.id, totalAmount: transaction.splitBill.totalAmount.toString(), personalAmount: transaction.splitBill.personalAmount.toString(), status: transaction.splitBill.status } : null,
+    note: transaction.note ?? null,
+    walletId: String(transaction.walletId),
+    categoryId: transaction.categoryId ? String(transaction.categoryId) : null,
+    subcategoryId: transaction.subcategoryId ? String(transaction.subcategoryId) : null,
+    payeeId: transaction.payeeId ? String(transaction.payeeId) : null,
+    wallet: {
+      id: String(transaction.wallet.id),
+      name: String(transaction.wallet.name),
+      walletType: transaction.wallet.walletType,
+      currency: {
+        id: String(transaction.wallet.currency.id),
+        code: String(transaction.wallet.currency.code),
+        name: String(transaction.wallet.currency.name),
+        symbol: String(transaction.wallet.currency.symbol),
+        decimalPlaces: Number(transaction.wallet.currency.decimalPlaces),
+      },
+    },
+    category: transaction.category
+      ? {
+          id: String(transaction.category.id),
+          name: String(transaction.category.name),
+          type: transaction.category.type,
+          icon: transaction.category.icon ?? null,
+          color: transaction.category.color ?? null,
+        }
+      : null,
+    subcategory: transaction.subcategory
+      ? {
+          id: String(transaction.subcategory.id),
+          name: String(transaction.subcategory.name),
+          categoryId: String(transaction.subcategory.categoryId),
+        }
+      : null,
+    payee: transaction.payee
+      ? {
+          id: String(transaction.payee.id),
+          name: String(transaction.payee.name),
+          note: transaction.payee.note ?? null,
+        }
+      : null,
+    installmentPlan: transaction.installmentPlan
+      ? {
+          id: String(transaction.installmentPlan.id),
+          transactionId: String(transaction.installmentPlan.transactionId),
+          totalAmount: transaction.installmentPlan.totalAmount.toString(),
+          feeAmount: transaction.installmentPlan.feeAmount.toString(),
+          installmentAmount: transaction.installmentPlan.installmentAmount.toString(),
+          tenorMonths: Number(transaction.installmentPlan.tenorMonths),
+          startDate: transaction.installmentPlan.startDate.toISOString(),
+          status: transaction.installmentPlan.status,
+        }
+      : null,
+    splitBill: transaction.splitBill
+      ? {
+          id: String(transaction.splitBill.id),
+          totalAmount: transaction.splitBill.totalAmount.toString(),
+          personalAmount: transaction.splitBill.personalAmount.toString(),
+          status: transaction.splitBill.status,
+        }
+      : null,
   };
 }
 
 export async function getTransactions() {
-  const transactions = await prisma.transaction.findMany({ where: { kind: "STANDARD" }, include: { wallet: { include: { currency: true } }, category: true, subcategory: true, payee: true, installmentPlan: true, splitBill: true }, orderBy: { transactionDate: "desc" } });
+  const transactions = await prisma.transaction.findMany({
+    where: { kind: "STANDARD" },
+    include: {
+      wallet: { include: { currency: true } },
+      category: true,
+      subcategory: true,
+      payee: true,
+      installmentPlan: true,
+      splitBill: true,
+    },
+    orderBy: { transactionDate: "desc" },
+  });
   return transactions.map(serializeTransaction);
 }
 
 export async function getTransactionById(id: string) {
-  const transaction = await prisma.transaction.findFirst({ where: { id, kind: "STANDARD" }, include: { wallet: { include: { currency: true } }, category: true, subcategory: true, payee: true, installmentPlan: true, splitBill: true } });
+  const transaction = await prisma.transaction.findFirst({
+    where: { id, kind: "STANDARD" },
+    include: {
+      wallet: { include: { currency: true } },
+      category: true,
+      subcategory: true,
+      payee: true,
+      installmentPlan: true,
+      splitBill: true,
+    },
+  });
   return transaction ? serializeTransaction(transaction) : null;
 }
 
-export async function createTransaction(data: Prisma.TransactionCreateInput) { return prisma.transaction.create({ data }); }
-export async function updateTransaction(id: string, data: Prisma.TransactionUpdateInput) { return prisma.transaction.update({ where: { id }, data }); }
-export async function deleteTransaction(id: string) { return prisma.transaction.delete({ where: { id } }); }
+export async function createTransaction(data: Prisma.TransactionCreateInput) {
+  return prisma.transaction.create({ data });
+}
+
+export async function updateTransaction(id: string, data: Prisma.TransactionUpdateInput) {
+  return prisma.transaction.update({ where: { id }, data });
+}
+
+export async function deleteTransaction(id: string) {
+  return prisma.transaction.delete({ where: { id } });
+}
