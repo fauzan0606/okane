@@ -2,15 +2,14 @@ import Link from "next/link";
 import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
-import BudgetItemForm from "@/modules/budget/components/BudgetItemForm";
 import BudgetItemRow from "@/modules/budget/components/BudgetItemRow";
-import OverallBudgetForm from "@/modules/budget/components/OverallBudgetForm";
 import AutomaticBudgetTool from "@/modules/budget/components/AutomaticBudgetTool";
+import ManualBudgetTool from "@/modules/budget/components/ManualBudgetTool";
 import { currentMonthKey, getBudgetFormData, getBudgetOverview } from "@/modules/budget/service";
 
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
 
-export default async function BudgetPage({ searchParams }: { searchParams: Promise<{ month?: string; currency?: string }> }) {
+export default async function BudgetPage({ searchParams }: { searchParams: Promise<{ month?: string; currency?: string; edit?: string }> }) {
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonthKey();
   const currency = params.currency || "IDR";
@@ -19,7 +18,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
   const next = (() => { const date = new Date(`${month}-01T00:00:00`); date.setMonth(date.getMonth() + 1); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; })();
   const totalProgress = overview.totalBudget > 0 ? Math.min((overview.totalActual / overview.totalBudget) * 100, 100) : 0;
   const overBudget = overview.totalActual > overview.totalBudget;
-  const hasOverall = overview.recommendedTotalBudget > 0 && overview.totalBudget > 0 && overview.items.length === 0;
+  const hasOverall = overview.totalBudget > 0 && overview.items.length === 0;
+  const editingItem = params.edit ? overview.items.find((item) => item.id === params.edit) ?? null : null;
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
@@ -52,14 +52,17 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
 
         <AutomaticBudgetTool month={month} currencyCode={overview.currency.code} currencySymbol={overview.currency.symbol} />
 
-        <section className="rounded-[20px] border border-[#26384B] bg-[#0D1722] p-5 md:p-6">
-          <div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Manual budget</p><h2 className="mt-1 text-lg font-semibold text-white">Choose one budgeting scope</h2><p className="mt-1 text-xs text-slate-500">Use one overall monthly limit, or use category/subcategory limits. The two approaches are intentionally kept separate.</p></div>
-          <div className="mt-5 space-y-4">
-            <OverallBudgetForm month={month} currencyCode={overview.currency.code} currentAmount={hasOverall ? overview.totalBudget : null} currencySymbol={overview.currency.symbol} />
-            <div className="relative py-1"><div className="absolute inset-x-0 top-1/2 border-t border-white/5" /><span className="relative bg-[#0D1722] px-2 text-[9px] uppercase tracking-[0.15em] text-slate-600">or per category</span></div>
-            <div><BudgetItemForm month={month} currencyCode={overview.currency.code} categories={formData.categories} subcategories={formData.subcategories} /></div>
-          </div>
-        </section>
+        <ManualBudgetTool
+          month={month}
+          currencyCode={overview.currency.code}
+          currencySymbol={overview.currency.symbol}
+          currentOverall={hasOverall ? overview.totalBudget : null}
+          categories={formData.categories}
+          subcategories={formData.subcategories}
+          initialCategoryId={editingItem?.categoryId ?? undefined}
+          initialSubcategoryId={editingItem?.subcategoryId ?? undefined}
+          initialAmount={editingItem?.amount}
+        />
 
         <section className="rounded-[20px] border border-[#26384B] bg-[#0D1722] p-5 md:p-6">
           <div className="flex items-start justify-between gap-4"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-emerald-400">Monthly progress</p><h2 className="mt-1 text-lg font-semibold text-white">{Math.round(totalProgress)}% of planned budget used</h2></div><p className="text-xs text-slate-500">{overview.items.length} category {overview.items.length === 1 ? "item" : "items"}</p></div>
@@ -69,7 +72,7 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
         <section className="space-y-3">
           {overview.items.length === 0 ? (
             <div className="rounded-[20px] border border-dashed border-white/10 bg-[#0d141e] p-10 text-center"><p className="text-sm font-semibold text-white">{hasOverall ? "Overall budget is active" : "No category budgets for this month yet"}</p><p className="mt-1 text-xs text-slate-500">{hasOverall ? "All expense categories are tracked against the single overall limit above." : "Choose the automatic planner or add a category limit manually."}</p></div>
-          ) : overview.items.map((item) => <BudgetItemRow key={item.id} item={item} currencySymbol={overview.currency.symbol} />)}
+          ) : overview.items.map((item) => <BudgetItemRow key={item.id} item={item} currencySymbol={overview.currency.symbol} editHref={`/budget?month=${month}&currency=${overview.currency.code}&edit=${item.id}`} />)}
         </section>
       </div>
     </AppShell>
