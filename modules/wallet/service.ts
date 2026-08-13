@@ -41,29 +41,41 @@ export async function createWalletService(input: CreateWalletInput) {
 }
 
 export async function updateWalletService(id: string, input: Partial<CreateWalletInput>) {
-  const data: Record<string, unknown> = {};
-  if (input.name !== undefined) data.name = input.name;
-  if (input.walletType !== undefined) data.walletType = input.walletType;
-  if (input.currentBalance !== undefined) { data.currentBalance = input.currentBalance; data.balanceAsOf = new Date(); }
-  if (input.bank !== undefined) data.bank = input.bank;
-  if (input.note !== undefined) data.note = input.note;
-  if (input.currencyCode !== undefined) { const currency = await getRequiredCurrency(input.currencyCode); data.currency = { connect: { id: currency.id } }; }
-
   const existing = await getWalletById(id);
   if (!existing) throw new Error("Wallet not found.");
 
-  if (input.walletType === WalletType.CREDIT_CARD) {
-    const profile = cardProfile(input);
-    await prisma.creditCardProfile.upsert({ where: { walletId: id }, update: profile ?? {}, create: { walletId: id, ...(profile ?? { creditLimit: 0, billingDate: 1, dueDate: 1, rewardPoint: 0 }) } });
-  } else if (input.walletType !== undefined && String(input.walletType) !== "CREDIT_CARD") {
-    await prisma.creditCardProfile.deleteMany({ where: { walletId: id } });
-  } else if (existing.walletType === WalletType.CREDIT_CARD && (input.creditLimit !== undefined || input.billingDate !== undefined || input.dueDate !== undefined || input.rewardPoint !== undefined)) {
-    const current = existing.creditCard;
-    if (!current) throw new Error("Credit card profile not found.");
-    await prisma.creditCardProfile.update({ where: { walletId: id }, data: { creditLimit: input.creditLimit ?? current.creditLimit, billingDate: input.billingDate ?? current.billingDate, dueDate: input.dueDate ?? current.dueDate, rewardPoint: input.rewardPoint ?? current.rewardPoint } });
+  const data: Record<string, unknown> = {};
+  if (input.name !== undefined) data.name = input.name;
+  if (input.walletType !== undefined) data.walletType = input.walletType as WalletType;
+  if (input.currentBalance !== undefined) { data.currentBalance = input.currentBalance; data.balanceAsOf = new Date(); }
+  if (input.bank !== undefined) data.bank = input.bank;
+  if (input.note !== undefined) data.note = input.note;
+  if (input.currencyCode !== undefined) {
+    const currency = await getRequiredCurrency(input.currencyCode);
+    data.currency = { connect: { id: currency.id } };
   }
 
-  return updateWallet(id, data);
+  const nextWalletType = input.walletType ?? existing.walletType;
+  const profile = nextWalletType === WalletType.CREDIT_CARD
+    ? cardProfile({ ...input, walletType: WalletType.CREDIT_CARD })
+    : null;
+
+  await prisma.$transaction(async (tx) => {
+    await tx.wallet.update({ where: { id }, data });
+
+    if (nextWalletType === WalletType.CREDIT_CARD) {
+      if (!profile) throw new Error("Credit card settings are incomplete.");
+      await tx.creditCardProfile.upsert({
+        where: { walletId: id },
+        update: profile,
+        create: { walletId: id, ...profile },
+      });
+    } else if (input.walletType !== undefined) {
+      await tx.creditCardProfile.deleteMany({ where: { walletId: id } });
+    }
+  });
+
+  return getWalletById(id);
 }
 
 export async function deleteWalletService(id: string) { return deleteWallet(id); }
