@@ -24,7 +24,8 @@ export default function BudgetItemForm({ month, currencyCode, categories, subcat
 
   function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
+    const formData = new FormData(form);
     startSaving(async () => {
       const result = await upsertBudgetItemAction(formData);
       if (!result.success) {
@@ -32,7 +33,7 @@ export default function BudgetItemForm({ month, currencyCode, categories, subcat
         return;
       }
       toast.success("Budget saved successfully.");
-      event.currentTarget.reset();
+      form.reset();
       setCategoryId("");
       setSubcategoryId("");
       router.refresh();
