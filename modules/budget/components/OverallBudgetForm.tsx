@@ -6,23 +6,30 @@ import { useRouter } from "next/navigation";
 import { clearOverallBudgetAction, upsertOverallBudgetAction } from "../actions";
 
 type Props = { month: string; currencyCode: string; currentAmount: number | null; currencySymbol: string };
-
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
 
 export default function OverallBudgetForm({ month, currencyCode, currentAmount, currencySymbol }: Props) {
   const router = useRouter();
   const [saving, startSaving] = useTransition();
   const [deleting, startDeleting] = useTransition();
+  async function save(data: FormData) {
+    let result = await upsertOverallBudgetAction(data);
+    if (!result.success && "requiresReplacement" in result && result.requiresReplacement) {
+      const confirmed = window.confirm(result.message ?? "A budget already exists for this month. Replace it?");
+      if (!confirmed) return;
+      data.set("replaceExisting", "true");
+      result = await upsertOverallBudgetAction(data);
+    }
+    if (!result.success) { toast.error(result.message ?? "Failed to save overall budget."); return; }
+    toast.success(currentAmount !== null ? "Overall budget updated successfully." : "Overall budget saved successfully.");
+    router.refresh();
+  }
   function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
     const data = new FormData(form);
-    startSaving(async () => {
-      const result = await upsertOverallBudgetAction(data);
-      if (!result.success) { toast.error(result.message ?? "Failed to save overall budget."); return; }
-      toast.success(currentAmount !== null ? "Overall budget updated successfully." : "Overall budget saved successfully.");
-      router.refresh();
-    });
+    data.set("editing", currentAmount !== null ? "true" : "false");
+    startSaving(() => save(data));
   }
   function remove() {
     const data = new FormData(); data.set("month", month); data.set("currencyCode", currencyCode);
