@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
 import { upsertBudgetItemAction } from "../actions";
@@ -12,8 +12,8 @@ type Props = { month: string; currencyCode: string; categories: Category[]; subc
 export default function BudgetItemForm({ month, currencyCode, categories, subcategories, initialCategoryId = "", initialSubcategoryId = "", initialAmount }: Props) {
   const router = useRouter();
   const [isSaving, startSaving] = useTransition();
-  const [categoryId, setCategoryId] = React.useState(initialCategoryId);
-  const [subcategoryId, setSubcategoryId] = React.useState(initialSubcategoryId);
+  const [categoryId, setCategoryId] = useState(initialCategoryId);
+  const [subcategoryId, setSubcategoryId] = useState(initialSubcategoryId);
   const availableSubcategories = useMemo(() => subcategories.filter((subcategory) => subcategory.categoryId === categoryId), [subcategories, categoryId]);
 
   async function handleSave(formData: FormData) {
