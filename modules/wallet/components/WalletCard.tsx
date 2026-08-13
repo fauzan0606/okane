@@ -14,6 +14,7 @@ export default function WalletCard({ wallet, currencies, selected = false, onSel
   const formatter = new Intl.NumberFormat("id-ID", { minimumFractionDigits: wallet.currency.decimalPlaces, maximumFractionDigits: wallet.currency.decimalPlaces });
   const creditCard = wallet.creditCard;
   const isCreditCard = wallet.walletType === "CREDIT_CARD" && creditCard;
+  const outstanding = isCreditCard ? Math.max(-Number(wallet.currentBalance), 0) : Number(wallet.currentBalance);
 
   return (
     <div
@@ -35,7 +36,7 @@ export default function WalletCard({ wallet, currencies, selected = false, onSel
       </div>
       <div className="mt-6">
         <p className="text-sm text-slate-400">{isCreditCard ? "Outstanding" : "Current Balance"}</p>
-        <p className="mt-1 text-2xl font-bold tracking-tight text-white">{wallet.currency.symbol}{formatter.format(Number(wallet.currentBalance))}</p>
+        <p className="mt-1 text-2xl font-bold tracking-tight text-white">{wallet.currency.symbol}{formatter.format(outstanding)}</p>
       </div>
       {isCreditCard && (
         <div className="mt-5 rounded-2xl border border-[#30465D] bg-[#0B141F] p-4">
