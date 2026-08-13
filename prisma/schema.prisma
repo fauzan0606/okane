@@ -297,6 +297,7 @@ model Budget {
   currencyId String
   periodStart DateTime
   periodEnd DateTime
+  totalAmount Decimal?
   note String?
   currency Currency @relation(fields: [currencyId], references: [id])
   items BudgetItem[]
@@ -309,11 +310,11 @@ model Budget {
 model BudgetItem {
   id String @id @default(uuid())
   budgetId String
-  categoryId String
+  categoryId String?
   subcategoryId String?
   amount Decimal
   budget Budget @relation(fields: [budgetId], references: [id], onDelete: Cascade)
-  category Category @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  category Category? @relation(fields: [categoryId], references: [id], onDelete: Restrict)
   subcategory Subcategory? @relation(fields: [subcategoryId], references: [id], onDelete: Restrict)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
