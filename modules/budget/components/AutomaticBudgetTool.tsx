@@ -20,10 +20,7 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
       form.set("month", month);
       form.set("currencyCode", currencyCode);
       const result = await getBudgetSuggestionAction(form);
-      if (!result.success) {
-        toast.error(result.message ?? "Failed to calculate budget.");
-        return;
-      }
+      if (!result.success) { toast.error(result.message ?? "Failed to calculate budget."); return; }
       setSuggestion(result.suggestion);
     });
   };
@@ -35,10 +32,7 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
       form.set("suggestion", JSON.stringify(suggestion));
       form.set("mode", mode);
       const result = await applyBudgetSuggestionAction(form);
-      if (!result.success) {
-        toast.error(result.message ?? "Failed to apply budget.");
-        return;
-      }
+      if (!result.success) { toast.error(result.message ?? "Failed to apply budget."); return; }
       toast.success(mode === "OVERALL" ? "Automatic overall budget applied." : "Automatic category budgets applied.");
       setSuggestion(null);
     });
@@ -83,15 +77,31 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
             </div>
           ) : (
             <div className="mt-4 rounded-2xl border border-white/10 bg-[#111C28] p-4">
-              <div className="grid gap-3 md:grid-cols-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-white">{mode === "CATEGORY" ? "Adjust category recommendations" : "Adjust overall recommendation"}</p>
+                  <p className="mt-1 text-xs text-slate-500">These values are recommendations. You can change them before approving.</p>
+                </div>
+                <button type="button" onClick={calculate} disabled={busy} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 hover:bg-white/5 disabled:opacity-50">Recalculate</button>
+              </div>
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Income estimate</p><p className="mt-1 text-sm font-semibold text-white">{currencySymbol}{money(suggestion.incomeEstimate)}</p></div>
                 <div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Historical spending</p><p className="mt-1 text-sm font-semibold text-white">{currencySymbol}{money(suggestion.historicalExpenseAverage)}</p></div>
                 <div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Previous budget</p><p className="mt-1 text-sm font-semibold text-white">{currencySymbol}{money(suggestion.previousBudgetTotal)}</p></div>
                 <div><p className="text-[9px] uppercase tracking-[0.12em] text-slate-500">Recommended total</p><p className="mt-1 text-sm font-semibold text-emerald-300">{currencySymbol}{money(suggestion.recommendedTotalBudget)}</p></div>
               </div>
               <p className="mt-3 text-[10px] text-slate-500">Confidence: <span className="font-semibold text-slate-300">{suggestion.confidence}</span></p>
-              {mode === "CATEGORY" && <div className="mt-4 rounded-xl border border-blue-400/10 bg-[#0D1722] p-3"><div className="flex items-center justify-between"><p className="text-xs font-semibold text-white">Category recommendations</p><p className="text-[10px] text-slate-500">Review before applying</p></div><div className="mt-3 space-y-2">{suggestion.items.map((item) => <div key={item.categoryId} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border border-white/5 bg-[#111C28] px-3 py-3"><div><p className="text-xs font-semibold text-white">{item.categoryName}</p><p className="mt-1 text-[10px] text-slate-500">History {currencySymbol}{money(item.historicalAverage)} · Previous budget {currencySymbol}{money(item.previousBudget)}</p></div><div className="text-right"><p className="text-[9px] uppercase tracking-[0.1em] text-slate-500">Recommended</p><p className="mt-0.5 text-sm font-semibold text-emerald-300">{currencySymbol}{money(item.recommendedAmount)}</p></div></div>)}</div></div>}
-              <div className="mt-4 flex justify-end"><button type="button" onClick={apply} disabled={busy} className="rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-[#07110b] disabled:opacity-50">{busy ? "Applying…" : mode === "OVERALL" ? "Use this overall budget" : "Use these category budgets"}</button></div>
+              {mode === "OVERALL" ? (
+                <div className="mt-4 rounded-xl border border-blue-400/10 bg-[#0D1722] p-3">
+                  <label className="block"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Budget amount</span><input type="number" min="1" step="1000" value={suggestion.recommendedTotalBudget} onChange={(event) => setSuggestion({ ...suggestion, recommendedTotalBudget: Number(event.target.value) || 0 })} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-200 outline-none" /></label>
+                </div>
+              ) : (
+                <div className="mt-4 rounded-xl border border-blue-400/10 bg-[#0D1722] p-3">
+                  <div className="flex items-center justify-between"><p className="text-xs font-semibold text-white">Category recommendations</p><p className="text-[10px] text-slate-500">Review and adjust before applying</p></div>
+                  <div className="mt-3 space-y-2">{suggestion.items.map((item, index) => <div key={item.categoryId ?? `item-${index}`} className="grid gap-3 rounded-xl border border-white/5 bg-[#111C28] px-3 py-3 md:grid-cols-[1fr_auto]"><div><p className="text-xs font-semibold text-white">{item.categoryName}</p><p className="mt-1 text-[10px] text-slate-500">History {currencySymbol}{money(item.historicalAverage)} · Previous budget {currencySymbol}{money(item.previousBudget)}</p></div><div className="flex items-center gap-2"><span className="text-[9px] uppercase tracking-[0.1em] text-slate-500">Budget</span><input type="number" min="1" step="1000" value={item.recommendedAmount} onChange={(event) => { const items = [...suggestion.items]; items[index] = { ...items[index], recommendedAmount: Number(event.target.value) || 0 }; setSuggestion({ ...suggestion, items }); }} className="w-36 rounded-lg border border-white/10 bg-[#070c12] px-2.5 py-2 text-sm text-slate-200 outline-none" /></div></div>)}</div>
+                </div>
+              )}
+              <div className="mt-4 flex justify-end"><button type="button" onClick={apply} disabled={busy || (mode === "OVERALL" ? suggestion.recommendedTotalBudget <= 0 : suggestion.items.some((item) => item.recommendedAmount <= 0))} className="rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-semibold text-[#07110b] disabled:opacity-50">{busy ? "Applying…" : mode === "OVERALL" ? "Use this overall budget" : "Use these category budgets"}</button></div>
             </div>
           )}
         </>
