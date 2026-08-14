@@ -115,7 +115,11 @@ export async function getTransactions() {
       installmentPlan: true,
       splitBill: true,
     },
-    orderBy: { transactionDate: "desc" },
+    orderBy: [
+      { transactionDate: "desc" },
+      { createdAt: "desc" },
+      { id: "desc" },
+    ],
   });
   return transactions.map(serializeTransaction);
 }
