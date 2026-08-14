@@ -102,6 +102,11 @@ export default async function TransactionsPage({
   const to = params.to ?? "";
   const reviewOnly = params.review === "1";
 
+  const merchantCounts = clientTransactions.reduce<Record<string, number>>((counts, transaction) => {
+    if (transaction.payeeId) counts[String(transaction.payeeId)] = (counts[String(transaction.payeeId)] ?? 0) + 1;
+    return counts;
+  }, {});
+
   const incompleteTransactions = clientTransactions.filter((transaction) =>
     transaction.wallet.name === IMPORT_REVIEW_WALLET_NAME || !transaction.categoryId || !transaction.subcategoryId,
   );
@@ -198,6 +203,8 @@ export default async function TransactionsPage({
           categories={formData.categories}
           subcategories={formData.subcategories}
           payees={formData.payees}
+          reviewMode={reviewOnly}
+          merchantCounts={merchantCounts}
         />
       </div>
     </AppShell>
