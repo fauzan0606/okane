@@ -105,6 +105,50 @@ export async function updateTransactionService(id: string, input: UpdateTransact
   });
 }
 
+export async function applyTransactionMappingToMerchantService(id: string, input: { walletId: string; categoryId: string; subcategoryId: string }) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.transaction.findUnique({
+      where: { id },
+      select: { id: true, kind: true, payeeId: true },
+    });
+    if (!source || source.kind !== "STANDARD") throw new Error("Transaction not found.");
+    if (!source.payeeId) throw new Error("This transaction does not have a merchant/payee to match.");
+
+    const [wallet, transactions] = await Promise.all([
+      tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } }),
+      tx.transaction.findMany({
+        where: { kind: "STANDARD", payeeId: source.payeeId },
+        include: { wallet: { select: { id: true, balanceAsOf: true, note: true } } },
+      }),
+    ]);
+    if (!wallet) throw new Error("Wallet not found.");
+    await validateCategorySelection(tx, input.categoryId, input.subcategoryId);
+
+    for (const transaction of transactions) {
+      const oldTransaction: BalanceTransaction = {
+        transactionDate: transaction.transactionDate,
+        type: transaction.type,
+        amount: transaction.amount,
+        createdAt: transaction.createdAt,
+      };
+      const newWallet = transaction.wallet.id === wallet.id ? transaction.wallet : wallet;
+      if (transaction.wallet.id !== wallet.id && affectsCurrentBalance(oldTransaction, transaction.wallet)) await applyBalanceDelta(tx, transaction.wallet.id, balanceDelta(oldTransaction).negated());
+      if (transaction.wallet.id !== wallet.id && affectsCurrentBalance(oldTransaction, newWallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(oldTransaction));
+
+      await tx.transaction.update({
+        where: { id: transaction.id },
+        data: {
+          wallet: { connect: { id: wallet.id } },
+          category: { connect: { id: input.categoryId } },
+          subcategory: { connect: { id: input.subcategoryId } },
+        },
+      });
+    }
+
+    return transactions.length;
+  });
+}
+
 export async function deleteTransactionService(id: string) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } }, splitBill: { select: { id: true } } } });
