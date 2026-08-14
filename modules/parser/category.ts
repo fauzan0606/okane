@@ -2,7 +2,8 @@ import type { ParserCategory, ParserContext, ParserSubcategory } from "./types";
 
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   food: ["makan", "kantin", "warung", "restoran", "restaurant", "kopi", "coffee", "cafe", "starbucks", "grabfood", "gofood", "snack", "dessert", "groceries", "supermarket", "minimarket"],
-  transport: ["transport", "grab", "gojek", "ojek", "taxi", "taksi", "bensin", "parkir", "tol", "kereta", "bus", "fuel", "ride-hailing", "tips", "tip driver", "tips ojol", "tips ojek", "tips taksi", "tip ojek", "tip taksi"],
+  social: ["tips", "tip driver", "tips ojol", "tips ojek", "tips taksi", "tip ojek", "tip taksi", "social", "sosial"],
+  transport: ["transport", "grab", "gojek", "ojek", "taxi", "taksi", "bensin", "parkir", "tol", "kereta", "bus", "fuel", "ride-hailing"],
   shopping: ["belanja", "shopping", "shop", "tokopedia", "shopee", "lazada", "oleh-oleh", "oleh oleh", "souvenir", "buah tangan", "hadiah", "kado"],
   housing: ["sewa", "rent", "mortgage", "listrik", "air", "internet", "wifi", "rumah", "kos", "maintenance"],
   health: ["dokter", "hospital", "rumah sakit", "obat", "pharmacy", "apotek", "dental", "gym", "fitness", "salon", "massage", "pijat", "spa", "body massage", "skincare"],
@@ -66,6 +67,8 @@ const SUBCATEGORY_KEYWORDS: Record<string, string[]> = {
   Insurance: ["insurance", "asuransi"],
   "Charity / Donation": ["donasi", "charity", "donation", "sedekah"],
   "Digital Services & Subscriptions": ["cloud", "icloud", "google one", "google drive", "dropbox", "onedrive", "software subscription", "digital service", "digital services", "berlangganan"],
+  "Social Activities": ["social", "sosial", "nongkrong", "hangout", "gathering"],
+  "Gifts & Celebrations": ["ulang tahun", "birthday", "celebration", "perayaan"],
   Salary: ["gaji", "salary"], Bonus: ["bonus", "thr"], Overtime: ["overtime", "lembur"], Allowance: ["allowance", "tunjangan"],
   "Business Income": ["business income", "usaha"], Freelance: ["freelance"], Commission: ["commission", "komisi"], "Rental Income": ["rental income", "sewa diterima"],
   Dividend: ["dividend", "dividen"], "Interest Income": ["interest income", "bunga diterima"], "Capital Gain": ["capital gain", "keuntungan investasi"],
@@ -75,6 +78,7 @@ const SUBCATEGORY_KEYWORDS: Record<string, string[]> = {
 function getCategoryGroup(name: string) {
   const normalized = name.toLowerCase();
   if (normalized.includes("food") || normalized.includes("drink")) return "food";
+  if (normalized.includes("social")) return "social";
   if (normalized.includes("transport")) return "transport";
   if (normalized.includes("shopping")) return "shopping";
   if (normalized.includes("housing")) return "housing";
