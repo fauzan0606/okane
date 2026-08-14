@@ -35,6 +35,7 @@ export default function TransactionImport({ wallets, categories, subcategories }
   const [rows, setRows] = useState<EditableTransaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importProgress, setImportProgress] = useState(0);
   const [error, setError] = useState("");
   const [showIncompletePrompt, setShowIncompletePrompt] = useState(false);
   const [sourceFormat, setSourceFormat] = useState("");
@@ -70,7 +71,7 @@ export default function TransactionImport({ wallets, categories, subcategories }
     setRows((current) => current.map((r) => normalizeDescription(r.merchant) === key ? { ...r, categoryId: target.categoryId, subcategoryId: target.subcategoryId } : r));
     toast.success(`Applied mapping to ${duplicateCounts.get(key) ?? 1} transactions with "${target.merchant}".`);
   }
-  function resetImportState() { setRows([]); setFileName(""); setError(""); setSourceFormat(""); setShowIncompletePrompt(false); setReviewFilter("ALL"); }
+  function resetImportState() { setRows([]); setFileName(""); setError(""); setSourceFormat(""); setShowIncompletePrompt(false); setReviewFilter("ALL"); setImportProgress(0); }
 
   async function scan(file: File) {
     setLoading(true); setError(""); resetImportState(); setFileName(file.name);
@@ -94,17 +95,49 @@ export default function TransactionImport({ wallets, categories, subcategories }
   }
   async function importRows() {
     if (selectedRows.length === 0) { toast.error("Select at least one transaction to import."); return; }
-    if (requiredIssues > 0) { toast.error("Complete the required fields before importing."); return; }
-    if (categoryIssues > 0) { toast.error("Complete category and subcategory review before importing."); return; }
-    setImporting(true); setError("");
+    if (requiredIssues > 0) { toast.error("Complete the required date, description, and amount fields before importing."); return; }
+    setImporting(true); setError(""); setImportProgress(0);
+    const batchSize = 100;
+    let importedCount = 0;
+    let failedCount = 0;
+    const successfulIndexes = new Set<number>();
+
     try {
-      const response = await fetch("/api/transactions/import", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ transactions: selectedRows.map((r) => ({ date: r.date, type: r.type, amount: r.amount, merchant: r.merchant, note: r.note, walletId: r.walletId, categoryId: r.categoryId, subcategoryId: r.subcategoryId })) }) });
-      const data = await response.json() as { error?: string; imported?: number; failed?: number };
-      if (!response.ok) throw new Error(data.error || "Transaction import failed.");
-      if ((data.failed ?? 0) > 0) toast.error(`${data.imported ?? 0} imported, ${data.failed} failed. Check the transaction list and retry failed rows.`); else toast.success(`${data.imported ?? 0} transactions imported successfully.`);
+      for (let start = 0; start < selectedRows.length; start += batchSize) {
+        const batch = selectedRows.slice(start, start + batchSize);
+        const response = await fetch("/api/transactions/import", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ transactions: batch.map((r) => ({ date: r.date, type: r.type, amount: r.amount, merchant: r.merchant, note: r.note, walletId: r.walletId, categoryId: r.categoryId, subcategoryId: r.subcategoryId })) }),
+        });
+        const data = await response.json() as { error?: string; imported?: number; failed?: number; results?: { index: number; success: boolean }[] };
+        if (!response.ok) throw new Error(data.error || "Transaction import failed.");
+
+        importedCount += data.imported ?? 0;
+        failedCount += data.failed ?? 0;
+        for (const result of data.results ?? []) if (result.success) successfulIndexes.add(start + result.index);
+        setImportProgress(Math.min(100, Math.round(((start + batch.length) / selectedRows.length) * 100)));
+      }
+
+      setRows((current) => current.map((row) => {
+        const position = selectedRows.findIndex((selected) => selected.sourceIndex === row.sourceIndex);
+        return position >= 0 && successfulIndexes.has(position) ? { ...row, selected: false } : row;
+      }));
+
+      if (failedCount > 0) {
+        toast.error(`${importedCount} imported, ${failedCount} failed. Failed rows remain selected for correction and retry.`);
+        return;
+      }
+
+      toast.success(`${importedCount} transactions imported successfully.`);
       resetImportState(); setOpen(false); window.location.reload();
-    } catch (e) { toast.error(e instanceof Error ? e.message : "Transaction import failed."); }
-    finally { setImporting(false); }
+    } catch (e) {
+      setRows((current) => current.map((row) => {
+        const position = selectedRows.findIndex((selected) => selected.sourceIndex === row.sourceIndex);
+        return position >= 0 && successfulIndexes.has(position) ? { ...row, selected: false } : row;
+      }));
+      toast.error(e instanceof Error ? e.message : "Transaction import failed.");
+    } finally { setImporting(false); }
   }
 
   return (
@@ -136,14 +169,15 @@ export default function TransactionImport({ wallets, categories, subcategories }
               const sameDescriptionCount = duplicateCounts.get(normalizeDescription(row.merchant)) ?? 0;
               return <div key={row.sourceIndex} className={`rounded-2xl border bg-[#101B28] p-4 ${requiredMissing ? "border-red-400/20" : categoryReviewMissing ? "border-amber-400/20" : categoryChanged || subcategoryChanged ? "border-amber-400/15" : "border-white/5"}`}>
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><label className="flex items-start gap-3"><input type="checkbox" checked={row.selected} onChange={(e) => updateRow(row.sourceIndex, { selected: e.target.checked })} className="mt-1 h-4 w-4 accent-emerald-500" /><div><p className="text-sm font-semibold text-white">#{row.sourceIndex} · {row.merchant || "Unnamed transaction"}</p><p className="mt-1 text-[10px] text-slate-500">{row.type} · {money(row.amount || 0)}{row.sourceRowNumber ? ` · Excel row ${row.sourceRowNumber}` : ""}{row.suggestionLevel ? ` · ${row.suggestionLevel} suggestion` : ""}</p>{row.sourceCategory && <p className="mt-1 text-[10px] text-slate-500">Source category: {row.sourceCategory}</p>}</div></label><div className="text-left lg:text-right"><p className="text-[10px] uppercase tracking-[0.1em] text-slate-600">OKANE recommendation</p><p className="mt-1 text-xs text-emerald-300">{row.suggestedCategoryName ?? "No category"}{row.suggestedSubcategoryName ? ` · ${row.suggestedSubcategoryName}` : ""}</p><p className="mt-1 text-[10px] text-slate-500">{row.suggestionReason}</p></div></div>
-                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Date</span><input type="date" value={row.date} onChange={(e) => updateRow(row.sourceIndex, { date: e.target.value })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Merchant</span><input value={row.merchant} onChange={(e) => updateRow(row.sourceIndex, { merchant: e.target.value })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Amount</span><input type="number" min="0" step="0.01" value={row.amount || ""} onChange={(e) => updateRow(row.sourceIndex, { amount: Number(e.target.value) })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label><label className={`block ${!row.walletId ? "rounded-xl border border-red-400/20 p-2" : ""}`}><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Wallet</span><select value={String(row.walletId ?? "")} onChange={(e) => updateWallet(row.sourceIndex, e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none"><option value="">Select wallet</option>{walletOptions.map((wallet) => <option key={wallet.id} value={String(wallet.id)}>{wallet.name}</option>)}</select></label><label className={`block ${!row.categoryId || categoryChanged ? "rounded-xl border border-amber-400/20 p-2" : ""}`}><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Category</span><select value={String(row.categoryId ?? "")} onChange={(e) => updateCategory(row.sourceIndex, e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none"><option value="">Select category</option>{robustCategoryOptions.map((category) => <option key={category.id} value={String(category.id)}>{category.icon ? `${category.icon} ` : ""}{category.name}</option>)}</select></label></div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5"><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Date</span><input type="date" value={row.date} onChange={(e) => updateRow(row.sourceIndex, { date: e.target.value })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Merchant</span><input value={row.merchant} onChange={(e) => updateRow(row.sourceIndex, { merchant: e.target.value })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Amount</span><input type="number" min="0" step="0.01" value={row.amount || ""} onChange={(e) => updateRow(row.sourceIndex, { amount: Number(e.target.value) })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label><label className={`block ${!row.walletId ? "rounded-xl border border-red-400/20 p-2" : ""}`}><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Wallet</span><select value={String(row.walletId ?? "")} onChange={(e) => updateWallet(row.sourceIndex, e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none"><option value="">Select wallet</option>{walletOptions.map((wallet) => <option key={wallet.id} value={String(wallet.id)}>{wallet.name}</option>)}</select>{!row.walletId && <p className="mt-1 text-[9px] text-red-300">No method detected. This row will be imported to the review queue.</p>}</label><label className={`block ${!row.categoryId || categoryChanged ? "rounded-xl border border-amber-400/20 p-2" : ""}`}><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Category</span><select value={String(row.categoryId ?? "")} onChange={(e) => updateCategory(row.sourceIndex, e.target.value)} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none"><option value="">Select category</option>{robustCategoryOptions.map((category) => <option key={category.id} value={String(category.id)}>{category.icon ? `${category.icon} ` : ""}{category.name}</option>)}</select></label></div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2"><label className={`block ${!row.subcategoryId || subcategoryChanged ? "rounded-xl border border-amber-400/20 p-2" : ""}`}><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Subcategory</span><select value={String(row.subcategoryId ?? "")} onChange={(e) => updateRow(row.sourceIndex, { subcategoryId: String(e.target.value) })} disabled={!row.categoryId} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none"><option value="">{row.categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.map((subcategory) => <option key={subcategory.id} value={String(subcategory.id)}>{subcategory.name}</option>)}</select></label><label className="block"><span className="mb-1.5 block text-[9px] uppercase tracking-[0.1em] text-slate-500">Note</span><input value={row.note} onChange={(e) => updateRow(row.sourceIndex, { note: e.target.value })} className="w-full rounded-xl border border-white/10 bg-[#07101A] px-3 py-2.5 text-xs text-white outline-none" /></label></div>
                 {sameDescriptionCount > 1 && row.categoryId && row.subcategoryId && <div className="mt-3 flex flex-wrap items-center gap-2 text-[10px]"><button type="button" onClick={() => applyCategoryToSameDescription(row.sourceIndex)} className="rounded-lg border border-cyan-400/15 bg-cyan-400/[0.04] px-3 py-1.5 font-semibold text-cyan-200 hover:bg-cyan-400/[0.08]">Apply category + subcategory to all {sameDescriptionCount} "{row.merchant}"</button><span className="text-slate-600">Same description is mapped together.</span></div>}
-                {(categoryReviewMissing || categoryChanged || subcategoryChanged) && <p className="mt-3 rounded-lg border border-amber-400/10 bg-amber-400/[0.03] px-3 py-2 text-[10px] text-amber-200">Review category + subcategory mapping before importing. For repeated descriptions, apply the mapping to all matching transactions or complete them consistently.</p>}
+                {(categoryReviewMissing || categoryChanged || subcategoryChanged) && <p className="mt-3 rounded-lg border border-amber-400/10 bg-amber-400/[0.03] px-3 py-2 text-[10px] text-amber-200">Category/subcategory review is optional during import. Incomplete rows can be fixed later from the Transactions page.</p>}
               </div>;
             })}</div>
           </>}
-          <DialogFooter className="mt-5 border-t border-white/5 pt-5"><Button type="button" variant="outline" onClick={() => { resetImportState(); setOpen(false); }} disabled={loading || importing}>Cancel</Button><Button type="button" onClick={importRows} disabled={loading || importing || rows.length === 0 || requiredIssues > 0 || categoryIssues > 0}><Check size={15} />{importing ? "Importing…" : `Review complete · Import ${selectedRows.length}`}</Button></DialogFooter>
+          {importing && <div className="mt-5 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.04] p-3"><div className="flex items-center justify-between text-xs"><span className="font-semibold text-emerald-200">Importing transactions…</span><span className="text-emerald-300">{importProgress}%</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-white/5"><div className="h-full rounded-full bg-emerald-400 transition-[width] duration-200" style={{ width: `${importProgress}%` }} /></div><p className="mt-2 text-[10px] text-slate-500">OKANE processes imports in background batches of up to 100 rows.</p></div>}
+          <DialogFooter className="mt-5 border-t border-white/5 pt-5"><Button type="button" variant="outline" onClick={() => { resetImportState(); setOpen(false); }} disabled={loading || importing}>Cancel</Button><Button type="button" onClick={importRows} disabled={loading || importing || rows.length === 0 || requiredIssues > 0}><Check size={15} />{importing ? `Importing ${importProgress}%…` : `Import ${selectedRows.length}${categoryIssues > 0 ? " · Review later" : ""}`}</Button></DialogFooter>
         </div>
       </DialogContent>
     </Dialog>
