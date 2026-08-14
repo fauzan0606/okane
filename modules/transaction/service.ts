@@ -1,3 +1,4 @@
+import { unstable_noStore as noStore } from "next/cache";
 import { Prisma, TransactionType, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTransactionById, getTransactions } from "./repository";
@@ -111,9 +112,10 @@ export async function deleteTransactionService(id: string) {
 }
 
 export async function transactionFormData() {
+  noStore();
   const [wallets, categories, subcategories, payees] = await Promise.all([
     prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true }, orderBy: { name: "asc" } }),
-    prisma.category.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.category.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.subcategory.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
     prisma.payee.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
   ]);
