@@ -34,16 +34,17 @@ export async function updateSplitBillItemAllocation(input: { splitBillId: string
     const subtotal = baseItems.reduce((sum, entry) => sum.plus(new Prisma.Decimal(entry.quantity).mul(entry.unitPrice)), new Prisma.Decimal(0));
     for (const entry of baseItems) for (const allocation of entry.allocations) participantShares.set(allocation.participantId, (participantShares.get(allocation.participantId) ?? new Prisma.Decimal(0)).plus(allocation.amount));
 
+    const baseShares = new Map(participantShares);
     const chargeItems = freshItems.filter((entry) => entry.name === "Tax / PPN" || entry.name === "Service Fee");
     for (const chargeItem of chargeItems) {
       const amount = new Prisma.Decimal(chargeItem.unitPrice);
       await tx.splitBillItemAllocation.deleteMany({ where: { itemId: chargeItem.id } });
       if (subtotal.gt(0) && amount.gt(0)) for (const participant of splitBill.participants) {
-        const base = participantShares.get(participant.id) ?? new Prisma.Decimal(0);
+        const base = baseShares.get(participant.id) ?? new Prisma.Decimal(0);
         if (base.lte(0)) continue;
         const allocation = base.div(subtotal).mul(amount);
         await tx.splitBillItemAllocation.create({ data: { itemId: chargeItem.id, participantId: participant.id, units: base, amount: allocation } });
-        participantShares.set(participant.id, base.plus(allocation));
+        participantShares.set(participant.id, (participantShares.get(participant.id) ?? new Prisma.Decimal(0)).plus(allocation));
       }
     }
 
