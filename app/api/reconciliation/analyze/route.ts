@@ -4,9 +4,10 @@ import { createReconciliationSession, type ExtractedRow } from "@/modules/reconc
 
 export const runtime = "nodejs";
 
-const MODEL = "gemini-3.1-flash-lite";
-const GENERATE_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const MODELS = ["gemini-3.5-flash-lite", "gemini-3.1-flash-lite", "gemini-3.5-flash"] as const;
+const GENERATE_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
 const UPLOAD_URL = "https://generativelanguage.googleapis.com/upload/v1beta/files";
+const MAX_GENERATION_ATTEMPTS_PER_MODEL = 3;
 
 const responseSchema = {
   type: "object",
@@ -66,6 +67,12 @@ function normalize(raw: any): { periodStart?: string; periodEnd?: string; rows: 
     periodEnd: raw.periodEnd ? String(raw.periodEnd).slice(0, 40) : undefined,
     rows,
   };
+}
+
+async function sleepWithJitter(attempt: number) {
+  const baseDelayMs = 1000 * 2 ** attempt;
+  const jitterMs = Math.floor(Math.random() * 350);
+  await new Promise((resolve) => setTimeout(resolve, baseDelayMs + jitterMs));
 }
 
 async function uploadToGeminiFiles(apiKey: string, file: File) {
@@ -142,6 +149,92 @@ function extractResponseText(data: any) {
   return parts.map((part: any) => part?.text ?? "").join("").trim();
 }
 
+function isRetryableStatus(status: number) {
+  return status === 408 || status === 429 || status >= 500;
+}
+
+async function generateWithModel(
+  apiKey: string,
+  model: string,
+  prompt: string,
+  fileData: { fileUri: string; mimeType: string },
+) {
+  const generateUrl = `${GENERATE_BASE_URL}/${model}:generateContent`;
+  let lastError = "Unknown Gemini error";
+  let lastStatus = 502;
+
+  for (let attempt = 0; attempt < MAX_GENERATION_ATTEMPTS_PER_MODEL; attempt += 1) {
+    const response = await fetch(`${generateUrl}?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{
+          parts: [
+            { text: prompt },
+            { file_data: { mime_type: fileData.mimeType, file_uri: fileData.fileUri } },
+          ],
+        }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseJsonSchema: responseSchema,
+          maxOutputTokens: 32768,
+        },
+      }),
+    });
+
+    if (response.ok) {
+      let data: any;
+      try {
+        data = await response.json();
+      } catch {
+        throw new Error("Gemini returned an invalid response while analyzing the statement.");
+      }
+      return data;
+    }
+
+    const body = await response.text();
+    lastStatus = response.status;
+    lastError = safeProviderDetail(body);
+    console.error("Gemini statement extraction failed", { model, attempt: attempt + 1, status: response.status, detail: lastError });
+
+    if (!isRetryableStatus(response.status)) {
+      const error = new Error(lastError);
+      (error as Error & { status?: number; model?: string }).status = response.status;
+      (error as Error & { status?: number; model?: string }).model = model;
+      throw error;
+    }
+
+    if (attempt < MAX_GENERATION_ATTEMPTS_PER_MODEL - 1) await sleepWithJitter(attempt);
+  }
+
+  const error = new Error(lastError);
+  (error as Error & { status?: number; model?: string }).status = lastStatus;
+  (error as Error & { status?: number; model?: string }).model = model;
+  throw error;
+}
+
+async function generateWithFallbacks(
+  apiKey: string,
+  prompt: string,
+  fileData: { fileUri: string; mimeType: string },
+) {
+  let lastError: Error | null = null;
+
+  for (const model of MODELS) {
+    try {
+      const data = await generateWithModel(apiKey, model, prompt, fileData);
+      return { data, model };
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error("Unknown Gemini error");
+      const status = (lastError as Error & { status?: number }).status;
+      if (!status || !isRetryableStatus(status)) throw lastError;
+      console.warn(`Gemini model ${model} remained unavailable after retries. Falling back to next model.`);
+    }
+  }
+
+  throw lastError ?? new Error("No Gemini model was available to process the statement.");
+}
+
 export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return error("GEMINI_API_KEY is not configured on the server.", 500);
@@ -158,7 +251,7 @@ export async function POST(request: Request) {
   if (typeof walletId !== "string" || !walletId) return error("Wallet is required.");
   if (sourceType !== "BANK_STATEMENT" && sourceType !== "CREDIT_CARD_STATEMENT") return error("Statement type is required.");
 
-  const prompt = `You are extracting a bank or credit-card statement into normalized transaction rows for a personal finance reconciliation system.\n\nStatement type: ${sourceType}.\nRules:\n- Extract every actual transaction row from the statement, not headers, balances, totals, rewards summaries, statement metadata, or page footers.\n- Preserve the transaction date printed for the transaction. Do not substitute statement date or posting date.\n- Preserve the description as printed, including merchant/reference text.\n- Amount must be the absolute numeric transaction amount without currency symbols or separators.\n- direction DEBIT means money/spending charged from the selected wallet; CREDIT means money/refund/credit posted to it; UNKNOWN when the statement does not make the direction reliable.\n- entryType should be one concise classification such as PURCHASE, REFUND, PAYMENT, FEE, INTEREST, TRANSFER, CASH_ADVANCE, REWARD, or UNKNOWN.\n- For credit-card statements, payment lines are PAYMENT and must not be treated as purchases or expenses.\n- Return pageNumber when visible or inferable from the document page. sourceRowNumber should be the visible transaction sequence/row number if present; otherwise use a best-effort sequential row number across transaction rows.\n- Do not invent transactions.\n- Extract the statement period when visible.\n- Keep duplicate-looking rows when they are separate statement rows.\n- Return only JSON matching the supplied schema.`;
+  const prompt = `You are extracting a bank or credit-card statement into normalized transaction rows for a personal finance reconciliation system.\n\nStatement type: ${sourceType}.\nRules:\n- Extract every actual transaction row from the statement, not headers, balances, totals, rewards summaries, statement metadata, or page footers.\n- Preserve the transaction date printed for the transaction. Do not substitute statement date or posting date.\n- Preserve the description as printed, including merchant/reference text.\n- Amount must be the absolute numeric transaction amount without currency symbols or separators.\n- direction DEBIT means money/spending charged from the selected wallet; CREDIT means money/refund/credit posted to it; UNKNOWN when the statement does not make the direction reliable.\n- entryType should be one concise classification such as PURCHASE, REFUND, PAYMENT, FEE, INTEREST, TRANSFER, CASH_ADVANCE, REWARD, or UNKNOWN.\n- For credit-card statements, payment lines are PAYMENT and must not be treated as purchases or expenses.\n- Return pageNumber when visible or inferable from the document page. sourceRowNumber should be the visible transaction sequence/row number if present; otherwise use a best-effort sequential row number across transaction rows.\n- Do not invent transactions.\n- Extract the statement period when visible, but only return a period value that is a valid ISO 8601 date (YYYY-MM-DD). If the period cannot be expressed as a valid date, omit it.\n- Keep duplicate-looking rows when they are separate statement rows.\n- Return only JSON matching the supplied schema.`;
 
   let uploadedFile: { fileName: string; fileUri: string; mimeType: string };
   try {
@@ -168,42 +261,23 @@ export async function POST(request: Request) {
     return error(err instanceof Error ? err.message : "Could not upload the statement to Gemini.", 502);
   }
 
-  const response = await fetch(`${GENERATE_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{
-        parts: [
-          { text: prompt },
-          { file_data: { mime_type: uploadedFile.mimeType, file_uri: uploadedFile.fileUri } },
-        ],
-      }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseJsonSchema: responseSchema,
-        maxOutputTokens: 32768,
-      },
-    }),
-  });
-
-  if (!response.ok) {
-    const body = await response.text();
-    console.error("Gemini statement extraction failed", response.status, body);
-    if (response.status === 429) return error("Gemini extraction rate limit reached. Please try again shortly.", 429);
-    if (response.status === 401 || response.status === 403) return error("Gemini API key is invalid or cannot access the model.", 502);
-    return error(`Gemini could not process this statement (${response.status}): ${safeProviderDetail(body)}`, 502);
-  }
-
-  let data: any;
+  let generated: { data: any; model: string };
   try {
-    data = await response.json();
-  } catch {
-    return error("Gemini returned an invalid response while analyzing the statement.", 502);
+    generated = await generateWithFallbacks(apiKey, prompt, uploadedFile);
+  } catch (err) {
+    console.error("All Gemini reconciliation models failed", err);
+    const message = err instanceof Error ? err.message : "Unknown Gemini error";
+    const status = (err as Error & { status?: number }).status;
+    if (status === 429) return error("Gemini is temporarily rate-limited. Please try again in a moment.", 429);
+    if (status === 503) return error("Gemini is temporarily busy across the configured models. Please try again in a moment.", 503);
+    if (status === 401 || status === 403) return error("Gemini API key is invalid or cannot access the configured models.", 502);
+    return error(`Gemini could not process this statement: ${message}`, 502);
   }
 
-  const text = extractResponseText(data);
+  console.info(`Reconciliation statement extracted with ${generated.model}`);
+  const text = extractResponseText(generated.data);
   if (!text) {
-    const finishReason = data?.candidates?.[0]?.finishReason;
+    const finishReason = generated.data?.candidates?.[0]?.finishReason;
     return error(`Gemini returned no extracted rows${finishReason ? ` (finish reason: ${finishReason})` : ""}.`, 502);
   }
 
@@ -218,7 +292,7 @@ export async function POST(request: Request) {
       periodStart: normalized.periodStart,
       periodEnd: normalized.periodEnd,
     });
-    return NextResponse.json({ sessionId: session.id, extractedCount: normalized.rows.length });
+    return NextResponse.json({ sessionId: session.id, extractedCount: normalized.rows.length, model: generated.model });
   } catch (err) {
     console.error(err);
     return error(err instanceof Error ? err.message : "Could not create reconciliation session.", 400);
