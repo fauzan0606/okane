@@ -3,12 +3,14 @@ import { Prisma, TransactionType, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTransactionById, getTransactions } from "./repository";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
+import { IMPORT_REVIEW_WALLET_NOTE } from "./importReview";
 import type { CreateTransactionInput, UpdateTransactionInput } from "./types";
 
 type BalanceTransaction = { transactionDate: Date; type: "INCOME" | "EXPENSE"; amount: Prisma.Decimal; createdAt: Date };
-type BalanceWallet = { balanceAsOf: Date | null };
+type BalanceWallet = { balanceAsOf: Date | null; note?: string | null };
 
 function affectsCurrentBalance(transaction: BalanceTransaction, wallet: BalanceWallet) {
+  if (wallet.note === IMPORT_REVIEW_WALLET_NOTE) return false;
   const snapshot = wallet.balanceAsOf;
   if (!snapshot) return true;
   const transactionDay = Date.UTC(transaction.transactionDate.getUTCFullYear(), transaction.transactionDate.getUTCMonth(), transaction.transactionDate.getUTCDate());
@@ -19,7 +21,10 @@ function affectsCurrentBalance(transaction: BalanceTransaction, wallet: BalanceW
 }
 
 function balanceDelta(transaction: BalanceTransaction) { return transaction.type === "INCOME" ? transaction.amount : transaction.amount.negated(); }
-async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: { currentBalance: delta.isPositive() ? { increment: delta } : { decrement: delta.abs() } } }); }
+async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) {
+  if (delta.isZero()) return;
+  await tx.wallet.update({ where: { id: walletId }, data: { currentBalance: delta.isPositive() ? { increment: delta } : { decrement: delta.abs() } } });
+}
 
 async function validateCategorySelection(tx: Prisma.TransactionClient, categoryId?: string, subcategoryId?: string) {
   if (!categoryId && subcategoryId) throw new Error("Category is required when a subcategory is selected.");
@@ -51,7 +56,7 @@ export async function findTransaction(id: string) { return getTransactionById(id
 export async function createTransactionService(input: CreateTransactionInput) {
   const payee = await findOrCreatePayeeByName(input.merchant);
   return prisma.$transaction(async (tx) => {
-    const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true } });
+    const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
     if (!wallet) throw new Error("Wallet not found.");
     await validateCategorySelection(tx, input.categoryId, input.subcategoryId);
     const plan = await buildInstallmentPlan(tx, input.walletId, input);
@@ -64,12 +69,12 @@ export async function createTransactionService(input: CreateTransactionInput) {
 export async function updateTransactionService(id: string, input: UpdateTransactionInput) {
   const payee = await findOrCreatePayeeByName(input.merchant);
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true } }, installmentPlan: true, splitBill: { select: { id: true } } } });
+    const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } }, installmentPlan: true, splitBill: { select: { id: true } } } });
     if (!existing) throw new Error("Transaction not found.");
     if (existing.splitBill && (input.transactionDate !== undefined || input.type !== undefined || input.amount !== undefined || input.walletId !== undefined || input.installment !== undefined)) throw new Error("This transaction is linked to a Split Bill. Edit the Split Bill first, or remove the Split Bill before changing the transaction amount, date, wallet, type, or installment.");
 
     const newWalletId = input.walletId ?? existing.walletId;
-    const newWallet = newWalletId === existing.wallet.id ? existing.wallet : await tx.wallet.findUnique({ where: { id: newWalletId }, select: { id: true, balanceAsOf: true, walletType: true } });
+    const newWallet = newWalletId === existing.wallet.id ? existing.wallet : await tx.wallet.findUnique({ where: { id: newWalletId }, select: { id: true, balanceAsOf: true, walletType: true, note: true } });
     if (!newWallet) throw new Error("Wallet not found.");
     const newCategoryId = input.categoryId !== undefined ? input.categoryId : existing.categoryId ?? undefined;
     const newSubcategoryId = input.subcategoryId !== undefined ? input.subcategoryId : existing.subcategoryId ?? undefined;
@@ -102,7 +107,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
 
 export async function deleteTransactionService(id: string) {
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true } }, splitBill: { select: { id: true } } } });
+    const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } }, splitBill: { select: { id: true } } } });
     if (!existing) throw new Error("Transaction not found.");
     if (existing.splitBill) throw new Error("This transaction is linked to a Split Bill. Delete the Split Bill first before deleting the transaction.");
     const transaction: BalanceTransaction = { transactionDate: existing.transactionDate, type: existing.type, amount: existing.amount, createdAt: existing.createdAt };
