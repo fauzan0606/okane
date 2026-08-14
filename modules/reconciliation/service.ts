@@ -23,6 +23,18 @@ function tokenSimilarity(a: string, b: string) {
 function dayDistance(a: Date, b: Date) {
   return Math.abs(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate()) - Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate())) / 86400000;
 }
+function parseValidDate(value?: string | Date | null) {
+  if (!value) return null;
+  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+function getValidPeriod(inputPeriod: string | undefined, dates: Date[], mode: "start" | "end") {
+  const explicit = parseValidDate(inputPeriod);
+  if (explicit) return explicit;
+  if (!dates.length) return null;
+  const times = dates.map((date) => date.getTime());
+  return new Date(mode === "start" ? Math.min(...times) : Math.max(...times));
+}
 function directionMatches(sourceType: ReconciliationSourceType, direction: ReconciliationDirection, transactionType: string) {
   if (sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT) return direction === ReconciliationDirection.DEBIT && transactionType === "EXPENSE";
   if (direction === ReconciliationDirection.DEBIT) return transactionType === "EXPENSE";
@@ -40,9 +52,9 @@ export async function createReconciliationSession(input: { walletId: string; sou
   if (input.sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT && wallet.walletType !== "CREDIT_CARD") throw new Error("Credit Card Statement reconciliation requires a credit card wallet.");
   if (!input.rows.length) throw new Error("No transaction rows were extracted from the statement.");
 
-  const dates = input.rows.map((row) => new Date(row.transactionDate)).filter((date) => !Number.isNaN(date.getTime()));
-  const periodStart = input.periodStart ? new Date(input.periodStart) : dates.length ? new Date(Math.min(...dates.map((date) => date.getTime()))) : null;
-  const periodEnd = input.periodEnd ? new Date(input.periodEnd) : dates.length ? new Date(Math.max(...dates.map((date) => date.getTime()))) : null;
+  const dates = input.rows.map((row) => parseValidDate(row.transactionDate)).filter((date): date is Date => Boolean(date));
+  const periodStart = getValidPeriod(input.periodStart, dates, "start");
+  const periodEnd = getValidPeriod(input.periodEnd, dates, "end");
   const windowStart = periodStart ? new Date(periodStart.getTime() - 3 * 86400000) : undefined;
   const windowEnd = periodEnd ? new Date(periodEnd.getTime() + 3 * 86400000) : undefined;
 
@@ -56,9 +68,9 @@ export async function createReconciliationSession(input: { walletId: string; sou
   const rowsToCreate: Prisma.ReconciliationRowCreateWithoutSessionInput[] = [];
 
   for (const raw of input.rows) {
-    const date = new Date(raw.transactionDate);
+    const date = parseValidDate(raw.transactionDate);
     const amount = new Prisma.Decimal(Math.abs(Number(raw.amount) || 0));
-    if (Number.isNaN(date.getTime()) || amount.lte(0) || !raw.description.trim()) continue;
+    if (!date || amount.lte(0) || !raw.description.trim()) continue;
 
     const candidates = transactions
       .filter((tx) => !usedTransactionIds.has(tx.id) && tx.amount.eq(amount) && directionMatches(input.sourceType, raw.direction as ReconciliationDirection, tx.type))
