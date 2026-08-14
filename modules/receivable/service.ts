@@ -150,9 +150,7 @@ export async function recordReceivablePayment(input: { receivableId: string; amo
   return prisma.$transaction(async (tx) => {
     const receivable = await tx.receivable.findUnique({ where: { id: input.receivableId }, include: { currency: true } });
     if (!receivable) throw new Error("Receivable not found.");
-    const remaining = new Prisma.Decimal(receivable.amount).minus(receivable.receivedAmount);
     const amount = new Prisma.Decimal(input.amount);
-    if (amount.gt(remaining)) throw new Error("Payment cannot exceed the remaining receivable.");
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, currencyId: true } });
     if (!wallet) throw new Error("Wallet not found.");
     if (wallet.currencyId !== receivable.currencyId) throw new Error("Payment wallet currency must match the receivable currency.");
@@ -185,7 +183,6 @@ export async function updateReceivablePayment(input: { paymentId: string; amount
     const receivable = payment.receivable;
     const otherReceived = new Prisma.Decimal(receivable.receivedAmount).minus(payment.amount);
     const newAmount = new Prisma.Decimal(input.amount);
-    if (otherReceived.plus(newAmount).gt(receivable.amount)) throw new Error("Payment total cannot exceed the receivable amount.");
 
     const oldWallet = await tx.wallet.findUnique({ where: { id: payment.walletId }, select: { id: true, balanceAsOf: true } });
     const newWallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, currencyId: true } });
