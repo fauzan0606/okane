@@ -8,6 +8,8 @@ function parseDate(value: FormDataEntryValue | null) { if (typeof value !== "str
 function requiredText(value: FormDataEntryValue | null) { return typeof value === "string" && value.trim() ? value.trim() : null; }
 function refreshAll() { revalidatePath("/receivables"); revalidatePath("/transactions"); revalidatePath("/wallet"); revalidatePath("/"); }
 
+type PaymentActionState = { success: boolean; message?: string };
+
 export async function createReceivableAction(formData: FormData) {
   const personName = formData.get("personName");
   const description = formData.get("description");
@@ -42,26 +44,36 @@ export async function deleteReceivableAction(formData: FormData) {
   refreshAll();
 }
 
-export async function recordReceivablePaymentAction(formData: FormData) {
+export async function recordReceivablePaymentAction(formData: FormData): Promise<PaymentActionState> {
   const receivableId = formData.get("receivableId");
   const amount = parseAmount(formData.get("amount"));
   const receivedAt = parseDate(formData.get("receivedAt"));
   const walletId = formData.get("walletId");
   const note = formData.get("note");
-  if (typeof receivableId !== "string" || !receivableId || amount === null || !receivedAt || typeof walletId !== "string" || !walletId) throw new Error("Please complete the payment fields.");
-  await recordReceivablePayment({ receivableId, amount, receivedAt, walletId, note: typeof note === "string" ? note : undefined });
-  refreshAll();
+  if (typeof receivableId !== "string" || !receivableId || amount === null || !receivedAt || typeof walletId !== "string" || !walletId) return { success: false, message: "Please complete the payment fields." };
+  try {
+    await recordReceivablePayment({ receivableId, amount, receivedAt, walletId, note: typeof note === "string" ? note : undefined });
+    refreshAll();
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Unable to record the receivable payment." };
+  }
 }
 
-export async function updateReceivablePaymentAction(formData: FormData) {
+export async function updateReceivablePaymentAction(formData: FormData): Promise<PaymentActionState> {
   const paymentId = requiredText(formData.get("paymentId"));
   const amount = parseAmount(formData.get("amount"));
   const receivedAt = parseDate(formData.get("receivedAt"));
   const walletId = requiredText(formData.get("walletId"));
   const note = formData.get("note");
-  if (!paymentId || amount === null || !receivedAt || !walletId) throw new Error("Please complete the payment fields.");
-  await updateReceivablePayment({ paymentId, amount, receivedAt, walletId, note: typeof note === "string" ? note : undefined });
-  refreshAll();
+  if (!paymentId || amount === null || !receivedAt || !walletId) return { success: false, message: "Please complete the payment fields." };
+  try {
+    await updateReceivablePayment({ paymentId, amount, receivedAt, walletId, note: typeof note === "string" ? note : undefined });
+    refreshAll();
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Unable to update the receivable payment." };
+  }
 }
 
 export async function deleteReceivablePaymentAction(formData: FormData) {
