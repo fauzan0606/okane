@@ -100,20 +100,6 @@ function buildPdf(pages: Line[][]) {
   return Buffer.from(pdf, "binary");
 }
 
-function round(value: number) {
-  return Math.round(value);
-}
-
-function splitParticipantLines(
-  items: Array<{ name: string; amount: number }>,
-  targetTotal: number,
-) {
-  const rounded = items.map((item) => ({ ...item, amount: round(item.amount) }));
-  const currentTotal = rounded.reduce((sum, item) => sum + item.amount, 0);
-  const difference = round(targetTotal) - currentTotal;
-  return { items: rounded, difference };
-}
-
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const bill = await prisma.splitBill.findUnique({
@@ -150,34 +136,18 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
     const serviceItem = participantAllocations.find((item) => item.name === "Service Fee");
     const otherFees = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && /fee/i.test(item.name));
 
-    const targetTotal = Number(participant.shareAmount);
-    const allDisplayed = [...normalItems, ...(taxItem ? [taxItem] : []), ...(serviceItem ? [serviceItem] : []), ...otherFees];
-    const reconciled = splitParticipantLines(allDisplayed, targetTotal);
-    const byName = new Map(reconciled.items.map((item, index) => [index, item]));
-    let lineIndex = 0;
-
-    const pushItem = (item: { name: string; amount: number }, bold = false) => {
-      const display = byName.get(lineIndex) ?? { ...item, amount: round(item.amount) };
-      lineIndex += 1;
-      lines.push({ text: display.name, right: money(display.amount, symbol), size: 9, bold, gap: 16 });
-    };
-
     if (normalItems.length === 0) lines.push({ text: "No allocated items", size: 9, gap: 16 });
-    else for (const item of normalItems) pushItem(item);
+    else for (const item of normalItems) lines.push({ text: item.name, right: money(item.amount, symbol), size: 9, gap: 16 });
 
-    const subtotal = normalItems.reduce((sum, item) => sum + round(item.amount), 0);
+    const subtotal = normalItems.reduce((sum, item) => sum + item.amount, 0);
     lines.push({ text: "Subtotal", right: money(subtotal, symbol), size: 9, bold: true, gap: 18 });
 
-    if (taxItem) pushItem(taxItem);
-    if (serviceItem) pushItem(serviceItem);
-    for (const fee of otherFees) pushItem(fee);
-
-    if (reconciled.difference !== 0) {
-      lines.push({ text: "Allocation adjustment", right: money(reconciled.difference, symbol), size: 8, gap: 16 });
-    }
+    if (taxItem) lines.push({ text: "Tax / PPN", right: money(taxItem.amount, symbol), size: 9, gap: 16 });
+    if (serviceItem) lines.push({ text: "Service Fee", right: money(serviceItem.amount, symbol), size: 9, gap: 16 });
+    for (const fee of otherFees) lines.push({ text: fee.name, right: money(fee.amount, symbol), size: 9, gap: 16 });
 
     lines.push({ separator: true, gap: 10 });
-    lines.push({ text: "TOTAL", right: money(targetTotal, symbol), size: 13, bold: true, gap: 26 });
+    lines.push({ text: "TOTAL", right: money(Number(participant.shareAmount), symbol), size: 13, bold: true, gap: 26 });
     lines.push({ text: "", gap: 10 });
   }
 
