@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useState, useTransition, type ReactElement } from "react";
-import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Category, Payee, Subcategory } from "@prisma/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -21,7 +20,6 @@ const initialState: TransactionActionState = { success: false };
 function dateInputValue(value?: Date | string | null) { return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10); }
 
 export default function TransactionForm({ mode, transaction, wallets, categories, subcategories, payees, trigger, reviewMode = false, sameMerchantCount = 0 }: TransactionFormProps) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
   const [isBulkPending, startBulk] = useTransition();
@@ -57,7 +55,7 @@ export default function TransactionForm({ mode, transaction, wallets, categories
       if (result.success) {
         toast.success(result.message ?? `Updated ${sameMerchantCount} transactions with the same merchant.`);
         setOpen(false);
-        router.refresh();
+        window.location.reload();
       } else {
         toast.error(result.message ?? "Failed to update matching transactions.");
       }
