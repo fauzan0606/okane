@@ -3,9 +3,9 @@ import type { ParserCategory, ParserContext, ParserSubcategory } from "./types";
 const CATEGORY_KEYWORDS: Record<string, string[]> = {
   food: ["makan", "kantin", "warung", "restoran", "restaurant", "kopi", "coffee", "cafe", "starbucks", "grabfood", "gofood", "snack", "dessert", "groceries", "supermarket", "minimarket"],
   transport: ["transport", "grab", "gojek", "ojek", "taxi", "taksi", "bensin", "parkir", "tol", "kereta", "bus", "fuel", "ride-hailing", "tips", "tip driver", "tips ojol", "tips ojek", "tips taksi", "tip ojek", "tip taksi"],
-  shopping: ["belanja", "shopping", "shop", "tokopedia", "shopee", "lazada"],
+  shopping: ["belanja", "shopping", "shop", "tokopedia", "shopee", "lazada", "oleh-oleh", "oleh oleh", "souvenir", "buah tangan", "hadiah", "kado"],
   housing: ["sewa", "rent", "mortgage", "listrik", "air", "internet", "wifi", "rumah", "kos", "maintenance"],
-  health: ["dokter", "hospital", "rumah sakit", "obat", "pharmacy", "apotek", "dental", "gym", "fitness", "salon", "massage", "pijat", "spa", "body massage"],
+  health: ["dokter", "hospital", "rumah sakit", "obat", "pharmacy", "apotek", "dental", "gym", "fitness", "salon", "massage", "pijat", "spa", "body massage", "skincare"],
   entertainment: ["bioskop", "cinema", "movie", "hobi", "game", "netflix", "spotify", "streaming", "subscription", "langganan", "event"],
   travel: ["flight", "pesawat", "hotel", "travel", "liburan", "vacation", "tour", "wisata"],
   finance: ["fee", "admin", "biaya admin", "atm", "interest", "bunga", "pajak", "tax", "transfer fee"],
