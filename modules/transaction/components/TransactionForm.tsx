@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useState, type ReactElement } from "react";
+import { useActionState, useRouter, useState, useTransition, type ReactElement } from "react";
 import { toast } from "sonner";
 import type { Category, Payee, Subcategory } from "@prisma/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
@@ -9,19 +9,21 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { createTransactionAction, updateTransactionAction } from "../actions";
+import { createTransactionAction, updateTransactionAction, applyTransactionMappingToMerchantAction } from "../actions";
 import { TRANSACTION_TYPES, formatTransactionType } from "../constants";
 import type { TransactionActionState } from "../types";
 import type { TransactionWithRelations } from "../repository";
 
 type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
-type TransactionFormProps = { mode: "create" | "edit"; transaction?: TransactionWithRelations; wallets: WalletOption[]; categories: Category[]; subcategories: Subcategory[]; payees: Payee[]; trigger: ReactElement };
+type TransactionFormProps = { mode: "create" | "edit"; transaction?: TransactionWithRelations; wallets: WalletOption[]; categories: Category[]; subcategories: Subcategory[]; payees: Payee[]; trigger: ReactElement; reviewMode?: boolean; sameMerchantCount?: number };
 const initialState: TransactionActionState = { success: false };
 function dateInputValue(value?: Date | string | null) { return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10); }
 
-export default function TransactionForm({ mode, transaction, wallets, categories, subcategories, payees, trigger }: TransactionFormProps) {
+export default function TransactionForm({ mode, transaction, wallets, categories, subcategories, payees, trigger, reviewMode = false, sameMerchantCount = 0 }: TransactionFormProps) {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [formKey, setFormKey] = useState(0);
+  const [isBulkPending, startBulk] = useTransition();
   const [walletId, setWalletId] = useState(transaction?.walletId ?? "");
   const [type, setType] = useState(transaction?.type ?? TRANSACTION_TYPES[0]);
   const [categoryId, setCategoryId] = useState(transaction?.categoryId ?? "");
@@ -37,10 +39,29 @@ export default function TransactionForm({ mode, transaction, wallets, categories
   const selectedCategoryName = visibleCategories.find((category) => category.id === categoryId)?.name;
   const selectedSubcategoryName = visibleSubcategories.find((subcategory) => subcategory.id === subcategoryId)?.name;
   const canInstallment = selectedWallet?.walletType === "CREDIT_CARD" && type === "EXPENSE";
+  const canApplyToSameMerchant = mode === "edit" && reviewMode && sameMerchantCount > 1 && Boolean(transaction?.payeeId) && Boolean(walletId) && Boolean(categoryId) && Boolean(subcategoryId) && !isBulkPending;
   const fee = Number(installmentFee || 0); const tenor = Number(installmentTenor || 0); const principal = Number(amount || 0); const monthlyAmount = tenor > 1 ? (principal + fee) / tenor : 0;
   const baseAction = mode === "create" ? createTransactionAction : updateTransactionAction;
   const [state, formAction, isPending] = useActionState(async (prevState: TransactionActionState, formData: FormData) => { const result = await baseAction(prevState, formData); if (result.success) { toast.success(mode === "create" ? "Transaction created successfully." : "Transaction updated successfully."); if (mode === "create") setFormKey((k) => k + 1); setOpen(false); } else if (result.message) toast.error(result.message); return result; }, initialState);
   function resetCreateForm() { setFormKey((k) => k + 1); setWalletId(""); setType(TRANSACTION_TYPES[0]); setCategoryId(""); setSubcategoryId(""); setAmount(""); setInstallmentEnabled(false); setInstallmentTenor("6"); setInstallmentStartDate(dateInputValue()); setInstallmentFee("0"); }
+  function applyToSameMerchant() {
+    if (!transaction?.id || !canApplyToSameMerchant) return;
+    const formData = new FormData();
+    formData.set("id", transaction.id);
+    formData.set("walletId", walletId);
+    formData.set("categoryId", categoryId);
+    formData.set("subcategoryId", subcategoryId);
+    startBulk(async () => {
+      const result = await applyTransactionMappingToMerchantAction({ success: false }, formData);
+      if (result.success) {
+        toast.success(result.message ?? `Updated ${sameMerchantCount} transactions with the same merchant.`);
+        setOpen(false);
+        router.refresh();
+      } else {
+        toast.error(result.message ?? "Failed to update matching transactions.");
+      }
+    });
+  }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen && mode === "create") resetCreateForm(); setOpen(isOpen); }}>
@@ -56,7 +77,7 @@ export default function TransactionForm({ mode, transaction, wallets, categories
               {canInstallment && <div className="rounded-2xl border border-[#30465D] bg-[#172A3D] p-4"><label className="flex cursor-pointer items-start gap-3"><input type="checkbox" name="installmentEnabled" value="true" checked={installmentEnabled} onChange={(event) => setInstallmentEnabled(event.target.checked)} className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-emerald-500" /><span><span className="block text-sm font-semibold text-white">Installment</span><span className="mt-0.5 block text-xs text-slate-500">Create a recurring credit-card installment plan. Off by default.</span></span></label>{installmentEnabled && <div className="mt-4 grid gap-4 md:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="installmentTenor">Tenor (months)</Label><Input id="installmentTenor" name="installmentTenor" type="number" min="2" max="120" value={installmentTenor} onChange={(e) => setInstallmentTenor(e.target.value)} required /></div><div className="space-y-1.5"><Label htmlFor="installmentStartDate">Start date</Label><Input id="installmentStartDate" name="installmentStartDate" type="date" value={installmentStartDate} onChange={(e) => setInstallmentStartDate(e.target.value)} required /></div><div className="space-y-1.5"><Label htmlFor="installmentFee">Interest / Fee (optional)</Label><Input id="installmentFee" name="installmentFee" type="number" min="0" step="0.01" value={installmentFee} onChange={(e) => setInstallmentFee(e.target.value)} /></div><div className="rounded-xl border border-[#30465D] bg-black/10 px-3 py-2"><p className="text-[10px] uppercase tracking-[0.08em] text-slate-500">Estimated monthly</p><p className="mt-1 text-sm font-semibold text-emerald-300">Rp{monthlyAmount.toLocaleString("id-ID", { maximumFractionDigits: 2 })}</p><p className="mt-0.5 text-[10px] text-slate-600">Total includes optional fee.</p></div></div>}</div>}
               <div className="grid gap-4 md:grid-cols-2"><div className="space-y-1.5"><Label htmlFor="categoryId">Category</Label><Select name="categoryId" value={categoryId} onValueChange={(value) => { const next = value ?? ""; setCategoryId(next); setSubcategoryId(""); }}><SelectTrigger id="categoryId" className="w-full"><SelectValue placeholder="Select category">{selectedCategoryName ?? "Select category"}</SelectValue></SelectTrigger><SelectContent>{visibleCategories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div><div className="space-y-1.5"><Label htmlFor="subcategoryId">Subcategory</Label><Select name="subcategoryId" value={subcategoryId} onValueChange={(value) => setSubcategoryId(value ?? "")} disabled={!categoryId}><SelectTrigger id="subcategoryId" className="w-full"><SelectValue placeholder={categoryId ? "Select subcategory" : "Select category first"}>{selectedSubcategoryName ?? (categoryId ? "Select subcategory" : "Select category first")}</SelectValue></SelectTrigger><SelectContent>{visibleSubcategories.length > 0 ? visibleSubcategories.map((subcategory) => <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.name}</SelectItem>) : <div className="px-3 py-2.5 text-sm text-slate-500">No subcategories available</div>}</SelectContent></Select></div></div>
               <div className="space-y-1.5"><Label htmlFor="merchant">Merchant</Label><Input id="merchant" name="merchant" list="merchant-list" defaultValue={transaction?.payee?.name ?? ""} placeholder="Merchant" /><datalist id="merchant-list">{payees.map((payee) => <option key={payee.id} value={payee.name} />)}</datalist></div><div className="space-y-1.5"><Label htmlFor="note">Note</Label><Textarea id="note" name="note" defaultValue={transaction?.note ?? ""} placeholder="Optional note" /></div>{state.fieldErrors?.subcategoryId && <p className="text-xs text-destructive">{state.fieldErrors.subcategoryId[0]}</p>}{state.message && <p className="text-xs text-destructive">{state.message}</p>}
-            </div><DialogFooter className="border-t border-[#30465D] bg-[#0E1925] p-4 sm:p-5"><Button type="button" variant="outline" onClick={() => { resetCreateForm(); setOpen(false); }} disabled={isPending}>Cancel</Button><Button type="submit" disabled={isPending}>{isPending ? "Saving..." : mode === "create" ? "Create Transaction" : "Save Changes"}</Button></DialogFooter>
+            </div><DialogFooter className="flex-wrap border-t border-[#30465D] bg-[#0E1925] p-4 sm:p-5"><Button type="button" variant="outline" onClick={() => { resetCreateForm(); setOpen(false); }} disabled={isPending || isBulkPending}>Cancel</Button>{canApplyToSameMerchant && <Button type="button" variant="outline" onClick={applyToSameMerchant} disabled={isPending || isBulkPending}>Apply wallet + category to all {sameMerchantCount} same-merchant transactions</Button>}<Button type="submit" disabled={isPending || isBulkPending}>{isPending ? "Saving..." : mode === "create" ? "Create Transaction" : "Save Changes"}</Button></DialogFooter>
           </form>
         </div>
       </DialogContent>
