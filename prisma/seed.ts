@@ -23,13 +23,14 @@ async function main() {
   const expenseCategories = [
     ["Food & Dining", ["Groceries", "Restaurants", "Coffee & Drinks", "Delivery & Takeaway", "Snacks & Desserts"], "#22C55E", "🍽️"],
     ["Housing", ["Rent / Mortgage", "Utilities", "Household", "Maintenance & Repairs"], "#F59E0B", "🏠"],
-    ["Transportation", ["Fuel", "Public Transportation", "Taxi / Ride-hailing", "Parking", "Toll", "Vehicle Maintenance", "Tips & Tipping"], "#3B82F6", "🚗"],
+    ["Transportation", ["Fuel", "Public Transportation", "Taxi / Ride-hailing", "Parking", "Toll", "Vehicle Maintenance"], "#3B82F6", "🚗"],
     ["Shopping", ["Clothing", "Electronics", "Personal Items", "Home & Furniture", "Gifts"], "#8B5CF6", "🛍️"],
     ["Health & Wellness", ["Medical", "Pharmacy", "Dental", "Fitness", "Personal Care"], "#EF4444", "❤️"],
     ["Entertainment", ["Movies & Events", "Hobbies", "Games", "Streaming & Subscriptions"], "#EC4899", "🎬"],
     ["Travel", ["Flights", "Hotels", "Local Transport", "Activities", "Other Travel"], "#06B6D4", "✈️"],
     ["Finance & Fees", ["Transfer Fee", "Bank Fee", "ATM Fee", "Credit Card Fee", "Interest", "Tax & Government Fee"], "#F97316", "💳"],
     ["Family & Education", ["Family Support", "Childcare", "Education", "School / Tuition"], "#14B8A6", "👨‍👩‍👧‍👦"],
+    ["Social", ["Tips & Tipping", "Social Activities", "Gifts & Celebrations"], "#F43F5E", "🤝"],
     ["Insurance & Protection", ["Insurance", "Other Protection"], "#64748B", "🛡️"],
     ["Other", ["Charity / Donation", "Other Expense", "Digital Services & Subscriptions"], "#94A3B8", "📦"],
   ] as const;
