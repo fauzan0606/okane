@@ -16,7 +16,7 @@ export default function ReceivablePaymentForm({ receivableId, remaining, today, 
   return (
     <form action={formAction} className="grid gap-2 md:grid-cols-[1fr_1fr_1.2fr_auto]">
       <input type="hidden" name="receivableId" value={receivableId} />
-      <input name="amount" required inputMode="decimal" min="0" max={remaining} placeholder={`Up to ${remaining.toLocaleString("id-ID")}`} className={inputClass} />
+      <input name="amount" required inputMode="decimal" min="0" placeholder="Amount received" className={inputClass} />
       <input name="receivedAt" type="date" required defaultValue={today} className={inputClass} />
       <select name="walletId" required className={selectClass}><option value="">Money received into...</option>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</option>)}</select>
       <button type="submit" disabled={pending} className="inline-flex items-center justify-center gap-1 rounded-xl bg-white/10 px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"><ArrowDownLeft size={14} /> {pending ? "Recording..." : "Record"}</button>
