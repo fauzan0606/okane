@@ -42,6 +42,7 @@ model Wallet {
   sourceReceivables Receivable[] @relation("ReceivableSourceWallet")
   transfersFrom Transfer[] @relation("TransferFromWallet")
   transfersTo Transfer[] @relation("TransferToWallet")
+  reconciliations ReconciliationSession[]
   @@index([currencyId])
 }
 
@@ -320,6 +321,88 @@ model BudgetItem {
   updatedAt DateTime @updatedAt
   @@index([budgetId, categoryId])
   @@index([budgetId, subcategoryId])
+}
+
+model ReconciliationSession {
+  id String @id @default(uuid())
+  walletId String
+  sourceType ReconciliationSourceType
+  status ReconciliationSessionStatus @default(REVIEWING)
+  fileName String
+  periodStart DateTime?
+  periodEnd DateTime?
+  extractedCount Int @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  wallet Wallet @relation(fields: [walletId], references: [id], onDelete: Restrict)
+  rows ReconciliationRow[]
+  @@index([walletId, createdAt])
+}
+
+model ReconciliationRow {
+  id String @id @default(uuid())
+  sessionId String
+  sourceSide ReconciliationSourceSide
+  sourceRowNumber Int?
+  pageNumber Int?
+  transactionDate DateTime
+  description String
+  amount Decimal
+  direction ReconciliationDirection
+  entryType String?
+  matchStatus ReconciliationMatchStatus
+  matchConfidence Int @default(0)
+  matchReason String?
+  matchedTransactionId String?
+  matchedTransferId String?
+  resolution ReconciliationResolution @default(PENDING)
+  createdTransactionId String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  session ReconciliationSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  @@index([sessionId, matchStatus])
+  @@index([matchedTransactionId])
+  @@index([matchedTransferId])
+  @@index([transactionDate, amount])
+}
+
+enum ReconciliationSourceType {
+  BANK_STATEMENT
+  CREDIT_CARD_STATEMENT
+}
+
+enum ReconciliationSessionStatus {
+  REVIEWING
+  COMPLETED
+  CANCELLED
+}
+
+enum ReconciliationSourceSide {
+  STATEMENT
+  OKANE
+}
+
+enum ReconciliationDirection {
+  DEBIT
+  CREDIT
+  UNKNOWN
+}
+
+enum ReconciliationMatchStatus {
+  MATCHED
+  POSSIBLE_MATCH
+  CONFLICT
+  STATEMENT_ONLY
+  OKANE_ONLY
+}
+
+enum ReconciliationResolution {
+  PENDING
+  ACCEPT_MATCH
+  ADD_INCOMPLETE
+  IGNORE
+  KEEP
+  DELETE
 }
 
 enum InstallmentPlanStatus {
