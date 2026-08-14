@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { createTransactionService, deleteTransactionService, updateTransactionService } from "./service";
+import { applyTransactionMappingToMerchantService, createTransactionService, deleteTransactionService, updateTransactionService } from "./service";
 import { transactionSchema } from "./schema";
 import type { TransactionActionState } from "./types";
 
@@ -89,6 +89,24 @@ export async function updateTransactionAction(_prevState: TransactionActionState
   }
   revalidateFinancialViews();
   return { success: true };
+}
+
+export async function applyTransactionMappingToMerchantAction(_prevState: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
+  const id = formData.get("id");
+  const walletId = formData.get("walletId");
+  const categoryId = nullableToUndefined(formData.get("categoryId"));
+  const subcategoryId = nullableToUndefined(formData.get("subcategoryId"));
+  if (typeof id !== "string" || !id) return { success: false, message: "Missing transaction id." };
+  if (typeof walletId !== "string" || !walletId) return { success: false, message: "Wallet is required before applying the mapping." };
+  if (!categoryId || !subcategoryId) return { success: false, message: "Category and subcategory are required before applying the mapping." };
+
+  try {
+    const count = await applyTransactionMappingToMerchantService(id, { walletId, categoryId, subcategoryId });
+    revalidateFinancialViews();
+    return { success: true, message: `Updated ${count} transactions with the same merchant.` };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to update matching transactions." };
+  }
 }
 
 export async function deleteTransactionAction(_prevState: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
