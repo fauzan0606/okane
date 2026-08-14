@@ -11,25 +11,6 @@ type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; 
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
 function capDecimal(value: Prisma.Decimal, maximum: Prisma.Decimal) { return value.lte(maximum) ? value : maximum; }
-function roundMoney(value: Prisma.Decimal) { return value.toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP); }
-function reconcileRoundedShares(values: Prisma.Decimal[], target: Prisma.Decimal) {
-  const rounded = values.map(roundMoney);
-  let difference = roundMoney(target).minus(rounded.reduce((sum, value) => sum.plus(value), new Prisma.Decimal(0)));
-  if (!difference.isZero() && rounded.length > 0) {
-    const direction = difference.isPositive() ? new Prisma.Decimal(1) : new Prisma.Decimal(-1);
-    let steps = Math.abs(difference.toNumber());
-    const fractions = values.map((value, index) => ({ index, fraction: value.minus(roundMoney(value)).abs() })).sort((a, b) => b.fraction.comparedTo(a.fraction));
-    let cursor = 0;
-    while (steps > 0) {
-      const index = fractions[cursor % fractions.length].index;
-      const next = rounded[index].plus(direction);
-      if (next.gte(0)) rounded[index] = next;
-      cursor += 1;
-      steps -= 1;
-    }
-  }
-  return rounded;
-}
 function balanceDelta(type: "INCOME" | "EXPENSE", amount: Prisma.Decimal) { return type === "INCOME" ? amount : amount.negated(); }
 async function applyBalanceDelta(tx: Prisma.TransactionClient, walletId: string, delta: Prisma.Decimal) { if (delta.isZero()) return; await tx.wallet.update({ where: { id: walletId }, data: delta.isPositive() ? { currentBalance: { increment: delta } } : { currentBalance: { decrement: delta.abs() } } }); }
 function chargeAmount(charge?: ChargeInput, subtotal = new Prisma.Decimal(0)) {
@@ -110,6 +91,7 @@ export async function createSplitBill(input: SplitBillInput) {
     };
 
     await addDiscount(orderDiscountAmount);
+    const baseShares = shareTotals.map((value) => value);
 
     const taxAmount = chargeAmount(input.tax, discountedSubtotal);
     const serviceFeeAmount = chargeAmount(input.serviceFee, discountedSubtotal);
@@ -119,10 +101,10 @@ export async function createSplitBill(input: SplitBillInput) {
       if (discountedSubtotal.lte(0)) throw new Error(`${name} cannot be added when the discounted bill subtotal is zero.`);
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name, quantity: 1, unitPrice: amount, splitMethod: SplitBillItemMethod.PRO_RATA } });
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
-        const units = shareTotals[participantIndex];
-        if (units.lte(0)) continue;
-        const allocation = units.div(discountedSubtotal).mul(amount);
-        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units, amount: allocation } });
+        const baseShare = baseShares[participantIndex];
+        if (baseShare.lte(0)) continue;
+        const allocation = baseShare.div(discountedSubtotal).mul(amount);
+        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: baseShare, amount: allocation } });
         shareTotals[participantIndex] = shareTotals[participantIndex].plus(allocation);
       }
     };
@@ -130,14 +112,14 @@ export async function createSplitBill(input: SplitBillInput) {
     const addDeliveryCharge = async (amount: Prisma.Decimal, splitMethod: "EQUAL" | "PRO_RATA") => {
       if (amount.lte(0)) return;
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name: "Delivery Fee", quantity: 1, unitPrice: amount, splitMethod: splitMethod === "PRO_RATA" ? SplitBillItemMethod.PRO_RATA : SplitBillItemMethod.EQUAL } });
-      const eligible = participants.map((_, index) => shareTotals[index].gt(0));
+      const eligible = participants.map((_, index) => baseShares[index].gt(0));
       const eligibleCount = eligible.filter(Boolean).length;
       if (eligibleCount === 0) throw new Error("Delivery fee cannot be allocated when no participant has an item share.");
-      const baseTotal = shareTotals.reduce((sum, value) => sum.plus(value), new Prisma.Decimal(0));
+      const baseTotal = baseShares.reduce((sum, value) => sum.plus(value), new Prisma.Decimal(0));
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
         if (!eligible[participantIndex]) continue;
-        const allocation = splitMethod === "EQUAL" ? amount.div(eligibleCount) : amount.mul(shareTotals[participantIndex]).div(baseTotal);
-        const units = splitMethod === "EQUAL" ? new Prisma.Decimal(1) : shareTotals[participantIndex];
+        const allocation = splitMethod === "EQUAL" ? amount.div(eligibleCount) : amount.mul(baseShares[participantIndex]).div(baseTotal);
+        const units = splitMethod === "EQUAL" ? new Prisma.Decimal(1) : baseShares[participantIndex];
         await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units, amount: allocation } });
         shareTotals[participantIndex] = shareTotals[participantIndex].plus(allocation);
       }
@@ -152,11 +134,10 @@ export async function createSplitBill(input: SplitBillInput) {
     await addProportionalCharge("Service Fee", serviceFeeAmount);
     await addDeliveryCharge(netDeliveryAmount, deliverySplitMethod);
 
-    const totalAmount = roundMoney(discountedSubtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount));
-    const roundedShares = reconcileRoundedShares(shareTotals, totalAmount);
+    const totalAmount = discountedSubtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount);
     const personalIndex = input.participants.findIndex((participant) => participant.isMe);
-    await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: roundedShares[personalIndex] } });
-    for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: roundedShares[index] } });
+    await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
+    for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
     return splitBill;
   });
 }
@@ -172,12 +153,12 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
     if (splitBill.transactionId) throw new Error("This Split Bill is already linked to a transaction.");
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, currencyId: true, balanceAsOf: true } });
     if (!wallet) throw new Error("Wallet not found.");
-    const totalAmount = roundMoney(splitBill.totalAmount);
+    const totalAmount = splitBill.totalAmount;
     const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: "EXPENSE", kind: "STANDARD", amount: totalAmount, note: splitBill.note || `Split Bill: ${splitBill.merchantName}`, wallet: { connect: { id: wallet.id } }, payee: payee ? { connect: { id: payee.id } } : undefined } });
     if (!wallet.balanceAsOf || transaction.transactionDate > wallet.balanceAsOf || (transaction.transactionDate.toDateString() === wallet.balanceAsOf.toDateString() && transaction.createdAt > wallet.balanceAsOf)) await applyBalanceDelta(tx, wallet.id, balanceDelta("EXPENSE", totalAmount));
     for (const participant of splitBill.participants) {
       if (participant.isMe || participant.shareAmount.lte(0) || participant.receivable) continue;
-      const receivableAmount = roundMoney(participant.shareAmount);
+      const receivableAmount = participant.shareAmount;
       await tx.receivable.create({ data: { personName: participant.name, description: `Split Bill: ${splitBill.merchantName}`, amount: receivableAmount, currencyId: wallet.currencyId, sourceWalletId: wallet.id, loanDate: input.transactionDate, sourceTransactionId: transaction.id, splitBillParticipantId: participant.id } });
     }
     await tx.splitBill.update({ where: { id: splitBill.id }, data: { transactionId: transaction.id, status: SplitBillStatus.OPEN } });
