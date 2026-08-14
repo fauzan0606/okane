@@ -1,0 +1,2 @@
+export const IMPORT_REVIEW_WALLET_NAME = "Unassigned (Review)";
+export const IMPORT_REVIEW_WALLET_NOTE = "SYSTEM_IMPORT_REVIEW_WALLET";
