@@ -2,7 +2,14 @@ import { prisma } from "@/lib/prisma";
 
 export const runtime = "nodejs";
 
-type Line = { text: string; size?: number; bold?: boolean; gap?: number };
+type Line = {
+  text?: string;
+  right?: string;
+  size?: number;
+  bold?: boolean;
+  gap?: number;
+  separator?: boolean;
+};
 
 function escapePdfText(value: string) {
   return value
@@ -15,14 +22,18 @@ function escapePdfText(value: string) {
 }
 
 function money(value: number, symbol: string) {
-  return `${symbol}${value.toLocaleString("id-ID", { maximumFractionDigits: 0 })}`;
+  return `${symbol}${Math.round(value).toLocaleString("id-ID")}`;
 }
 
 function date(value: Date) {
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "long", year: "numeric" }).format(value);
 }
 
-function splitLines(lines: Line[], maxLines = 48) {
+function textWidth(value: string, size: number) {
+  return value.length * size * 0.52;
+}
+
+function splitLines(lines: Line[], maxLines = 46) {
   const pages: Line[][] = [];
   let current: Line[] = [];
   for (const line of lines) {
@@ -47,15 +58,26 @@ function buildPdf(pages: Line[][]) {
 
   for (const lines of pages) {
     let y = 780;
-    const streamParts: string[] = ["q", "0.12 0.20 0.28 rg", "0.12 0.20 0.28 RG"];
+    const streamParts: string[] = [];
     for (const line of lines) {
+      if (line.separator) {
+        streamParts.push(`0.82 0.84 0.87 RG 0.5 w 54 ${y + 7} m 541 ${y + 7} l S`);
+        y -= line.gap ?? 10;
+        continue;
+      }
+
       const size = line.size ?? 10;
       const font = line.bold ? "/F2" : "/F1";
       const color = line.bold ? "0.08 0.12 0.17" : "0.25 0.30 0.35";
-      streamParts.push(`${color} rg BT ${font} ${size} Tf 54 ${y} Td (${escapePdfText(line.text)}) Tj ET`);
+      if (line.text) streamParts.push(`${color} rg BT ${font} ${size} Tf 54 ${y} Td (${escapePdfText(line.text)}) Tj ET`);
+      if (line.right) {
+        const width = textWidth(line.right, size);
+        const x = Math.max(360, 520 - width);
+        streamParts.push(`${color} rg BT ${font} ${size} Tf ${x} ${y} Td (${escapePdfText(line.right)}) Tj ET`);
+      }
       y -= line.gap ?? (size >= 16 ? 25 : size >= 12 ? 20 : 16);
     }
-    streamParts.push("Q");
+
     const stream = streamParts.join("\n");
     const contentId = add(`<< /Length ${Buffer.byteLength(stream, "utf8")} >>\nstream\n${stream}\nendstream`);
     const pageId = add(`<< /Type /Page /Parent ${pagesId} 0 R /MediaBox [0 0 595 842] /Resources << /Font << /F1 ${fontRegularId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`);
@@ -76,6 +98,20 @@ function buildPdf(pages: Line[][]) {
   for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, "0")} 00000 n \n`;
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root ${catalogId} 0 R >>\nstartxref\n${xrefOffset}\n%%EOF`;
   return Buffer.from(pdf, "binary");
+}
+
+function round(value: number) {
+  return Math.round(value);
+}
+
+function splitParticipantLines(
+  items: Array<{ name: string; amount: number }>,
+  targetTotal: number,
+) {
+  const rounded = items.map((item) => ({ ...item, amount: round(item.amount) }));
+  const currentTotal = rounded.reduce((sum, item) => sum + item.amount, 0);
+  const difference = round(targetTotal) - currentTotal;
+  return { items: rounded, difference };
 }
 
 export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -101,28 +137,48 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
 
   for (const participant of bill.participants) {
     lines.push({ text: participant.isMe ? `${participant.name} (You)` : participant.name, size: 14, bold: true, gap: 20 });
-    lines.push({ text: "ITEMS", size: 8, bold: true, gap: 16 });
-    let subtotal = 0;
+    lines.push({ text: "ITEMS", size: 8, bold: true, gap: 14, separator: true });
+
     const participantAllocations = bill.items.flatMap((item) => {
       const allocation = item.allocations.find((entry) => entry.participantId === participant.id);
       if (!allocation) return [];
-      const amount = Number(allocation.amount);
-      subtotal += amount;
-      return [{ name: item.name, amount }];
+      return [{ name: item.name, amount: Number(allocation.amount) }];
     });
 
-    if (participantAllocations.length === 0) lines.push({ text: "No allocated items", size: 9, gap: 16 });
-    else for (const allocation of participantAllocations) lines.push({ text: `${allocation.name}    ${money(allocation.amount, symbol)}`, size: 9, gap: 16 });
-
+    const normalItems = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && !/fee/i.test(item.name));
     const taxItem = participantAllocations.find((item) => item.name === "Tax / PPN");
     const serviceItem = participantAllocations.find((item) => item.name === "Service Fee");
-    const foodItems = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee");
-    const foodSubtotal = foodItems.reduce((sum, item) => sum + item.amount, 0);
-    lines.push({ text: `Subtotal    ${money(foodSubtotal, symbol)}`, size: 9, bold: true, gap: 16 });
-    if (taxItem) lines.push({ text: `Tax / PPN    ${money(taxItem.amount, symbol)}`, size: 9, gap: 16 });
-    if (serviceItem) lines.push({ text: `Service Fee    ${money(serviceItem.amount, symbol)}`, size: 9, gap: 16 });
-    lines.push({ text: `TOTAL    ${money(subtotal, symbol)}`, size: 13, bold: true, gap: 26 });
-    lines.push({ text: "", gap: 12 });
+    const otherFees = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && /fee/i.test(item.name));
+
+    const targetTotal = Number(participant.shareAmount);
+    const allDisplayed = [...normalItems, ...(taxItem ? [taxItem] : []), ...(serviceItem ? [serviceItem] : []), ...otherFees];
+    const reconciled = splitParticipantLines(allDisplayed, targetTotal);
+    const byName = new Map(reconciled.items.map((item, index) => [index, item]));
+    let lineIndex = 0;
+
+    const pushItem = (item: { name: string; amount: number }, bold = false) => {
+      const display = byName.get(lineIndex) ?? { ...item, amount: round(item.amount) };
+      lineIndex += 1;
+      lines.push({ text: display.name, right: money(display.amount, symbol), size: 9, bold, gap: 16 });
+    };
+
+    if (normalItems.length === 0) lines.push({ text: "No allocated items", size: 9, gap: 16 });
+    else for (const item of normalItems) pushItem(item);
+
+    const subtotal = normalItems.reduce((sum, item) => sum + round(item.amount), 0);
+    lines.push({ text: "Subtotal", right: money(subtotal, symbol), size: 9, bold: true, gap: 18 });
+
+    if (taxItem) pushItem(taxItem);
+    if (serviceItem) pushItem(serviceItem);
+    for (const fee of otherFees) pushItem(fee);
+
+    if (reconciled.difference !== 0) {
+      lines.push({ text: "Allocation adjustment", right: money(reconciled.difference, symbol), size: 8, gap: 16 });
+    }
+
+    lines.push({ separator: true, gap: 10 });
+    lines.push({ text: "TOTAL", right: money(targetTotal, symbol), size: 13, bold: true, gap: 26 });
+    lines.push({ text: "", gap: 10 });
   }
 
   lines.push({ text: "Thank you for using OKANE", size: 8, gap: 16 });
