@@ -12,6 +12,7 @@ import {
   listTransactions,
   transactionFormData,
 } from "@/modules/transaction/service";
+import { IMPORT_REVIEW_WALLET_NAME } from "@/modules/transaction/importReview";
 import type { TransactionWithRelations } from "@/modules/transaction/repository";
 import type { Category, Payee, Subcategory } from "@prisma/client";
 
@@ -84,7 +85,7 @@ function serializeFormData(formData: Awaited<ReturnType<typeof transactionFormDa
 export default async function TransactionsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ category?: string; wallet?: string; from?: string; to?: string }>;
+  searchParams: Promise<{ category?: string; wallet?: string; from?: string; to?: string; review?: string }>;
 }) {
   const [transactions, rawFormData, params] = await Promise.all([
     listTransactions(),
@@ -99,8 +100,13 @@ export default async function TransactionsPage({
   const walletId = params.wallet ?? "";
   const from = params.from ?? "";
   const to = params.to ?? "";
+  const reviewOnly = params.review === "1";
 
-  const filteredTransactions = clientTransactions.filter((transaction) => {
+  const incompleteTransactions = clientTransactions.filter((transaction) =>
+    transaction.wallet.name === IMPORT_REVIEW_WALLET_NAME || !transaction.categoryId || !transaction.subcategoryId,
+  );
+
+  const filteredTransactions = (reviewOnly ? incompleteTransactions : clientTransactions).filter((transaction) => {
     const transactionDay = transaction.transactionDate.slice(0, 10);
     if (categoryId && transaction.categoryId !== categoryId) return false;
     if (walletId && transaction.walletId !== walletId) return false;
@@ -109,7 +115,7 @@ export default async function TransactionsPage({
     return true;
   });
 
-  const hasFilters = Boolean(categoryId || walletId || from || to);
+  const hasFilters = Boolean(categoryId || walletId || from || to || reviewOnly);
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
@@ -121,6 +127,11 @@ export default async function TransactionsPage({
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {incompleteTransactions.length > 0 && (
+              <a href="/transactions?review=1" className="inline-flex items-center rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-4 py-2.5 text-sm font-semibold text-amber-200 hover:bg-amber-400/[0.1]">
+                Review incomplete ({incompleteTransactions.length})
+              </a>
+            )}
             <TransactionImport wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} />
             <TransactionForm
               mode="create"
@@ -132,6 +143,13 @@ export default async function TransactionsPage({
             />
           </div>
         </div>
+
+        {reviewOnly && (
+          <div className="flex flex-col gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-4 text-sm text-amber-100 md:flex-row md:items-center md:justify-between">
+            <span>Showing {filteredTransactions.length} incomplete transactions. Complete missing wallet, category, or subcategory fields and the transaction will leave this review view.</span>
+            <a href="/transactions" className="font-semibold underline underline-offset-2">Show all transactions</a>
+          </div>
+        )}
 
         <section className="rounded-[18px] border border-white/10 bg-[#0d141e] p-4">
           <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
