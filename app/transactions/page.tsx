@@ -15,6 +15,9 @@ import {
 import type { TransactionWithRelations } from "@/modules/transaction/repository";
 import type { Category, Payee, Subcategory } from "@prisma/client";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 type ClientTransaction = TransactionWithRelations;
 type ClientCategory = Pick<Category, "id" | "name" | "type" | "icon" | "color">;
 type ClientSubcategory = Pick<Subcategory, "id" | "categoryId" | "name" | "isActive" | "sortOrder">;
