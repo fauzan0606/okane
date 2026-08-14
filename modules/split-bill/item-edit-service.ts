@@ -58,7 +58,6 @@ export async function updateSplitBillItemAllocation(input: { splitBillId: string
       if (participant.isMe) continue;
       const receivable = participant.receivable;
       const paid = receivable?.payments.reduce((sum, payment) => sum.plus(payment.amount), new Prisma.Decimal(0)) ?? new Prisma.Decimal(0);
-      if (receivable && share.lt(paid)) throw new Error(`${participant.name}'s new share cannot be lower than payments already received.`);
       if (receivable && share.gt(0)) {
         const status = paid.gte(share) ? ReceivableStatus.RECEIVED : paid.gt(0) ? ReceivableStatus.PARTIALLY_RECEIVED : receivable.dueDate && receivable.dueDate < new Date() ? ReceivableStatus.OVERDUE : ReceivableStatus.OUTSTANDING;
         await tx.receivable.update({ where: { id: receivable.id }, data: { amount: share, status } });
