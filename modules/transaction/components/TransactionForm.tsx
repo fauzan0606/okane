@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState, useRouter, useState, useTransition, type ReactElement } from "react";
+import { useActionState, useState, useTransition, type ReactElement } from "react";
+import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { Category, Payee, Subcategory } from "@prisma/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
