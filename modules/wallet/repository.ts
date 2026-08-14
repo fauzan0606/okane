@@ -113,7 +113,7 @@ export async function getWalletHistory(walletId: string): Promise<WalletHistoryE
     runningBalance = runningBalance.minus(movement.delta);
   }
 
-  return result.reverse();
+  return result;
 }
 
 export async function createWallet(data: Prisma.WalletCreateInput) {
