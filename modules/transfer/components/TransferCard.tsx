@@ -82,6 +82,11 @@ export default function TransferCard({ transfer, wallets }: { transfer: Transfer
   const selectedSource = manualWallets.find((wallet) => wallet.id === fromWalletId);
   const destinationWallets = manualWallets.filter((wallet) => wallet.id !== fromWalletId && (!selectedSource || wallet.currency.code === selectedSource.currency.code));
 
+  function handleSourceChange(value: string | null) {
+    setFromWalletId(value ?? "");
+    setToWalletId("");
+  }
+
   return (
     <article className="rounded-[18px] border border-[#30465D] bg-[#172A3D] px-4 py-4 md:px-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -131,7 +136,7 @@ export default function TransferCard({ transfer, wallets }: { transfer: Transfer
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <Label>From Wallet</Label>
-                  <Select name="fromWalletId" value={fromWalletId} onValueChange={(value) => setFromWalletId(value ?? "")}>
+                  <Select name="fromWalletId" value={fromWalletId} onValueChange={handleSourceChange}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Select source wallet" /></SelectTrigger>
                     <SelectContent>{manualWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
                   </Select>
@@ -151,7 +156,7 @@ export default function TransferCard({ transfer, wallets }: { transfer: Transfer
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button>
-                <Button type="submit" disabled={pending} className="bg-emerald-500 text-[#06110b] hover:bg-emerald-400">{pending ? "Saving..." : "Save Changes"}</Button>
+                <Button type="submit" disabled={pending || !fromWalletId || !toWalletId} className="bg-emerald-500 text-[#06110b] hover:bg-emerald-400">{pending ? "Saving..." : "Save Changes"}</Button>
               </DialogFooter>
             </form>
           </DialogContent>
