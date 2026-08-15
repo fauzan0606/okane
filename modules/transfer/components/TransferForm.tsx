@@ -23,8 +23,9 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
   const [pending, setPending] = useState(false);
   const [sourceWalletId, setSourceWalletId] = useState("");
 
-  const sourceWallet = wallets.find((wallet) => wallet.id === sourceWalletId);
-  const destinationWallets = wallets.filter((wallet) => wallet.id !== sourceWalletId && (!sourceWallet || wallet.currency.code === sourceWallet.currency.code));
+  const manualWallets = wallets.filter((wallet) => wallet.walletType !== "CREDIT_CARD");
+  const sourceWallet = manualWallets.find((wallet) => wallet.id === sourceWalletId);
+  const destinationWallets = manualWallets.filter((wallet) => wallet.id !== sourceWalletId && (!sourceWallet || wallet.currency.code === sourceWallet.currency.code));
 
   async function submit(formData: FormData) {
     setPending(true);
@@ -60,8 +61,8 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
             </div>
           </DialogHeader>
 
-          {wallets.length < 2 ? (
-            <div className="rounded-[22px] border border-dashed border-amber-400/20 bg-[#0A1119] p-5 text-sm text-amber-200">You need at least two active wallets before creating a transfer.</div>
+          {manualWallets.length < 2 ? (
+            <div className="rounded-[22px] border border-dashed border-amber-400/20 bg-[#0A1119] p-5 text-sm text-amber-200">You need at least two active non-credit-card wallets before creating a transfer.</div>
           ) : (
             <form action={submit} className="overflow-hidden rounded-[22px] border border-[#30465D] bg-[#0A1119]">
               <div className="space-y-4 p-4 sm:space-y-5 sm:p-6">
@@ -69,14 +70,14 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
                   <div className="space-y-1.5">
                     <Label htmlFor="fromWalletId">From Wallet</Label>
                     <Select name="fromWalletId" required value={sourceWalletId} onValueChange={(value) => setSourceWalletId(value ?? "")}>
-                      <SelectTrigger id="fromWalletId" className="w-full"><SelectValue placeholder="Select source wallet">{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select source wallet"}</SelectValue></SelectTrigger>
-                      <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
+                      <SelectTrigger id="fromWalletId" className="w-full"><SelectValue placeholder="Select source wallet">{(id: string | null) => manualWallets.find((wallet) => wallet.id === id)?.name ?? "Select source wallet"}</SelectValue></SelectTrigger>
+                      <SelectContent>{manualWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="toWalletId">To Wallet</Label>
                     <Select name="toWalletId" required defaultValue="">
-                      <SelectTrigger id="toWalletId" className="w-full"><SelectValue placeholder={sourceWallet ? "Select destination wallet" : "Select source first"}>{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select destination wallet"}</SelectValue></SelectTrigger>
+                      <SelectTrigger id="toWalletId" className="w-full"><SelectValue placeholder={sourceWallet ? "Select destination wallet" : "Select source first"}>{(id: string | null) => manualWallets.find((wallet) => wallet.id === id)?.name ?? "Select destination wallet"}</SelectValue></SelectTrigger>
                       <SelectContent>{destinationWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
