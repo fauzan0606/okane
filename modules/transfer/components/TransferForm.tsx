@@ -22,6 +22,7 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const [sourceWalletId, setSourceWalletId] = useState("");
+  const [destinationWalletId, setDestinationWalletId] = useState("");
 
   const manualWallets = wallets.filter((wallet) => wallet.walletType !== "CREDIT_CARD");
   const sourceWallet = manualWallets.find((wallet) => wallet.id === sourceWalletId);
@@ -34,6 +35,7 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
       toast.success("Transfer created successfully.");
       setOpen(false);
       setSourceWalletId("");
+      setDestinationWalletId("");
     } catch (error) {
       toast.error(getErrorMessage(error));
     } finally {
@@ -43,7 +45,15 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
 
   function resetForm(nextOpen: boolean) {
     setOpen(nextOpen);
-    if (!nextOpen) setSourceWalletId("");
+    if (!nextOpen) {
+      setSourceWalletId("");
+      setDestinationWalletId("");
+    }
+  }
+
+  function handleSourceChange(value: string | null) {
+    setSourceWalletId(value ?? "");
+    setDestinationWalletId("");
   }
 
   return (
@@ -69,14 +79,14 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="fromWalletId">From Wallet</Label>
-                    <Select name="fromWalletId" required value={sourceWalletId} onValueChange={(value) => setSourceWalletId(value ?? "")}>
+                    <Select name="fromWalletId" required value={sourceWalletId} onValueChange={handleSourceChange}>
                       <SelectTrigger id="fromWalletId" className="w-full"><SelectValue placeholder="Select source wallet">{(id: string | null) => manualWallets.find((wallet) => wallet.id === id)?.name ?? "Select source wallet"}</SelectValue></SelectTrigger>
                       <SelectContent>{manualWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-1.5">
                     <Label htmlFor="toWalletId">To Wallet</Label>
-                    <Select name="toWalletId" required defaultValue="">
+                    <Select name="toWalletId" required value={destinationWalletId} onValueChange={(value) => setDestinationWalletId(value ?? "")}>
                       <SelectTrigger id="toWalletId" className="w-full"><SelectValue placeholder={sourceWallet ? "Select destination wallet" : "Select source first"}>{(id: string | null) => manualWallets.find((wallet) => wallet.id === id)?.name ?? "Select destination wallet"}</SelectValue></SelectTrigger>
                       <SelectContent>{destinationWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
                     </Select>
@@ -91,7 +101,7 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
               </div>
               <DialogFooter className="border-t border-[#30465D] bg-[#0E1925] p-4 sm:p-5">
                 <Button type="button" variant="outline" onClick={() => resetForm(false)} disabled={pending}>Cancel</Button>
-                <Button type="submit" disabled={pending || !sourceWalletId || destinationWallets.length === 0} className="bg-emerald-500 text-[#06110b] hover:bg-emerald-400"><ArrowRight size={16} />{pending ? "Transferring..." : "Transfer"}</Button>
+                <Button type="submit" disabled={pending || !sourceWalletId || !destinationWalletId} className="bg-emerald-500 text-[#06110b] hover:bg-emerald-400"><ArrowRight size={16} />{pending ? "Transferring..." : "Transfer"}</Button>
               </DialogFooter>
             </form>
           )}
