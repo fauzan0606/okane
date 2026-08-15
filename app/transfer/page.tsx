@@ -3,18 +3,31 @@ import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import { prisma } from "@/lib/prisma";
 import TransferForm from "@/modules/transfer/components/TransferForm";
-import { ArrowLeftRight, ArrowRight, CalendarDays, CircleDollarSign, WalletCards } from "lucide-react";
-
-function formatMoney(value: number, symbol: string) { return `${symbol}${value.toLocaleString("id-ID", { maximumFractionDigits: 2 })}`; }
-function formatDate(value: string | Date) { return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)); }
+import TransferCard from "@/modules/transfer/components/TransferCard";
+import { ArrowLeftRight, CircleDollarSign, WalletCards } from "lucide-react";
 
 export default async function TransferPage() {
   const [wallets, transfers] = await Promise.all([
     prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true, currentBalance: true, currency: { select: { code: true, symbol: true } } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    prisma.transfer.findMany({ include: { fromWallet: { select: { name: true, currency: { select: { code: true, symbol: true } } } }, toWallet: { select: { name: true, currency: { select: { code: true, symbol: true } } } } }, orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }], take: 50 }),
+    prisma.transfer.findMany({
+      include: {
+        fromWallet: { select: { id: true, name: true, currency: { select: { code: true, symbol: true } } } },
+        toWallet: { select: { id: true, name: true, currency: { select: { code: true, symbol: true } } } },
+      },
+      orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }],
+      take: 50,
+    }),
   ]);
+
   const serializedWallets = wallets.map((wallet) => ({ ...wallet, currentBalance: Number(wallet.currentBalance) }));
-  const serializedTransfers = transfers.map((transfer) => ({ ...transfer, amount: Number(transfer.amount), feeAmount: Number(transfer.feeAmount) }));
+  const serializedTransfers = transfers.map((transfer) => ({
+    ...transfer,
+    amount: Number(transfer.amount),
+    feeAmount: Number(transfer.feeAmount),
+    transferDate: transfer.transferDate.toISOString(),
+    createdAt: transfer.createdAt.toISOString(),
+    updatedAt: transfer.updatedAt.toISOString(),
+  }));
   const totalTransfers = serializedTransfers.length;
   const totalFees = serializedTransfers.reduce((sum, transfer) => sum + transfer.feeAmount, 0);
   const currencies = new Set(serializedWallets.map((wallet) => wallet.currency.code));
@@ -22,6 +35,6 @@ export default async function TransferPage() {
   return <AppShell sidebar={<Sidebar />} header={<Header />}><div className="space-y-6">
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Move money between accounts</p><h1 className="mt-1 text-3xl font-bold text-white">Transfer</h1><p className="mt-2 max-w-2xl text-sm text-slate-500">Move money between your own wallets without creating an income or expense transaction.</p></div><TransferForm wallets={serializedWallets} /></div>
     <section className="grid gap-3 md:grid-cols-3"><div className="rounded-[18px] border border-[#30465D] bg-[#172A3D] px-4 py-4 shadow-[0_12px_28px_rgba(0,0,0,0.16)]"><div className="flex items-center gap-2 text-slate-500"><ArrowLeftRight size={14} /><span className="text-[10px] uppercase tracking-[0.12em]">Transfers</span></div><p className="mt-1 text-xl font-semibold text-white">{totalTransfers}</p><p className="mt-1 text-[10px] text-slate-600">Latest 50 transfers</p></div><div className="rounded-[18px] border border-[#30465D] bg-[#172A3D] px-4 py-4 shadow-[0_12px_28px_rgba(0,0,0,0.16)]"><div className="flex items-center gap-2 text-slate-500"><CircleDollarSign size={14} /><span className="text-[10px] uppercase tracking-[0.12em]">Currencies</span></div><p className="mt-1 text-xl font-semibold text-white">{currencies.size}</p><p className="mt-1 text-[10px] text-slate-600">Transfers require matching currencies</p></div><div className="rounded-[18px] border border-[#30465D] bg-[#172A3D] px-4 py-4 shadow-[0_12px_28px_rgba(0,0,0,0.16)]"><div className="flex items-center gap-2 text-slate-500"><WalletCards size={14} /><span className="text-[10px] uppercase tracking-[0.12em]">Recorded fees</span></div><p className="mt-1 text-xl font-semibold text-amber-300">{totalFees === 0 ? "—" : totalFees.toLocaleString("id-ID")}</p><p className="mt-1 text-[10px] text-slate-600">Across displayed transfers</p></div></section>
-    <section><div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">History</p><h2 className="mt-1 text-base font-semibold text-white">Recent Transfers</h2></div><span className="text-[10px] text-slate-600">Newest first</span></div>{serializedTransfers.length === 0 ? <div className="rounded-[20px] border border-dashed border-white/10 bg-[#0E1925] p-12 text-center"><ArrowLeftRight size={26} className="mx-auto text-slate-600" /><p className="mt-3 text-sm font-semibold text-white">No transfers yet</p><p className="mt-1 text-xs text-slate-500">Your transfer history will appear here after the first transfer.</p></div> : <div className="space-y-2">{serializedTransfers.map((transfer) => <article key={transfer.id} className="rounded-[18px] border border-[#30465D] bg-[#172A3D] px-4 py-4 md:px-5"><div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between"><div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><span className={`rounded-full border px-2.5 py-1 text-[9px] font-semibold ${transfer.origin === "CREDIT_CARD_PAYMENT" ? "border-blue-400/15 bg-blue-400/10 text-blue-300" : "border-emerald-400/15 bg-emerald-400/10 text-emerald-300"}`}>{transfer.origin === "CREDIT_CARD_PAYMENT" ? "CC PAYMENT" : "TRANSFER"}</span><span className="text-[10px] text-slate-600"><CalendarDays size={11} className="mr-1 inline" />{formatDate(transfer.transferDate)}</span></div><div className="mt-2 flex flex-wrap items-center gap-2 text-sm"><span className="font-semibold text-white">{transfer.fromWallet.name}</span><ArrowRight size={14} className="text-slate-600" /><span className="font-semibold text-white">{transfer.toWallet.name}</span></div></div><div className="flex items-end gap-6 md:text-right"><div><p className="text-[9px] uppercase tracking-[0.08em] text-slate-600">Amount</p><p className="mt-0.5 text-sm font-bold text-white">{formatMoney(transfer.amount, transfer.fromWallet.currency.symbol)}</p></div><div><p className="text-[9px] uppercase tracking-[0.08em] text-slate-600">Fee</p><p className={`mt-0.5 text-sm font-semibold ${transfer.feeAmount > 0 ? "text-amber-300" : "text-slate-400"}`}>{transfer.feeAmount > 0 ? formatMoney(transfer.feeAmount, transfer.fromWallet.currency.symbol) : "—"}</p></div></div></div></article>)}</div>}</section>
+    <section><div className="mb-3 flex items-end justify-between gap-3"><div><p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-600">History</p><h2 className="mt-1 text-base font-semibold text-white">Recent Transfers</h2></div><span className="text-[10px] text-slate-600">Newest first · manual transfers can be edited or deleted</span></div>{serializedTransfers.length === 0 ? <div className="rounded-[20px] border border-dashed border-white/10 bg-[#0E1925] p-12 text-center"><ArrowLeftRight size={26} className="mx-auto text-slate-600" /><p className="mt-3 text-sm font-semibold text-white">No transfers yet</p><p className="mt-1 text-xs text-slate-500">Your transfer history will appear here after the first transfer.</p></div> : <div className="space-y-2">{serializedTransfers.map((transfer) => <TransferCard key={transfer.id} transfer={transfer} wallets={serializedWallets} />)}</div>}</section>
   </div></AppShell>;
 }
