@@ -1,4 +1,4 @@
-import { Prisma, TransactionType, TransferOrigin } from "@prisma/client";
+import { Prisma, TransactionType, TransferOrigin, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAsOf: Date | null) {
@@ -12,11 +12,14 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
 
 async function getWalletPair(tx: Prisma.TransactionClient, fromWalletId: string, toWalletId: string) {
   const [fromWallet, toWallet] = await Promise.all([
-    tx.wallet.findUnique({ where: { id: fromWalletId }, select: { id: true, name: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
-    tx.wallet.findUnique({ where: { id: toWalletId }, select: { id: true, name: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
+    tx.wallet.findUnique({ where: { id: fromWalletId }, select: { id: true, name: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
+    tx.wallet.findUnique({ where: { id: toWalletId }, select: { id: true, name: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
   ]);
   if (!fromWallet) throw new Error("Source wallet not found.");
   if (!toWallet) throw new Error("Destination wallet not found.");
+  if (fromWallet.walletType === WalletType.CREDIT_CARD || toWallet.walletType === WalletType.CREDIT_CARD) {
+    throw new Error("Credit card wallets can only be used through Credit Cards > Payment History.");
+  }
   if (fromWallet.id === toWallet.id) throw new Error("Source and destination wallets must be different.");
   if (fromWallet.currencyId !== toWallet.currencyId) throw new Error("Transfer currently requires wallets with the same currency.");
   return { fromWallet, toWallet };
