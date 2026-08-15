@@ -137,14 +137,22 @@ export default function TransferCard({ transfer, wallets }: { transfer: Transfer
                 <div className="space-y-1.5">
                   <Label>From Wallet</Label>
                   <Select name="fromWalletId" value={fromWalletId} onValueChange={handleSourceChange}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select source wallet" /></SelectTrigger>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder="Select source wallet">
+                        {(id: string | null) => manualWallets.find((wallet) => wallet.id === id)?.name ?? "Select source wallet"}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>{manualWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>To Wallet</Label>
                   <Select name="toWalletId" value={toWalletId} onValueChange={(value) => setToWalletId(value ?? "")}>
-                    <SelectTrigger className="w-full"><SelectValue placeholder="Select destination wallet" /></SelectTrigger>
+                    <SelectTrigger className="w-full">
+                      <SelectValue placeholder={selectedSource ? "Select destination wallet" : "Select source first"}>
+                        {(id: string | null) => manualWallets.find((wallet) => wallet.id === id)?.name ?? "Select destination wallet"}
+                      </SelectValue>
+                    </SelectTrigger>
                     <SelectContent>{destinationWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
