@@ -78,6 +78,9 @@ export default function TransferCard({ transfer, wallets }: { transfer: Transfer
   }
 
   const manual = transfer.origin === "MANUAL";
+  const manualWallets = wallets.filter((wallet) => wallet.walletType !== "CREDIT_CARD");
+  const selectedSource = manualWallets.find((wallet) => wallet.id === fromWalletId);
+  const destinationWallets = manualWallets.filter((wallet) => wallet.id !== fromWalletId && (!selectedSource || wallet.currency.code === selectedSource.currency.code));
 
   return (
     <article className="rounded-[18px] border border-[#30465D] bg-[#172A3D] px-4 py-4 md:px-5">
@@ -130,14 +133,14 @@ export default function TransferCard({ transfer, wallets }: { transfer: Transfer
                   <Label>From Wallet</Label>
                   <Select name="fromWalletId" value={fromWalletId} onValueChange={(value) => setFromWalletId(value ?? "")}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Select source wallet" /></SelectTrigger>
-                    <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
+                    <SelectContent>{manualWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-1.5">
                   <Label>To Wallet</Label>
                   <Select name="toWalletId" value={toWalletId} onValueChange={(value) => setToWalletId(value ?? "")}>
                     <SelectTrigger className="w-full"><SelectValue placeholder="Select destination wallet" /></SelectTrigger>
-                    <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
+                    <SelectContent>{destinationWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
