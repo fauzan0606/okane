@@ -21,6 +21,10 @@ function getErrorMessage(error: unknown) {
 export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState(false);
+  const [sourceWalletId, setSourceWalletId] = useState("");
+
+  const sourceWallet = wallets.find((wallet) => wallet.id === sourceWalletId);
+  const destinationWallets = wallets.filter((wallet) => wallet.id !== sourceWalletId && (!sourceWallet || wallet.currency.code === sourceWallet.currency.code));
 
   async function submit(formData: FormData) {
     setPending(true);
@@ -28,17 +32,21 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
       await createTransferAction(formData);
       toast.success("Transfer created successfully.");
       setOpen(false);
+      setSourceWalletId("");
     } catch (error) {
       toast.error(getErrorMessage(error));
-      // Keep the dialog open so the user can correct the source wallet,
-      // amount, or fee instead of seeing a runtime error page.
     } finally {
       setPending(false);
     }
   }
 
+  function resetForm(nextOpen: boolean) {
+    setOpen(nextOpen);
+    if (!nextOpen) setSourceWalletId("");
+  }
+
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
+    <Dialog open={open} onOpenChange={resetForm}>
       <DialogTrigger render={<Button type="button" className="gap-2 bg-emerald-500 px-4 text-xs font-bold text-[#06110b] hover:bg-emerald-400" />}>
         <ArrowLeftRight size={15} />
         + Transfer
@@ -60,7 +68,7 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
                 <div className="grid gap-4 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <Label htmlFor="fromWalletId">From Wallet</Label>
-                    <Select name="fromWalletId" required defaultValue="">
+                    <Select name="fromWalletId" required value={sourceWalletId} onValueChange={(value) => setSourceWalletId(value ?? "")}>
                       <SelectTrigger id="fromWalletId" className="w-full"><SelectValue placeholder="Select source wallet">{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select source wallet"}</SelectValue></SelectTrigger>
                       <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code} · {formatMoney(wallet.currentBalance, wallet.currency.symbol)}</SelectItem>)}</SelectContent>
                     </Select>
@@ -68,20 +76,21 @@ export default function TransferForm({ wallets }: { wallets: WalletOption[] }) {
                   <div className="space-y-1.5">
                     <Label htmlFor="toWalletId">To Wallet</Label>
                     <Select name="toWalletId" required defaultValue="">
-                      <SelectTrigger id="toWalletId" className="w-full"><SelectValue placeholder="Select destination wallet">{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select destination wallet"}</SelectValue></SelectTrigger>
-                      <SelectContent>{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
+                      <SelectTrigger id="toWalletId" className="w-full"><SelectValue placeholder={sourceWallet ? "Select destination wallet" : "Select source first"}>{(id: string | null) => wallets.find((wallet) => wallet.id === id)?.name ?? "Select destination wallet"}</SelectValue></SelectTrigger>
+                      <SelectContent>{destinationWallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                 </div>
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-1.5"><Label htmlFor="transferDate">Date</Label><Input id="transferDate" name="transferDate" type="date" defaultValue={new Date().toISOString().slice(0, 10)} required /></div>
                   <div className="space-y-1.5"><Label htmlFor="amount">Amount</Label><Input id="amount" name="amount" type="number" min="0.01" step="0.01" placeholder="0" required /></div>
                   <div className="space-y-1.5"><Label htmlFor="feeAmount">Transfer Fee <span className="text-muted-foreground">(optional)</span></Label><Input id="feeAmount" name="feeAmount" type="number" min="0" step="0.01" placeholder="0" /></div>
                 </div>
-                <input type="hidden" name="transferDate" value={new Date().toISOString().slice(0, 10)} />
+                {sourceWallet && <p className="text-[11px] text-slate-500">Available source balance: <span className="font-semibold text-slate-300">{formatMoney(sourceWallet.currentBalance, sourceWallet.currency.symbol)}</span>. Transfer amount plus fee cannot exceed this balance.</p>}
               </div>
               <DialogFooter className="border-t border-[#30465D] bg-[#0E1925] p-4 sm:p-5">
-                <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={pending}>Cancel</Button>
-                <Button type="submit" disabled={pending} className="bg-emerald-500 text-[#06110b] hover:bg-emerald-400"><ArrowRight size={16} />{pending ? "Transferring..." : "Transfer"}</Button>
+                <Button type="button" variant="outline" onClick={() => resetForm(false)} disabled={pending}>Cancel</Button>
+                <Button type="submit" disabled={pending || !sourceWalletId || destinationWallets.length === 0} className="bg-emerald-500 text-[#06110b] hover:bg-emerald-400"><ArrowRight size={16} />{pending ? "Transferring..." : "Transfer"}</Button>
               </DialogFooter>
             </form>
           )}
