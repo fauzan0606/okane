@@ -10,11 +10,10 @@ permissions:
 
 jobs:
   apply-fix:
-    if: ${{ !contains(github.event.head_commit.message, 'fix(splitbill): pro-rata unit editing and included charges') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout branch
-        uses: actions/checkout@v7
+        uses: actions/checkout@v4
 
       - name: Apply Split Bill fixes
         run: |
