@@ -1,0 +1,81 @@
+name: OKANE Split Bill Fix Once
+
+on:
+  push:
+    branches:
+      - feat/phase-1-transfer-v2
+
+permissions:
+  contents: write
+
+jobs:
+  apply-fix:
+    if: ${{ !contains(github.event.head_commit.message, 'fix(splitbill): pro-rata unit editing and included charges') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v7
+
+      - name: Apply Split Bill fixes
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('modules/split-bill/components/SplitBillForm.tsx')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  '''function chargeAmount(charge: Charge, subtotal: number) {\n  const value = Number(charge.value) || 0;\n  if (value <= 0 || charge.treatment === "INCLUDED") return 0;\n  return charge.mode === "PERCENT" ? subtotal * value / 100 : value;\n}''',
+                  '''function chargeAmount(charge: Charge, subtotal: number) {\n  const value = Number(charge.value) || 0;\n  if (value <= 0) return 0;\n  if (charge.treatment === "INCLUDED") {\n    return charge.mode === "PERCENT" ? subtotal * value / (100 + value) : value;\n  }\n  return charge.mode === "PERCENT" ? subtotal * value / 100 : value;\n}'''
+              ),
+              (
+                  '''const currentlySelected = Number(item.units[participantIndex]) > 0;\n      const units = item.units.map((unit, pIndex) => pIndex === participantIndex ? (currentlySelected ? "" : "1") : unit);\n      const selectedCount = units.filter((unit) => Number(unit) > 0).length;''',
+                  '''const currentlySelected = item.units[participantIndex] !== "";\n      const units = item.units.map((unit, pIndex) => pIndex === participantIndex ? (currentlySelected ? "" : "1") : unit);\n      const selectedCount = units.filter((unit) => unit !== "").length;'''
+              ),
+              (
+                  '''function updateUnit(itemIndex: number, participantIndex: number, value: string) { setItems((current) => current.map((item, index) => index === itemIndex ? { ...item, units: item.units.map((unit, pIndex) => pIndex === participantIndex ? value : unit) } : item)); }''',
+                  '''function updateUnit(itemIndex: number, participantIndex: number, value: string) { setItems((current) => current.map((item, index) => index === itemIndex ? { ...item, units: item.units.map((unit, pIndex) => pIndex === participantIndex ? (value === "" ? "0" : value) : unit) } : item)); }'''
+              ),
+              (
+                  '''{items.map((item, itemIndex) => { const selectedCount = item.units.filter((unit) => Number(unit) > 0).length; return <div key={itemIndex}''',
+                  '''{items.map((item, itemIndex) => { const selectedCount = item.units.filter((unit) => unit !== "").length; return <div key={itemIndex}'''
+              ),
+              (
+                  '''{participants.map((participant, participantIndex) => { const selected = Number(item.units[participantIndex]) > 0; return <button''',
+                  '''{participants.map((participant, participantIndex) => { const selected = item.units[participantIndex] !== ""; return <button'''
+              ),
+              (
+                  '''{participants.map((participant, participantIndex) => { const selected = Number(item.units[participantIndex]) > 0; return selected ? <label''',
+                  '''{participants.map((participant, participantIndex) => { const selected = item.units[participantIndex] !== ""; return selected ? <label'''
+              ),
+              (
+                  '''    tax: tax.value ? { mode: tax.mode, value: Number(tax.value), treatment: tax.treatment } : undefined,\n    serviceFee: serviceFee.value ? { mode: serviceFee.mode, value: Number(serviceFee.value), treatment: serviceFee.treatment } : undefined,''',
+                  '''    tax: tax.value ? (tax.treatment === "INCLUDED" ? { mode: "AMOUNT", value: tax.mode === "PERCENT" ? roundedMoney(Number(tax.value) * discountedSubtotal / (100 + Number(tax.value))) : Number(tax.value), treatment: "EXCLUDED" } : { mode: tax.mode, value: Number(tax.value), treatment: tax.treatment }) : undefined,\n    serviceFee: serviceFee.value ? (serviceFee.treatment === "INCLUDED" ? { mode: "AMOUNT", value: serviceFee.mode === "PERCENT" ? roundedMoney(Number(serviceFee.value) * discountedSubtotal / (100 + Number(serviceFee.value))) : Number(serviceFee.value), treatment: "EXCLUDED" } : { mode: serviceFee.mode, value: Number(serviceFee.value), treatment: serviceFee.treatment }) : undefined,'''
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected exactly one occurrence, found {count}: {old[:100]!r}')
+              text = text.replace(old, new)
+
+          path.write_text(text)
+          print('Split Bill fixes applied.')
+          PY
+
+      - name: Verify changes
+        run: |
+          grep -n '100 + value' modules/split-bill/components/SplitBillForm.tsx
+          grep -n 'value === "" ? "0"' modules/split-bill/components/SplitBillForm.tsx
+          grep -n 'treatment === "INCLUDED" ? { mode: "AMOUNT"' modules/split-bill/components/SplitBillForm.tsx
+
+      - name: Commit fixes and remove one-time workflow
+        run: |
+          rm .github/workflows/okane-splitbill-fix-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix(splitbill): pro-rata unit editing and included charges"
+          git push
