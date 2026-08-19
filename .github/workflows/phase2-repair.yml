@@ -29,9 +29,10 @@ jobs:
           s = p.read_text()
           old = '  investmentAssets InvestmentAsset[]\n  investmentTransactions InvestmentTransaction[]\n}'
           new = '  investmentAssets InvestmentAsset[]\n  investmentTransactions InvestmentTransaction[]\n  investmentAccounts InvestmentAccount[]\n}'
-          if old not in s:
+          if old in s:
+              p.write_text(s.replace(old, new, 1))
+          elif '  investmentAccounts InvestmentAccount[]' not in s:
               raise SystemExit('Expected Currency relation block not found')
-          p.write_text(s.replace(old, new, 1))
           PY
 
       - name: Repair ESLint dependency and lockfile
