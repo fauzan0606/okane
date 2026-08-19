@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType } from "@prisma/client";
+import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { refreshIndoPremierFeeRules } from "@/modules/investment/fee-rules";
 import { addDefaultFeeRules, calculateBreakEvenPrice, calculateInvestmentCosts, createCashDeposit, createCashWithdrawal, createInvestmentAccount, createInvestmentAsset, createInvestmentProvider, createInvestmentTransaction, getInvestmentOverview, recordInvestmentIncome, updateHoldingPrice } from "@/modules/investment/service";
@@ -7,8 +7,16 @@ import { addDefaultFeeRules, calculateBreakEvenPrice, calculateInvestmentCosts, 
 function serialize<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 
 export async function GET() {
-  try { return NextResponse.json(serialize(await getInvestmentOverview())); }
-  catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load investments." }, { status: 500 }); }
+  try {
+    const overview = await getInvestmentOverview();
+    const byCurrency = new Map<string, { value: Prisma.Decimal; cost: Prisma.Decimal; cash: Prisma.Decimal }>();
+    for (const h of overview.holdings) { const code = h.asset.currency.code; const row = byCurrency.get(code) ?? { value: new Prisma.Decimal(0), cost: new Prisma.Decimal(0), cash: new Prisma.Decimal(0) }; row.value = row.value.plus(h.marketValue); row.cost = row.cost.plus(h.costBasis); byCurrency.set(code, row); }
+    for (const c of overview.cashAccounts) { const code = c.account.currency.code; const row = byCurrency.get(code) ?? { value: new Prisma.Decimal(0), cost: new Prisma.Decimal(0), cash: new Prisma.Decimal(0) }; row.cash = row.cash.plus(c.balance); byCurrency.set(code, row); }
+    const currencyRows = [...byCurrency.entries()].map(([code, row]) => ({ code, invested: row.value, costBasis: row.cost, cash: row.cash, total: row.value.plus(row.cash), unrealized: row.value.minus(row.cost) }));
+    const primary = currencyRows.find(r => r.code === "IDR") ?? currencyRows[0] ?? { code: "IDR", invested: new Prisma.Decimal(0), costBasis: new Prisma.Decimal(0), cash: new Prisma.Decimal(0), total: new Prisma.Decimal(0), unrealized: new Prisma.Decimal(0) };
+    const safeSummary = { totalValue: primary.invested, totalCost: primary.costBasis, totalCash: primary.cash, totalInvestmentValue: primary.total, unrealized: primary.unrealized, returnPct: primary.costBasis.isZero() ? new Prisma.Decimal(0) : primary.unrealized.div(primary.costBasis).mul(100), primaryCurrency: primary.code, byCurrency: currencyRows };
+    return NextResponse.json(serialize({ ...overview, summary: safeSummary }));
+  } catch (error) { return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load investments." }, { status: 500 }); }
 }
 
 export async function POST(request: Request) {
