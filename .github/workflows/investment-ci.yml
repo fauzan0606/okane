@@ -1,0 +1,25 @@
+name: Investment Phase 2 CI
+
+on:
+  push:
+    branches: [feat/phase-2-investments]
+  pull_request:
+    branches: [feat/phase-2-investments]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: file:./ci.db
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npx prisma validate
+      - run: npx prisma generate
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run build
