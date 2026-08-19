@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { refreshIndoPremierFeeRules } from "@/modules/investment/fee-rules";
 import { addDefaultFeeRules, calculateBreakEvenPrice, calculateInvestmentCosts, createCashDeposit, createCashWithdrawal, createInvestmentAccount, createInvestmentAsset, createInvestmentProvider, createInvestmentTransaction, getInvestmentOverview, recordInvestmentIncome, updateHoldingPrice } from "@/modules/investment/service";
 
 function serialize<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
@@ -15,6 +16,7 @@ export async function POST(request: Request) {
     const body = await request.json();
     const action = String(body.action || "");
     if (action === "provider.create") { const provider = await createInvestmentProvider(body); await addDefaultFeeRules(provider.id); return NextResponse.json(serialize(provider)); }
+    if (action === "fee.refresh") return NextResponse.json(serialize(await refreshIndoPremierFeeRules(body.providerId, new Date(body.effectiveFrom || Date.now()))));
     if (action === "account.create") return NextResponse.json(serialize(await createInvestmentAccount({ ...body, accountType: body.accountType as InvestmentAccountType })));
     if (action === "asset.create") return NextResponse.json(serialize(await createInvestmentAsset({ ...body, assetType: body.assetType as InvestmentAssetType })));
     if (action === "cash.deposit") return NextResponse.json(serialize(await createCashDeposit({ cashAccountId: body.cashAccountId, amount: Number(body.amount), date: new Date(body.date), sourceWalletId: body.sourceWalletId || undefined, note: body.note })));
