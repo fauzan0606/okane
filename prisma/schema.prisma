@@ -18,6 +18,9 @@ model Currency {
   wallets Wallet[]
   receivables Receivable[]
   budgets Budget[]
+  investmentCashAccounts InvestmentCashAccount[]
+  investmentAssets InvestmentAsset[]
+  investmentTransactions InvestmentTransaction[]
 }
 
 model Wallet {
@@ -43,6 +46,8 @@ model Wallet {
   transfersFrom Transfer[] @relation("TransferFromWallet")
   transfersTo Transfer[] @relation("TransferToWallet")
   reconciliations ReconciliationSession[]
+  investmentCashMovements InvestmentCashMovement[]
+  investmentTransactionsAsFunding InvestmentTransaction[] @relation("InvestmentFundingWallet")
   @@index([currencyId])
 }
 
@@ -366,6 +371,154 @@ model ReconciliationRow {
   @@index([transactionDate, amount])
 }
 
+model InvestmentProvider {
+  id String @id @default(uuid())
+  name String
+  countryCode String
+  websiteUrl String?
+  note String?
+  isActive Boolean @default(true)
+  accounts InvestmentAccount[]
+  feeRules InvestmentFeeRule[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([name, countryCode])
+}
+
+model InvestmentAccount {
+  id String @id @default(uuid())
+  providerId String
+  name String
+  accountType InvestmentAccountType
+  currencyId String
+  accountNumberMasked String?
+  note String?
+  isActive Boolean @default(true)
+  provider InvestmentProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  currency Currency @relation(fields: [currencyId], references: [id])
+  cashAccount InvestmentCashAccount?
+  holdings InvestmentHolding[]
+  transactions InvestmentTransaction[]
+  @@index([providerId, isActive])
+}
+
+model InvestmentCashAccount {
+  id String @id @default(uuid())
+  accountId String @unique
+  balance Decimal @default(0)
+  account InvestmentAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  movements InvestmentCashMovement[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model InvestmentCashMovement {
+  id String @id @default(uuid())
+  cashAccountId String
+  movementType InvestmentCashMovementType
+  amount Decimal
+  movementDate DateTime
+  sourceWalletId String?
+  investmentTransactionId String?
+  note String?
+  cashAccount InvestmentCashAccount @relation(fields: [cashAccountId], references: [id], onDelete: Cascade)
+  sourceWallet Wallet? @relation(fields: [sourceWalletId], references: [id], onDelete: SetNull)
+  investmentTransaction InvestmentTransaction? @relation(fields: [investmentTransactionId], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
+  @@index([cashAccountId, movementDate])
+}
+
+model InvestmentAsset {
+  id String @id @default(uuid())
+  symbol String?
+  name String
+  assetType InvestmentAssetType
+  countryCode String?
+  currencyId String
+  unitName String
+  purity Decimal?
+  note String?
+  isActive Boolean @default(true)
+  currency Currency @relation(fields: [currencyId], references: [id])
+  holdings InvestmentHolding[]
+  transactions InvestmentTransaction[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([symbol])
+  @@index([assetType, countryCode])
+}
+
+model InvestmentHolding {
+  id String @id @default(uuid())
+  accountId String
+  assetId String
+  quantity Decimal @default(0)
+  costBasis Decimal @default(0)
+  currentPrice Decimal?
+  priceAsOf DateTime?
+  account InvestmentAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  asset InvestmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  transactions InvestmentTransaction[]
+  @@unique([accountId, assetId])
+  @@index([assetId])
+}
+
+model InvestmentTransaction {
+  id String @id @default(uuid())
+  accountId String
+  assetId String
+  holdingId String?
+  transactionType InvestmentTransactionType
+  transactionDate DateTime
+  quantity Decimal @default(0)
+  unitPrice Decimal @default(0)
+  grossAmount Decimal @default(0)
+  feeAmount Decimal @default(0)
+  taxAmount Decimal @default(0)
+  otherCharges Decimal @default(0)
+  totalCashAmount Decimal @default(0)
+  netCashAmount Decimal @default(0)
+  costBasisAmount Decimal @default(0)
+  realizedGainLoss Decimal?
+  fundingCashAccountId String?
+  fundingWalletId String?
+  currencyId String
+  note String?
+  feeRuleSnapshot String?
+  status String @default("ACTUAL")
+  account InvestmentAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  asset InvestmentAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+  holding InvestmentHolding? @relation(fields: [holdingId], references: [id], onDelete: SetNull)
+  currency Currency @relation(fields: [currencyId], references: [id])
+  fundingWallet Wallet? @relation("InvestmentFundingWallet", fields: [fundingWalletId], references: [id], onDelete: SetNull)
+  fundingCashAccount InvestmentCashAccount? @relation(fields: [fundingCashAccountId], references: [id], onDelete: SetNull)
+  cashMovements InvestmentCashMovement[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([accountId, transactionDate])
+  @@index([assetId, transactionDate])
+  @@index([transactionType, transactionDate])
+}
+
+model InvestmentFeeRule {
+  id String @id @default(uuid())
+  providerId String
+  assetType InvestmentAssetType
+  transactionType InvestmentTransactionType
+  feeRate Decimal @default(0)
+  taxRate Decimal @default(0)
+  fixedFee Decimal @default(0)
+  effectiveFrom DateTime
+  effectiveTo DateTime?
+  sourceUrl String?
+  sourceLabel String?
+  note String?
+  provider InvestmentProvider @relation(fields: [providerId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([providerId, assetType, transactionType, effectiveFrom])
+}
+
 enum ReconciliationSourceType {
   BANK_STATEMENT
   CREDIT_CARD_STATEMENT
@@ -465,4 +618,42 @@ enum CreditCardStatementStatus {
   PARTIALLY_PAID
   PAID
   OVERDUE
+}
+
+enum InvestmentAccountType {
+  CASH
+  PORTFOLIO
+  COMBINED
+}
+
+enum InvestmentAssetType {
+  STOCK
+  MUTUAL_FUND
+  ETF
+  BOND
+  GOLD
+  OTHER
+}
+
+enum InvestmentTransactionType {
+  BUY
+  SELL
+  DIVIDEND
+  INTEREST
+  COUPON
+  FEE
+  TAX
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+  SPLIT
+  BONUS
+}
+
+enum InvestmentCashMovementType {
+  DEPOSIT
+  WITHDRAWAL
+  BUY_SETTLEMENT
+  SELL_SETTLEMENT
+  ADJUSTMENT
 }
