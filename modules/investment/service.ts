@@ -1,0 +1,221 @@
+import { InvestmentAccountType, InvestmentAssetType, InvestmentCashMovementType, InvestmentTransactionType, Prisma } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
+
+const D = Prisma.Decimal;
+
+function roundMoney(value: Prisma.Decimal) {
+  return value.toDecimalPlaces(2);
+}
+
+function positive(value: number, label: string) {
+  if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} must be greater than zero.`);
+  return new D(value);
+}
+
+function nonNegative(value: number | undefined, label: string) {
+  const n = value ?? 0;
+  if (!Number.isFinite(n) || n < 0) throw new Error(`${label} cannot be negative.`);
+  return new D(n);
+}
+
+async function findFunding(tx: Prisma.TransactionClient, input: { accountId: string; fundingCashAccountId?: string; fundingWalletId?: string }) {
+  if (input.fundingCashAccountId) {
+    const cash = await tx.investmentCashAccount.findUnique({ where: { id: input.fundingCashAccountId }, include: { account: true } });
+    if (!cash || cash.accountId !== input.accountId) throw new Error("Funding cash account does not belong to the selected investment account.");
+    return { kind: "CASH" as const, cash };
+  }
+  if (input.fundingWalletId) {
+    const wallet = await tx.wallet.findUnique({ where: { id: input.fundingWalletId }, include: { currency: true } });
+    if (!wallet) throw new Error("Funding wallet not found.");
+    return { kind: "WALLET" as const, wallet };
+  }
+  throw new Error("Select a funding wallet or investment cash account.");
+}
+
+async function applyFundingDebit(tx: Prisma.TransactionClient, funding: Awaited<ReturnType<typeof findFunding>>, amount: Prisma.Decimal) {
+  if (funding.kind === "CASH") {
+    if (funding.cash.balance.lt(amount)) throw new Error(`Insufficient balance in ${funding.cash.account.name}.`);
+    await tx.investmentCashAccount.update({ where: { id: funding.cash.id }, data: { balance: { decrement: amount } } });
+  } else {
+    if (funding.wallet.currentBalance.lt(amount)) throw new Error(`Insufficient balance in ${funding.wallet.name}.`);
+    await tx.wallet.update({ where: { id: funding.wallet.id }, data: { currentBalance: { decrement: amount } } });
+  }
+}
+
+async function applyFundingCredit(tx: Prisma.TransactionClient, funding: Awaited<ReturnType<typeof findFunding>>, amount: Prisma.Decimal) {
+  if (funding.kind === "CASH") {
+    await tx.investmentCashAccount.update({ where: { id: funding.cash.id }, data: { balance: { increment: amount } } });
+  } else {
+    await tx.wallet.update({ where: { id: funding.wallet.id }, data: { currentBalance: { increment: amount } } });
+  }
+}
+
+export async function getInvestmentOverview() {
+  const [providers, accounts, holdings, transactions, cashAccounts] = await Promise.all([
+    prisma.investmentProvider.findMany({ where: { isActive: true }, include: { feeRules: { orderBy: { effectiveFrom: "desc" } } }, orderBy: { name: "asc" } }),
+    prisma.investmentAccount.findMany({ where: { isActive: true }, include: { provider: true, currency: true, cashAccount: true }, orderBy: { name: "asc" } }),
+    prisma.investmentHolding.findMany({ where: { quantity: { gt: 0 } }, include: { asset: { include: { currency: true } }, account: { include: { provider: true, currency: true } } }, orderBy: { costBasis: "desc" } }),
+    prisma.investmentTransaction.findMany({ include: { asset: true, account: { include: { provider: true } } }, orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }], take: 20 }),
+    prisma.investmentCashAccount.findMany({ include: { account: { include: { provider: true, currency: true } } }, orderBy: { balance: "desc" } }),
+  ]);
+
+  const holdingRows = holdings.map((h) => {
+    const marketValue = h.currentPrice ? h.quantity.mul(h.currentPrice) : h.costBasis;
+    const gain = marketValue.minus(h.costBasis);
+    const returnPct = h.costBasis.isZero() ? new D(0) : gain.div(h.costBasis).mul(100);
+    return { ...h, marketValue, gain, returnPct };
+  });
+  const totalValue = holdingRows.reduce((sum, h) => sum.plus(h.marketValue), new D(0));
+  const totalCost = holdingRows.reduce((sum, h) => sum.plus(h.costBasis), new D(0));
+  const totalCash = cashAccounts.reduce((sum, c) => sum.plus(c.balance), new D(0));
+  const unrealized = totalValue.minus(totalCost);
+
+  return {
+    providers,
+    accounts,
+    holdings: holdingRows,
+    cashAccounts,
+    transactions,
+    summary: { totalValue, totalCost, totalCash, totalInvestmentValue: totalValue.plus(totalCash), unrealized, returnPct: totalCost.isZero() ? new D(0) : unrealized.div(totalCost).mul(100) },
+  };
+}
+
+export async function createInvestmentProvider(input: { name: string; countryCode: string; websiteUrl?: string; note?: string }) {
+  if (!input.name.trim()) throw new Error("Provider name is required.");
+  return prisma.investmentProvider.create({ data: { name: input.name.trim(), countryCode: input.countryCode.toUpperCase(), websiteUrl: input.websiteUrl || null, note: input.note || null } });
+}
+
+export async function createInvestmentAccount(input: { providerId: string; name: string; accountType: InvestmentAccountType; currencyId: string; accountNumberMasked?: string; createCashAccount?: boolean }) {
+  return prisma.$transaction(async (tx) => {
+    const account = await tx.investmentAccount.create({ data: { providerId: input.providerId, name: input.name.trim(), accountType: input.accountType, currencyId: input.currencyId, accountNumberMasked: input.accountNumberMasked || null } });
+    if (input.createCashAccount || input.accountType === InvestmentAccountType.CASH) await tx.investmentCashAccount.create({ data: { accountId: account.id } });
+    return account;
+  });
+}
+
+export async function createInvestmentAsset(input: { symbol?: string; name: string; assetType: InvestmentAssetType; countryCode?: string; currencyId: string; unitName: string; purity?: number }) {
+  if (!input.name.trim()) throw new Error("Asset name is required.");
+  return prisma.investmentAsset.create({ data: { symbol: input.symbol?.trim().toUpperCase() || null, name: input.name.trim(), assetType: input.assetType, countryCode: input.countryCode?.toUpperCase() || null, currencyId: input.currencyId, unitName: input.unitName.trim(), purity: input.purity == null ? null : new D(input.purity) } });
+}
+
+export async function createCashDeposit(input: { cashAccountId: string; amount: number; date: Date; sourceWalletId?: string; note?: string }) {
+  const amount = positive(input.amount, "Deposit amount");
+  return prisma.$transaction(async (tx) => {
+    const cash = await tx.investmentCashAccount.findUnique({ where: { id: input.cashAccountId }, include: { account: true } });
+    if (!cash) throw new Error("Investment cash account not found.");
+    if (input.sourceWalletId) {
+      const wallet = await tx.wallet.findUnique({ where: { id: input.sourceWalletId }, include: { currency: true } });
+      if (!wallet || wallet.currencyId !== cash.account.currencyId) throw new Error("Source wallet currency must match the investment cash account.");
+      if (wallet.currentBalance.lt(amount)) throw new Error(`Insufficient balance in ${wallet.name}.`);
+      await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { decrement: amount } } });
+    }
+    await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { increment: amount } } });
+    return tx.investmentCashMovement.create({ data: { cashAccountId: cash.id, movementType: InvestmentCashMovementType.DEPOSIT, amount, movementDate: input.date, sourceWalletId: input.sourceWalletId || null, note: input.note || null } });
+  });
+}
+
+export async function createCashWithdrawal(input: { cashAccountId: string; amount: number; date: Date; destinationWalletId?: string; note?: string }) {
+  const amount = positive(input.amount, "Withdrawal amount");
+  return prisma.$transaction(async (tx) => {
+    const cash = await tx.investmentCashAccount.findUnique({ where: { id: input.cashAccountId }, include: { account: true } });
+    if (!cash || cash.balance.lt(amount)) throw new Error("Insufficient investment cash balance.");
+    if (input.destinationWalletId) {
+      const wallet = await tx.wallet.findUnique({ where: { id: input.destinationWalletId } });
+      if (!wallet || wallet.currencyId !== cash.account.currencyId) throw new Error("Destination wallet currency must match the investment cash account.");
+      await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: amount } } });
+    }
+    await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { decrement: amount } } });
+    return tx.investmentCashMovement.create({ data: { cashAccountId: cash.id, movementType: InvestmentCashMovementType.WITHDRAWAL, amount, movementDate: input.date, sourceWalletId: input.destinationWalletId || null, note: input.note || null } });
+  });
+}
+
+async function getFeeRule(tx: Prisma.TransactionClient, providerId: string, assetType: InvestmentAssetType, transactionType: InvestmentTransactionType, date: Date) {
+  return tx.investmentFeeRule.findFirst({ where: { providerId, assetType, transactionType, effectiveFrom: { lte: date }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: date } }] }, orderBy: { effectiveFrom: "desc" } });
+}
+
+export async function calculateInvestmentCosts(input: { providerId: string; assetType: InvestmentAssetType; transactionType: InvestmentTransactionType; grossAmount: number; date: Date; feeRateOverride?: number; taxRateOverride?: number; fixedFeeOverride?: number }) {
+  const gross = positive(input.grossAmount, "Gross amount");
+  const rule = await prisma.investmentFeeRule.findFirst({ where: { providerId: input.providerId, assetType: input.assetType, transactionType: input.transactionType, effectiveFrom: { lte: input.date }, OR: [{ effectiveTo: null }, { effectiveTo: { gte: input.date } }] }, orderBy: { effectiveFrom: "desc" } });
+  const feeRate = input.feeRateOverride ?? Number(rule?.feeRate ?? 0);
+  const taxRate = input.taxRateOverride ?? Number(rule?.taxRate ?? 0);
+  const fixed = input.fixedFeeOverride ?? Number(rule?.fixedFee ?? 0);
+  const fee = gross.mul(feeRate).div(100).plus(fixed);
+  const tax = gross.mul(taxRate).div(100);
+  return { gross, fee: roundMoney(fee), tax: roundMoney(tax), totalBuy: roundMoney(gross.plus(fee).plus(tax)), netSell: roundMoney(gross.minus(fee).minus(tax)), rule };
+}
+
+export async function createInvestmentTransaction(input: {
+  accountId: string; assetId: string; transactionType: InvestmentTransactionType; transactionDate: Date; quantity: number; unitPrice: number;
+  feeAmount?: number; taxAmount?: number; otherCharges?: number; fundingCashAccountId?: string; fundingWalletId?: string; note?: string;
+}) {
+  const quantity = positive(input.quantity, "Quantity");
+  const unitPrice = positive(input.unitPrice, "Unit price");
+  const fee = nonNegative(input.feeAmount, "Fee");
+  const tax = nonNegative(input.taxAmount, "Tax");
+  const other = nonNegative(input.otherCharges, "Other charges");
+
+  return prisma.$transaction(async (tx) => {
+    const account = await tx.investmentAccount.findUnique({ where: { id: input.accountId }, include: { provider: true, currency: true } });
+    const asset = await tx.investmentAsset.findUnique({ where: { id: input.assetId }, include: { currency: true } });
+    if (!account || !asset) throw new Error("Investment account or asset not found.");
+    if (account.currencyId !== asset.currencyId) throw new Error("Investment account and asset currency must match.");
+    if (![InvestmentTransactionType.BUY, InvestmentTransactionType.SELL, InvestmentTransactionType.DIVIDEND, InvestmentTransactionType.INTEREST, InvestmentTransactionType.COUPON].includes(input.transactionType)) throw new Error("Unsupported investment transaction type.");
+
+    const gross = roundMoney(quantity.mul(unitPrice));
+    const totalCosts = fee.plus(tax).plus(other);
+    const funding = await findFunding(tx, { accountId: input.accountId, fundingCashAccountId: input.fundingCashAccountId, fundingWalletId: input.fundingWalletId });
+    const holding = await tx.investmentHolding.findUnique({ where: { accountId_assetId: { accountId: account.id, assetId: asset.id } } });
+
+    if (input.transactionType === InvestmentTransactionType.BUY) {
+      const totalCash = roundMoney(gross.plus(totalCosts));
+      await applyFundingDebit(tx, funding, totalCash);
+      const current = holding ?? await tx.investmentHolding.create({ data: { accountId: account.id, assetId: asset.id } });
+      const newQty = current.quantity.plus(quantity);
+      const newCost = current.costBasis.plus(totalCash);
+      const updated = await tx.investmentHolding.update({ where: { id: current.id }, data: { quantity: newQty, costBasis: newCost, currentPrice: unitPrice, priceAsOf: input.transactionDate } });
+      const transaction = await tx.investmentTransaction.create({ data: { accountId: account.id, assetId: asset.id, holdingId: updated.id, transactionType: input.transactionType, transactionDate: input.transactionDate, quantity, unitPrice, grossAmount: gross, feeAmount: fee, taxAmount: tax, otherCharges: other, totalCashAmount: totalCash, netCashAmount: totalCash.neg(), costBasisAmount: totalCash, fundingCashAccountId: funding.kind === "CASH" ? funding.cash.id : null, fundingWalletId: funding.kind === "WALLET" ? funding.wallet.id : null, currencyId: account.currencyId, note: input.note || null, feeRuleSnapshot: JSON.stringify({ feeRate: fee.div(gross).mul(100).toString(), taxRate: tax.div(gross).mul(100).toString(), fee: fee.toString(), tax: tax.toString() }) } });
+      await tx.investmentCashMovement.create({ data: { cashAccountId: funding.kind === "CASH" ? funding.cash.id : (await ensureShadowCashAccount(tx, account)).id, movementType: InvestmentCashMovementType.BUY_SETTLEMENT, amount: totalCash, movementDate: input.transactionDate, investmentTransactionId: transaction.id, note: "Investment purchase settlement" } }).catch(() => undefined);
+      return transaction;
+    }
+
+    if (!holding || holding.quantity.lt(quantity)) throw new Error("Insufficient holding quantity.");
+    const proportion = quantity.div(holding.quantity);
+    const soldCost = holding.costBasis.mul(proportion);
+    const net = roundMoney(gross.minus(totalCosts));
+    await applyFundingCredit(tx, funding, net);
+    const newQty = holding.quantity.minus(quantity);
+    const newCost = holding.costBasis.minus(soldCost);
+    const updated = await tx.investmentHolding.update({ where: { id: holding.id }, data: { quantity: newQty, costBasis: newCost, currentPrice: unitPrice, priceAsOf: input.transactionDate } });
+    const transaction = await tx.investmentTransaction.create({ data: { accountId: account.id, assetId: asset.id, holdingId: updated.id, transactionType: input.transactionType, transactionDate: input.transactionDate, quantity, unitPrice, grossAmount: gross, feeAmount: fee, taxAmount: tax, otherCharges: other, totalCashAmount: gross, netCashAmount: net, costBasisAmount: soldCost, realizedGainLoss: net.minus(soldCost), fundingCashAccountId: funding.kind === "CASH" ? funding.cash.id : null, fundingWalletId: funding.kind === "WALLET" ? funding.wallet.id : null, currencyId: account.currencyId, note: input.note || null, feeRuleSnapshot: JSON.stringify({ fee: fee.toString(), tax: tax.toString() }) } });
+    if (funding.kind === "CASH") await tx.investmentCashMovement.create({ data: { cashAccountId: funding.cash.id, movementType: InvestmentCashMovementType.SELL_SETTLEMENT, amount: net, movementDate: input.transactionDate, investmentTransactionId: transaction.id, note: "Investment sale settlement" } });
+    return transaction;
+  });
+}
+
+async function ensureShadowCashAccount(tx: Prisma.TransactionClient, account: { id: string; accountType: InvestmentAccountType; currencyId: string }) {
+  const existing = await tx.investmentCashAccount.findUnique({ where: { accountId: account.id } });
+  if (existing) return existing;
+  return tx.investmentCashAccount.create({ data: { accountId: account.id } });
+}
+
+export async function addDefaultFeeRules(providerId: string, effectiveFrom = new Date()) {
+  return prisma.$transaction(async (tx) => {
+    const existing = await tx.investmentFeeRule.count({ where: { providerId } });
+    if (existing > 0) return { created: 0 };
+    const rules = [
+      { assetType: InvestmentAssetType.STOCK, transactionType: InvestmentTransactionType.BUY, feeRate: 0.19, taxRate: 0, sourceLabel: "IndoPremier published stock fee snapshot" },
+      { assetType: InvestmentAssetType.STOCK, transactionType: InvestmentTransactionType.SELL, feeRate: 0.29, taxRate: 0.1, sourceLabel: "IndoPremier + Indonesian stock sale tax snapshot" },
+    ];
+    for (const r of rules) await tx.investmentFeeRule.create({ data: { providerId, assetType: r.assetType, transactionType: r.transactionType, feeRate: r.feeRate, taxRate: r.taxRate, fixedFee: 0, effectiveFrom, sourceLabel: r.sourceLabel } });
+    return { created: rules.length };
+  });
+}
+
+export function calculateBreakEvenPrice(quantity: number, acquisitionCost: number, sellFeeRatePct: number, sellTaxRatePct: number, sellFixedFee = 0, otherSellCosts = 0) {
+  const q = positive(quantity, "Quantity");
+  const cost = positive(acquisitionCost, "Acquisition cost");
+  const fixed = new D(sellFixedFee).plus(otherSellCosts);
+  const rate = new D(100).minus(new D(sellFeeRatePct)).minus(new D(sellTaxRatePct));
+  if (rate.lte(0)) throw new Error("Selling fee and tax rates leave no positive net proceeds.");
+  return roundMoney(cost.plus(fixed).mul(100).div(q.mul(rate)));
+}
