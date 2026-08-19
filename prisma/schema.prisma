@@ -519,23 +519,141 @@ model InvestmentFeeRule {
   @@index([providerId, assetType, transactionType, effectiveFrom])
 }
 
-enum ReconciliationSourceType { BANK_STATEMENT CREDIT_CARD_STATEMENT }
-enum ReconciliationSessionStatus { REVIEWING COMPLETED CANCELLED }
-enum ReconciliationSourceSide { STATEMENT OKANE }
-enum ReconciliationDirection { DEBIT CREDIT UNKNOWN }
-enum ReconciliationMatchStatus { MATCHED POSSIBLE_MATCH CONFLICT STATEMENT_ONLY OKANE_ONLY }
-enum ReconciliationResolution { PENDING ACCEPT_MATCH ADD_INCOMPLETE IGNORE KEEP DELETE }
-enum InstallmentPlanStatus { ACTIVE COMPLETED CANCELLED }
-enum SplitBillStatus { DRAFT OPEN SETTLED CANCELLED }
-enum SplitBillItemMethod { EQUAL PRO_RATA }
-enum ReceivableStatus { OUTSTANDING PARTIALLY_RECEIVED RECEIVED OVERDUE }
-enum TransactionKind { STANDARD REIMBURSEMENT }
-enum TransferOrigin { MANUAL CREDIT_CARD_PAYMENT }
-enum WalletType { CASH BANK_ACCOUNT CREDIT_CARD DEBIT_CARD E_WALLET FOREIGN_CASH INVESTMENT }
-enum CategoryType { INCOME EXPENSE }
-enum TransactionType { INCOME EXPENSE }
-enum CreditCardStatementStatus { UNPAID PARTIALLY_PAID PAID OVERDUE }
-enum InvestmentAccountType { CASH PORTFOLIO COMBINED }
-enum InvestmentAssetType { STOCK MUTUAL_FUND ETF BOND GOLD OTHER }
-enum InvestmentTransactionType { BUY SELL DIVIDEND INTEREST COUPON FEE TAX TRANSFER_IN TRANSFER_OUT ADJUSTMENT SPLIT BONUS }
-enum InvestmentCashMovementType { DEPOSIT WITHDRAWAL BUY_SETTLEMENT SELL_SETTLEMENT ADJUSTMENT }
+enum ReconciliationSourceType {
+  BANK_STATEMENT
+  CREDIT_CARD_STATEMENT
+}
+
+enum ReconciliationSessionStatus {
+  REVIEWING
+  COMPLETED
+  CANCELLED
+}
+
+enum ReconciliationSourceSide {
+  STATEMENT
+  OKANE
+}
+
+enum ReconciliationDirection {
+  DEBIT
+  CREDIT
+  UNKNOWN
+}
+
+enum ReconciliationMatchStatus {
+  MATCHED
+  POSSIBLE_MATCH
+  CONFLICT
+  STATEMENT_ONLY
+  OKANE_ONLY
+}
+
+enum ReconciliationResolution {
+  PENDING
+  ACCEPT_MATCH
+  ADD_INCOMPLETE
+  IGNORE
+  KEEP
+  DELETE
+}
+
+enum InstallmentPlanStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum SplitBillStatus {
+  DRAFT
+  OPEN
+  SETTLED
+  CANCELLED
+}
+
+enum SplitBillItemMethod {
+  EQUAL
+  PRO_RATA
+}
+
+enum ReceivableStatus {
+  OUTSTANDING
+  PARTIALLY_RECEIVED
+  RECEIVED
+  OVERDUE
+}
+
+enum TransactionKind {
+  STANDARD
+  REIMBURSEMENT
+}
+
+enum TransferOrigin {
+  MANUAL
+  CREDIT_CARD_PAYMENT
+}
+
+enum WalletType {
+  CASH
+  BANK_ACCOUNT
+  CREDIT_CARD
+  DEBIT_CARD
+  E_WALLET
+  FOREIGN_CASH
+  INVESTMENT
+}
+
+enum CategoryType {
+  INCOME
+  EXPENSE
+}
+
+enum TransactionType {
+  INCOME
+  EXPENSE
+}
+
+enum CreditCardStatementStatus {
+  UNPAID
+  PARTIALLY_PAID
+  PAID
+  OVERDUE
+}
+
+enum InvestmentAccountType {
+  CASH
+  PORTFOLIO
+  COMBINED
+}
+
+enum InvestmentAssetType {
+  STOCK
+  MUTUAL_FUND
+  ETF
+  BOND
+  GOLD
+  OTHER
+}
+
+enum InvestmentTransactionType {
+  BUY
+  SELL
+  DIVIDEND
+  INTEREST
+  COUPON
+  FEE
+  TAX
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+  SPLIT
+  BONUS
+}
+
+enum InvestmentCashMovementType {
+  DEPOSIT
+  WITHDRAWAL
+  BUY_SETTLEMENT
+  SELL_SETTLEMENT
+  ADJUSTMENT
+}
