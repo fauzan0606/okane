@@ -5,6 +5,7 @@ on:
     branches: [feat/phase-2-investments]
   pull_request:
     branches: [feat/phase-1-transfer-v2]
+  workflow_dispatch:
 
 jobs:
   validate:
