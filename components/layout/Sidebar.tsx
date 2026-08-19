@@ -4,7 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { LucideIcon } from "lucide-react";
-import { ArrowLeftRight, BarChart3, CreditCard, FileSearch, HandCoins, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, Settings, Tags, Target, Wallet } from "lucide-react";
+import { ArrowLeftRight, BarChart3, BriefcaseBusiness, CreditCard, FileSearch, HandCoins, LayoutDashboard, Landmark, PiggyBank, Receipt, ReceiptText, Settings, Tags, Target, Wallet } from "lucide-react";
 
 type MenuItem = { icon: LucideIcon; label: string; href: string };
 type MenuGroup = { title: string; items: MenuItem[] };
@@ -21,7 +21,7 @@ const menus: MenuGroup[] = [
     { icon: ArrowLeftRight, label: "Transfer", href: "/transfer" },
   ] },
   { title: "Planning", items: [{ icon: PiggyBank, label: "Budget", href: "/budget" }, { icon: Target, label: "Goals", href: "/goals" }] },
-  { title: "Wealth & Insight", items: [{ icon: Landmark, label: "Assets", href: "/assets" }, { icon: BarChart3, label: "Analytics", href: "/analytics" }] },
+  { title: "Wealth & Insight", items: [{ icon: BriefcaseBusiness, label: "Investments", href: "/investments" }, { icon: Landmark, label: "Assets", href: "/assets" }, { icon: BarChart3, label: "Analytics", href: "/analytics" }] },
 ];
 
 export default function Sidebar() {
