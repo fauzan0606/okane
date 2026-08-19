@@ -20,6 +20,7 @@ model Currency {
   budgets Budget[]
   investmentAssets InvestmentAsset[]
   investmentTransactions InvestmentTransaction[]
+  investmentAccounts InvestmentAccount[]
 }
 
 model Wallet {
