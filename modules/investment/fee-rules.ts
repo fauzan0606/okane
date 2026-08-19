@@ -11,7 +11,10 @@ export async function refreshIndoPremierFeeRules(providerId: string, effectiveFr
   if (!provider) throw new Error("Provider not found.");
   if (!provider.name.toLowerCase().includes("indopremier")) throw new Error("Online refresh is currently supported for IndoPremier only.");
 
-  const [brokerResponse, taxResponse] = await Promise.all([fetch(SOURCES.indoPremierFees, { cache: "no-store" }), fetch(SOURCES.stockSaleTax, { cache: "no-store" })]);
+  const [brokerResponse, taxResponse] = await Promise.all([
+    fetch(SOURCES.indoPremierFees, { cache: "no-store" }),
+    fetch(SOURCES.stockSaleTax, { cache: "no-store" }),
+  ]);
   if (!brokerResponse.ok || !taxResponse.ok) throw new Error("Official fee/tax source could not be reached.");
   const brokerText = await brokerResponse.text();
   const taxText = await taxResponse.text();
@@ -29,8 +32,8 @@ export async function refreshIndoPremierFeeRules(providerId: string, effectiveFr
     for (const rule of latest) await tx.investmentFeeRule.update({ where: { id: rule.id }, data: { effectiveTo: new Date(effectiveFrom.getTime() - 1) } });
     await tx.investmentFeeRule.createMany({ data: [
       { providerId, assetType: InvestmentAssetType.STOCK, transactionType: InvestmentTransactionType.BUY, feeRate: buyFee, taxRate: 0, fixedFee: 0, effectiveFrom, sourceUrl: SOURCES.indoPremierFees, sourceLabel: `Online refresh ${effectiveFrom.toISOString().slice(0, 10)}` },
-      { providerId, assetType: InvestmentAssetType.STOCK, transactionType: InvestmentTransactionType.SELL, feeRate: sellFee, taxRate: sellTax, fixedFee: 0, effectiveFrom, sourceUrl: SOURCES.indoPremierFees, sourceLabel: `Online refresh ${effectiveFrom.toISOString().slice(0, 10)} + DJP`, note: taxSource: SOURCES.stockSaleTax },
-    ] as any);
+      { providerId, assetType: InvestmentAssetType.STOCK, transactionType: InvestmentTransactionType.SELL, feeRate: sellFee, taxRate: sellTax, fixedFee: 0, effectiveFrom, sourceUrl: SOURCES.indoPremierFees, sourceLabel: `Online refresh ${effectiveFrom.toISOString().slice(0, 10)} + DJP`, note: SOURCES.stockSaleTax },
+    ] });
     return { buyFee, sellFee, sellTax, sources: SOURCES };
   });
 }
