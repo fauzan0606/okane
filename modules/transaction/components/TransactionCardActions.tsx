@@ -3,7 +3,6 @@
 import { useState, useTransition } from "react";
 import { Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
-import type { Category, Payee, Subcategory } from "@prisma/client";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import type { TransactionWithRelations } from "../repository";
@@ -11,7 +10,10 @@ import { deleteTransactionAction } from "../actions";
 import TransactionForm from "./TransactionForm";
 
 type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
-type Props = { transaction: TransactionWithRelations; wallets: WalletOption[]; categories: Category[]; subcategories: Subcategory[]; payees: Payee[]; reviewMode?: boolean; sameMerchantCount?: number };
+type CategoryOption = { id: string; name: string; type: "INCOME" | "EXPENSE"; icon: string | null; color: string | null };
+type SubcategoryOption = { id: string; categoryId: string; name: string; isActive?: boolean; sortOrder?: number };
+type PayeeOption = { id: string; name: string; note: string | null };
+type Props = { transaction: TransactionWithRelations; wallets: WalletOption[]; categories: CategoryOption[]; subcategories: SubcategoryOption[]; payees: PayeeOption[]; reviewMode?: boolean; sameMerchantCount?: number };
 
 export default function TransactionCardActions({ transaction, wallets, categories, subcategories, payees, reviewMode = false, sameMerchantCount = 0 }: Props) {
   const [deleteOpen, setDeleteOpen] = useState(false);

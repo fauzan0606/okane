@@ -1,5 +1,4 @@
 import type { TransactionWithRelations } from "../repository";
-import type { Category, Payee, Subcategory } from "@prisma/client";
 import { formatTransactionType } from "../constants";
 import { getInstallmentNumber } from "../installment";
 import TransactionCardActions from "./TransactionCardActions";
@@ -23,7 +22,10 @@ type ClientTransaction = Omit<TransactionWithRelations, "installmentPlan" | "spl
     status: "DRAFT" | "OPEN" | "SETTLED" | "CANCELLED";
   } | null;
 };
-type TransactionCardProps = { transaction: TransactionWithRelations; wallets: WalletOption[]; categories: Category[]; subcategories: Subcategory[]; payees: Payee[]; reviewMode?: boolean; sameMerchantCount?: number };
+type CategoryOption = { id: string; name: string; type: "INCOME" | "EXPENSE"; icon: string | null; color: string | null };
+type SubcategoryOption = { id: string; categoryId: string; name: string; isActive?: boolean; sortOrder?: number };
+type PayeeOption = { id: string; name: string; note: string | null };
+type TransactionCardProps = { transaction: TransactionWithRelations; wallets: WalletOption[]; categories: CategoryOption[]; subcategories: SubcategoryOption[]; payees: PayeeOption[]; reviewMode?: boolean; sameMerchantCount?: number };
 
 export default function TransactionCard({ transaction, wallets, categories, subcategories, payees, reviewMode = false, sameMerchantCount = 0 }: TransactionCardProps) {
   const splitBill = transaction.splitBill;

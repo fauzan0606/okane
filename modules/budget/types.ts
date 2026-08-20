@@ -5,6 +5,7 @@ export type BudgetItemView = {
   subcategoryId: string | null;
   subcategoryName: string | null;
   amount: number;
+  budgetAmount: number;
   actualAmount: number;
   remainingAmount: number;
   percentage: number;
