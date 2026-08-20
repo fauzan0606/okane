@@ -51,7 +51,9 @@ export async function POST(request: Request) {
     }
 
     if (action === "transaction.create") {
-      return NextResponse.json(serialize(await createInvestmentTransactionV3({ ...body, transactionType: String(body.transactionType) as "BUY" | "SELL", transactionDate: new Date(body.transactionDate), quantity: Number(body.quantity), unitPrice: Number(body.unitPrice), feeAmount: Number(body.feeAmount || 0), taxAmount: Number(body.taxAmount || 0), otherCharges: Number(body.otherCharges || 0), sourceLotId: body.sourceLotId ? String(body.sourceLotId) : undefined })));
+      const account = await prisma.investmentAccount.findUnique({ where: { id: String(body.accountId) }, include: { cashAccount: true } });
+      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 400 });
+      return NextResponse.json(serialize(await createInvestmentTransactionV3({ ...body, transactionType: String(body.transactionType) as "BUY" | "SELL", transactionDate: new Date(body.transactionDate), quantity: Number(body.quantity), unitPrice: Number(body.unitPrice), feeAmount: Number(body.feeAmount || 0), taxAmount: Number(body.taxAmount || 0), otherCharges: Number(body.otherCharges || 0), fundingCashAccountId: body.fundingCashAccountId || account.cashAccount?.id, sourceLotId: body.sourceLotId ? String(body.sourceLotId) : undefined })));
     }
 
     if (action === "cash.setBalance") return NextResponse.json(serialize(await setInvestmentCashBalance({ cashAccountId: String(body.cashAccountId), balance: Number(body.balance), date: new Date(body.date), note: body.note ? String(body.note) : undefined })));
