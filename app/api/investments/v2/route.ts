@@ -39,8 +39,11 @@ export async function POST(request: Request) {
       await addDefaultFeeRules(provider.id);
       const rdnBankName = String(body.rdnBankName || "").trim();
       const rdnAccountNumber = String(body.rdnAccountNumber || "").trim();
+      const buyFeePct = Number(body.buyFeePct || 0);
+      const sellFeePct = Number(body.sellFeePct || 0);
+      if (!Number.isFinite(buyFeePct) || buyFeePct < 0 || !Number.isFinite(sellFeePct) || sellFeePct < 0) return NextResponse.json({ error: "Trading fees cannot be negative." }, { status: 400 });
       const accountName = `${provider.name}${rdnBankName ? ` · RDN ${rdnBankName}` : ""}`;
-      const account = await prisma.investmentAccount.create({ data: { providerId: provider.id, name: accountName, accountType: InvestmentAccountType.PORTFOLIO, currencyId: String(body.currencyId), accountNumberMasked: rdnAccountNumber || null, note: JSON.stringify({ rdnBankName, rdnAccountNumber }) } });
+      const account = await prisma.investmentAccount.create({ data: { providerId: provider.id, name: accountName, accountType: InvestmentAccountType.PORTFOLIO, currencyId: String(body.currencyId), accountNumberMasked: rdnAccountNumber || null, note: JSON.stringify({ rdnBankName, rdnAccountNumber, buyFeePct, sellFeePct }) } });
       const cashAccount = await prisma.investmentCashAccount.create({ data: { accountId: account.id } });
       return NextResponse.json(serialize({ account, cashAccount }));
     }
@@ -55,9 +58,12 @@ export async function POST(request: Request) {
       if (!providerName) return NextResponse.json({ error: "Provider name is required." }, { status: 400 });
       const rdnBankName = String(body.rdnBankName || "").trim();
       const rdnAccountNumber = String(body.rdnAccountNumber || "").trim();
+      const buyFeePct = Number(body.buyFeePct || 0);
+      const sellFeePct = Number(body.sellFeePct || 0);
+      if (!Number.isFinite(buyFeePct) || buyFeePct < 0 || !Number.isFinite(sellFeePct) || sellFeePct < 0) return NextResponse.json({ error: "Trading fees cannot be negative." }, { status: 400 });
       const updated = await prisma.$transaction(async tx => {
         const provider = await tx.investmentProvider.update({ where: { id: account.providerId }, data: { name: providerName, websiteUrl: body.websiteUrl ? String(body.websiteUrl).trim() : null } });
-        return tx.investmentAccount.update({ where: { id: account.id }, data: { name: `${provider.name}${rdnBankName ? ` · RDN ${rdnBankName}` : ""}`, currencyId, accountNumberMasked: rdnAccountNumber || null, note: JSON.stringify({ rdnBankName, rdnAccountNumber }) } });
+        return tx.investmentAccount.update({ where: { id: account.id }, data: { name: `${provider.name}${rdnBankName ? ` · RDN ${rdnBankName}` : ""}`, currencyId, accountNumberMasked: rdnAccountNumber || null, note: JSON.stringify({ rdnBankName, rdnAccountNumber, buyFeePct, sellFeePct }) } });
       });
       return NextResponse.json(serialize(updated));
     }
