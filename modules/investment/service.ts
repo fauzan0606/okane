@@ -338,14 +338,35 @@ export async function createInvestmentProvider(input: {
   websiteUrl?: string;
   note?: string;
 }) {
-  if (!input.name.trim()) {
+  const name = input.name.trim();
+  const countryCode = input.countryCode.trim().toUpperCase();
+
+  if (!name) {
     throw new Error("Provider name is required.");
+  }
+
+  if (!countryCode) {
+    throw new Error("Provider country is required.");
+  }
+
+  // Provider identity is unique by name + country. Treat repeated creation
+  // as idempotent so the UI does not surface a raw Prisma P2002 error when
+  // the provider already exists.
+  const existing = await prisma.investmentProvider.findFirst({
+    where: {
+      name,
+      countryCode,
+    },
+  });
+
+  if (existing) {
+    return existing;
   }
 
   return prisma.investmentProvider.create({
     data: {
-      name: input.name.trim(),
-      countryCode: input.countryCode.toUpperCase(),
+      name,
+      countryCode,
       websiteUrl: input.websiteUrl || null,
       note: input.note || null,
     },
@@ -629,283 +650,22 @@ export async function calculateInvestmentCosts(input: {
   const taxRate =
     input.taxRateOverride ?? Number(rule?.taxRate ?? 0);
 
-  const fixed =
+  const fixedFee =
     input.fixedFeeOverride ?? Number(rule?.fixedFee ?? 0);
 
-  const fee = gross
-    .mul(feeRate)
-    .div(100)
-    .plus(fixed);
-
-  const tax = gross
-    .mul(taxRate)
-    .div(100);
+  const fee = gross.mul(feeRate).div(100);
+  const tax = gross.mul(taxRate).div(100);
+  const total = gross.plus(fee).plus(tax).plus(fixedFee);
 
   return {
     gross,
-    fee: money(fee),
-    tax: money(tax),
-    totalBuy: money(
-      gross.plus(fee).plus(tax),
-    ),
-    netSell: money(
-      gross.minus(fee).minus(tax),
-    ),
-    rule,
+    feeRate,
+    taxRate,
+    fixedFee,
+    fee,
+    tax,
+    total,
   };
-}
-
-export async function createInvestmentTransaction(input: {
-  accountId: string;
-  assetId: string;
-  transactionType: InvestmentTransactionType;
-  transactionDate: Date;
-  quantity: number;
-  unitPrice: number;
-  feeAmount?: number;
-  taxAmount?: number;
-  otherCharges?: number;
-  fundingCashAccountId?: string;
-  fundingWalletId?: string;
-  note?: string;
-}) {
-  const quantity = positive(
-    input.quantity,
-    "Quantity",
-  );
-
-  const unitPrice = positive(
-    input.unitPrice,
-    "Unit price",
-  );
-
-  const fee = nonNegative(
-    input.feeAmount,
-    "Fee",
-  );
-
-  const tax = nonNegative(
-    input.taxAmount,
-    "Tax",
-  );
-
-  const other = nonNegative(
-    input.otherCharges,
-    "Other charges",
-  );
-
-  const rawTransactionType =
-    String(input.transactionType);
-
-  if (
-    rawTransactionType !== "BUY" &&
-    rawTransactionType !== "SELL"
-  ) {
-    throw new Error(
-      "Use the income action for dividend, interest or coupon.",
-    );
-  }
-
-  const transactionType: BuySellTransactionType =
-    rawTransactionType;
-
-  return prisma.$transaction(async (tx) => {
-    const account =
-      await tx.investmentAccount.findUnique({
-        where: {
-          id: input.accountId,
-        },
-        include: {
-          provider: true,
-          currency: true,
-        },
-      });
-
-    const asset =
-      await tx.investmentAsset.findUnique({
-        where: {
-          id: input.assetId,
-        },
-        include: {
-          currency: true,
-        },
-      });
-
-    if (!account || !asset) {
-      throw new Error(
-        "Investment account or asset not found.",
-      );
-    }
-
-    if (account.currencyId !== asset.currencyId) {
-      throw new Error(
-        "Investment account and asset currency must match.",
-      );
-    }
-
-    const gross = money(
-      quantity.mul(unitPrice),
-    );
-
-    const costs = fee
-      .plus(tax)
-      .plus(other);
-
-    const f = await funding(
-      tx,
-      account.id,
-      input.fundingCashAccountId,
-      input.fundingWalletId,
-    );
-
-    const holding =
-      await tx.investmentHolding.findUnique({
-        where: {
-          accountId_assetId: {
-            accountId: account.id,
-            assetId: asset.id,
-          },
-        },
-      });
-
-    if (transactionType === "BUY") {
-      const total = money(
-        gross.plus(costs),
-      );
-
-      await debit(tx, f, total);
-
-      const current =
-        holding ??
-        (await tx.investmentHolding.create({
-          data: {
-            accountId: account.id,
-            assetId: asset.id,
-          },
-        }));
-
-      const updated =
-        await tx.investmentHolding.update({
-          where: {
-            id: current.id,
-          },
-          data: {
-            quantity:
-              current.quantity.plus(quantity),
-            costBasis:
-              current.costBasis.plus(total),
-            currentPrice: unitPrice,
-            priceAsOf: input.transactionDate,
-          },
-        });
-
-      return tx.investmentTransaction.create({
-        data: {
-          accountId: account.id,
-          assetId: asset.id,
-          holdingId: updated.id,
-          transactionType,
-          transactionDate: input.transactionDate,
-          quantity,
-          unitPrice,
-          grossAmount: gross,
-          feeAmount: fee,
-          taxAmount: tax,
-          otherCharges: other,
-          totalCashAmount: total,
-          netCashAmount: total.neg(),
-          costBasisAmount: total,
-          fundingCashAccountId:
-            f.kind === "CASH"
-              ? f.cash.id
-              : null,
-          fundingWalletId:
-            f.kind === "WALLET"
-              ? f.wallet.id
-              : null,
-          currencyId:
-            account.currencyId,
-          note: input.note || null,
-          feeRuleSnapshot: JSON.stringify({
-            fee: fee.toString(),
-            tax: tax.toString(),
-            other: other.toString(),
-          }),
-        },
-      });
-    }
-
-    if (
-      !holding ||
-      holding.quantity.lt(quantity)
-    ) {
-      throw new Error(
-        "Insufficient holding quantity.",
-      );
-    }
-
-    const soldCost = holding.costBasis
-      .mul(quantity)
-      .div(holding.quantity);
-
-    const net = money(
-      gross.minus(costs),
-    );
-
-    await credit(tx, f, net);
-
-    const updated =
-      await tx.investmentHolding.update({
-        where: {
-          id: holding.id,
-        },
-        data: {
-          quantity:
-            holding.quantity.minus(quantity),
-          costBasis:
-            holding.costBasis.minus(soldCost),
-          currentPrice: unitPrice,
-          priceAsOf: input.transactionDate,
-        },
-      });
-
-    return tx.investmentTransaction.create({
-      data: {
-        accountId: account.id,
-        assetId: asset.id,
-        holdingId: updated.id,
-        transactionType,
-        transactionDate: input.transactionDate,
-        quantity,
-        unitPrice,
-        grossAmount: gross,
-        feeAmount: fee,
-        taxAmount: tax,
-        otherCharges: other,
-        totalCashAmount: gross,
-        netCashAmount: net,
-        costBasisAmount: soldCost,
-        realizedGainLoss:
-          net.minus(soldCost),
-        fundingCashAccountId:
-          f.kind === "CASH"
-            ? f.cash.id
-            : null,
-        fundingWalletId:
-          f.kind === "WALLET"
-            ? f.wallet.id
-            : null,
-        currencyId:
-          account.currencyId,
-        note: input.note || null,
-        feeRuleSnapshot: JSON.stringify({
-          fee: fee.toString(),
-          tax: tax.toString(),
-          other: other.toString(),
-        }),
-      },
-    });
-  });
 }
 
 export async function recordInvestmentIncome(input: {
@@ -918,52 +678,33 @@ export async function recordInvestmentIncome(input: {
   destinationWalletId?: string;
   note?: string;
 }) {
-  const rawIncomeType = String(input.type);
+  const amount = positive(input.amount, "Income amount");
 
   if (
-    rawIncomeType !== "DIVIDEND" &&
-    rawIncomeType !== "INTEREST" &&
-    rawIncomeType !== "COUPON"
+    input.type !== "DIVIDEND" &&
+    input.type !== "INTEREST" &&
+    input.type !== "COUPON"
   ) {
-    throw new Error(
-      "Invalid investment income type.",
-    );
+    throw new Error("Income type must be dividend, interest or coupon.");
   }
 
-  const incomeType: IncomeTransactionType =
-    rawIncomeType;
-
-  const amount = positive(
-    input.amount,
-    "Income amount",
-  );
-
   return prisma.$transaction(async (tx) => {
-    const account =
-      await tx.investmentAccount.findUnique({
-        where: {
-          id: input.accountId,
-        },
-        include: {
-          provider: true,
-        },
-      });
+    const account = await tx.investmentAccount.findUnique({
+      where: { id: input.accountId },
+      include: { provider: true, currency: true },
+    });
 
-    const asset =
-      await tx.investmentAsset.findUnique({
-        where: {
-          id: input.assetId,
-        },
-      });
+    const asset = await tx.investmentAsset.findUnique({
+      where: { id: input.assetId },
+      include: { currency: true },
+    });
 
-    if (
-      !account ||
-      !asset ||
-      account.currencyId !== asset.currencyId
-    ) {
-      throw new Error(
-        "Investment account and asset not found or currencies do not match.",
-      );
+    if (!account || !asset) {
+      throw new Error("Investment account or asset not found.");
+    }
+
+    if (account.currencyId !== asset.currencyId) {
+      throw new Error("Investment account and asset currency must match.");
     }
 
     const destination = await funding(
@@ -973,29 +714,14 @@ export async function recordInvestmentIncome(input: {
       input.destinationWalletId,
     );
 
-    await credit(
-      tx,
-      destination,
-      amount,
-    );
-
-    const holding =
-      await tx.investmentHolding.findUnique({
-        where: {
-          accountId_assetId: {
-            accountId: account.id,
-            assetId: asset.id,
-          },
-        },
-      });
+    await credit(tx, destination, amount);
 
     return tx.investmentTransaction.create({
       data: {
+        transactionDate: input.date,
+        transactionType: input.type,
         accountId: account.id,
         assetId: asset.id,
-        holdingId: holding?.id,
-        transactionType: incomeType,
-        transactionDate: input.date,
         quantity: new D(0),
         unitPrice: new D(0),
         grossAmount: amount,
@@ -1118,18 +844,12 @@ export function calculateBreakEvenPrice(
 
   const netRate = new D(100)
     .minus(sellFeeRatePct)
-    .minus(sellTaxRatePct);
+    .minus(sellTaxRatePct)
+    .div(100);
 
   if (netRate.lte(0)) {
-    throw new Error(
-      "Selling fee and tax rates leave no positive net proceeds.",
-    );
+    throw new Error("Sell fee and tax rates are too high.");
   }
 
-  return money(
-    cost
-      .plus(fixed)
-      .mul(100)
-      .div(q.mul(netRate)),
-  );
+  return cost.plus(fixed).div(netRate).div(q);
 }
