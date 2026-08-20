@@ -45,6 +45,40 @@ export async function POST(request: Request) {
       return NextResponse.json(serialize({ account, cashAccount }));
     }
 
+    if (action === "account.update") {
+      const accountId = String(body.accountId || "");
+      const account = await prisma.investmentAccount.findUnique({ where: { id: accountId }, include: { provider: true, transactions: { select: { id: true }, take: 1 }, holdings: { select: { quantity: true }, take: 1 } } });
+      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 404 });
+      const currencyId = String(body.currencyId || account.currencyId);
+      if (currencyId !== account.currencyId && (account.transactions.length || account.holdings.length)) return NextResponse.json({ error: "Currency cannot be changed after the account has transactions or holdings." }, { status: 400 });
+      const providerName = String(body.providerName || account.provider.name).trim();
+      if (!providerName) return NextResponse.json({ error: "Provider name is required." }, { status: 400 });
+      const rdnBankName = String(body.rdnBankName || "").trim();
+      const rdnAccountNumber = String(body.rdnAccountNumber || "").trim();
+      const updated = await prisma.$transaction(async tx => {
+        const provider = await tx.investmentProvider.update({ where: { id: account.providerId }, data: { name: providerName, websiteUrl: body.websiteUrl ? String(body.websiteUrl).trim() : null } });
+        return tx.investmentAccount.update({ where: { id: account.id }, data: { name: `${provider.name}${rdnBankName ? ` · RDN ${rdnBankName}` : ""}`, currencyId, accountNumberMasked: rdnAccountNumber || null, note: JSON.stringify({ rdnBankName, rdnAccountNumber }) } });
+      });
+      return NextResponse.json(serialize(updated));
+    }
+
+    if (action === "account.close") {
+      const accountId = String(body.accountId || "");
+      const account = await prisma.investmentAccount.findUnique({ where: { id: accountId } });
+      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 404 });
+      const updated = await prisma.investmentAccount.update({ where: { id: accountId }, data: { isActive: false } });
+      return NextResponse.json(serialize(updated));
+    }
+
+    if (action === "account.delete") {
+      const accountId = String(body.accountId || "");
+      const account = await prisma.investmentAccount.findUnique({ where: { id: accountId }, include: { cashAccount: true, transactions: { select: { id: true }, take: 1 }, holdings: { select: { quantity: true }, take: 1 } } });
+      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 404 });
+      if (account.transactions.length || account.holdings.some(h => !h.quantity.isZero()) || !account.cashAccount?.balance.isZero()) return NextResponse.json({ error: "Account has historical data or a non-zero RDN balance. Use Close Account instead of Delete." }, { status: 400 });
+      await prisma.investmentAccount.delete({ where: { id: accountId } });
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "asset.create") {
       const asset = await prisma.investmentAsset.create({ data: { symbol: body.symbol ? String(body.symbol).trim().toUpperCase() : null, name: String(body.name).trim(), assetType: String(body.assetType) as InvestmentAssetType, countryCode: body.countryCode ? String(body.countryCode).toUpperCase() : null, currencyId: String(body.currencyId), unitName: String(body.unitName || "share").trim() } });
       return NextResponse.json(serialize(asset));
@@ -52,7 +86,7 @@ export async function POST(request: Request) {
 
     if (action === "transaction.create") {
       const account = await prisma.investmentAccount.findUnique({ where: { id: String(body.accountId) }, include: { cashAccount: true } });
-      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 400 });
+      if (!account || !account.isActive) return NextResponse.json({ error: "Investment account not found or already closed." }, { status: 400 });
       return NextResponse.json(serialize(await createInvestmentTransactionV3({ ...body, transactionType: String(body.transactionType) as "BUY" | "SELL", transactionDate: new Date(body.transactionDate), quantity: Number(body.quantity), unitPrice: Number(body.unitPrice), feeAmount: Number(body.feeAmount || 0), taxAmount: Number(body.taxAmount || 0), otherCharges: Number(body.otherCharges || 0), fundingCashAccountId: body.fundingCashAccountId || account.cashAccount?.id, sourceLotId: body.sourceLotId ? String(body.sourceLotId) : undefined })));
     }
 
