@@ -14,7 +14,11 @@ function readMeta<T>(value: string | null | undefined, prefix: string): T | null
   if (!value) return null;
   const start = value.indexOf(prefix);
   if (start < 0) return null;
-  try { return JSON.parse(value.slice(start + prefix.length)) as T; } catch { return null; }
+  try {
+    const raw = value.slice(start + prefix.length);
+    const separator = raw.indexOf("}{");
+    return JSON.parse(separator >= 0 ? raw.slice(0, separator + 1) : raw) as T;
+  } catch { return null; }
 }
 
 type LotMeta = { lotId: string; allocations?: Array<{ lotId: string; quantity: string }>; source?: string; sourceRow?: number; sourceHash?: string; sourceFile?: string };
@@ -143,8 +147,7 @@ export async function getInvestmentAccountLedger(accountId: string) {
   const rows = buys.map((b) => {
     const m = readMeta<LotMeta>(b.note, LOT); const lotId = m?.lotId ?? b.id; const sales = saleMap.get(lotId) ?? [];
     const sold = sales.reduce((s, x) => s.plus(x.quantity), new D(0)); const remaining = b.quantity.minus(sold); const p = priceMap.get(b.assetId); const currentValue = p?.price ? remaining.mul(p.price) : new D(0); const remainingCost = b.quantity.isZero() ? new D(0) : b.costBasisAmount.mul(remaining).div(b.quantity);
-    const rule = { feeRate: 0.29, taxRate: 0 };
-    const minSell = b.quantity.isZero() ? new D(0) : b.costBasisAmount.div(b.quantity).div(new D(100 - rule.feeRate - rule.taxRate).div(100));
+    const minSell = b.quantity.isZero() ? new D(0) : b.costBasisAmount.div(b.quantity).div(new D(99.71).div(100));
     return { id: b.id, lotId, transactionDate: b.transactionDate, asset: b.asset, quantity: b.quantity, soldQuantity: sold, remainingQuantity: remaining, unitPrice: b.unitPrice, totalCost: b.costBasisAmount, minimumSellPrice: money(minSell), currentPrice: p?.price ?? null, priceAsOf: p?.asOf ?? null, currentValue: money(currentValue), unrealizedGainLoss: money(currentValue.minus(remainingCost)), sales };
   });
   return { account, rows, transactions, summary: { openLots: rows.filter((r) => r.remainingQuantity.gt(0)).length, openQuantity: rows.reduce((s, r) => s.plus(r.remainingQuantity), new D(0)), realizedGainLoss: sells.reduce((s, t) => s.plus(t.realizedGainLoss ?? 0), new D(0)) } };
@@ -177,19 +180,19 @@ export async function refreshInvestmentStockPrices(input?: { accountId?: string;
   const holdings = await prisma.investmentHolding.findMany({ where: { quantity: { gt: 0 }, ...(input?.accountId ? { accountId: input.accountId } : {}), asset: { assetType: "STOCK", symbol: { not: null } } }, include: { asset: true } });
   const symbols = [...new Set(holdings.filter((h) => !h.priceAsOf || h.priceAsOf < cutoff).map((h) => h.asset.symbol).filter((s): s is string => Boolean(s)))];
   const updated: Array<{ symbol: string; price: string; asOf: Date }> = []; const errors: Array<{ symbol: string; error: string }> = [];
-  for (const symbol of symbols) { try { const q = await quote(symbol); const targets = holdings.filter((h) => h.asset.symbol === symbol); await prisma.$transaction(targets.map((h) => prisma.investmentHolding.update({ where: { id: h.id }, data: { currentPrice: q.price, priceAsOf: q.asOf } }))); updated.push({ symbol, price: q.price.toString(), asOf: q.asOf }); } catch (e) { errors.push({ symbol, error: e instanceof Error ? e.message : "Unable to refresh price" }); } }
+  for (const stock of symbols) { try { const q = await quote(stock); const targets = holdings.filter((h) => h.asset.symbol === stock); await prisma.$transaction(targets.map((h) => prisma.investmentHolding.update({ where: { id: h.id }, data: { currentPrice: q.price, priceAsOf: q.asOf } }))); updated.push({ symbol: stock, price: q.price.toString(), asOf: q.asOf }); } catch (e) { errors.push({ symbol: stock, error: e instanceof Error ? e.message : "Unable to refresh price" }); } }
   return { updated, errors, source: "Yahoo Finance chart endpoint", staleAfterMinutes: stale };
 }
 
 export async function importInvestmentWorkbook(input: { accountId: string; buffer: Buffer; fileName: string }) {
-  const xlsx = await import("xlsx");
+  const xlsx = await (Function("return import('xlsx')")() as Promise<any>);
   const workbook = xlsx.read(input.buffer, { type: "buffer", cellDates: true });
   const sheet = workbook.Sheets["stocks dtl"];
   if (!sheet) throw new Error('Sheet "stocks dtl" was not found.');
   const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
   const hash = crypto.createHash("sha256").update(input.buffer).digest("hex");
   const existing = await prisma.investmentTransaction.findMany({ where: { accountId: input.accountId, status: "IMPORTED" }, select: { note: true } });
-  const keys = new Set(existing.map((r) => { const m = readMeta<{ sourceHash?: string; sourceRow?: number }>(r.note, IMPORT); return m ? `${m.sourceHash}:${m.sourceRow}` : ""; }));
+  const keys = new Set(existing.map((r) => { const m = readMeta<{ sourceHash?: string; sourceRow?: number }>(r.note, LOT); return m ? `${m.sourceHash}:${m.sourceRow}` : ""; }));
   const account = await prisma.investmentAccount.findUnique({ where: { id: input.accountId }, select: { currencyId: true } });
   if (!account) throw new Error("Investment account not found.");
   let imported = 0; let skipped = 0; const warnings: string[] = [];
@@ -201,13 +204,13 @@ export async function importInvestmentWorkbook(input: { accountId: string; buffe
       let asset = await tx.investmentAsset.findFirst({ where: { symbol, currencyId: account.currencyId, isActive: true } });
       if (!asset) asset = await tx.investmentAsset.create({ data: { symbol, name: symbol, assetType: "STOCK", countryCode: "ID", currencyId: account.currencyId, unitName: "share" } });
       const quantity = new D(lots).mul(100); const grossAmount = Number.isFinite(gross) && gross > 0 ? new D(gross) : quantity.mul(buyPrice); const buyFee = Number.isFinite(fee) && fee >= 0 ? new D(fee) : new D(0); const cost = Number.isFinite(total) && total > 0 ? new D(total) : money(grossAmount.plus(buyFee));
-      const lotId = crypto.randomUUID(); const importInfo = { sourceHash: hash, sourceRow: rowNo, sourceFile: input.fileName }; const buyNote = meta(LOT, { lotId, source: "IMPORT", ...importInfo }) + meta(IMPORT, importInfo);
+      const lotId = crypto.randomUUID(); const importInfo = { source: "IMPORT", sourceHash: hash, sourceRow: rowNo, sourceFile: input.fileName }; const lotNote = { lotId, ...importInfo };
       const current = await tx.investmentHolding.findUnique({ where: { accountId_assetId: { accountId: input.accountId, assetId: asset.id } } }); const nextQty = (current?.quantity ?? new D(0)).plus(quantity); const nextCost = money((current?.costBasis ?? new D(0)).plus(cost));
       const holding = current ? await tx.investmentHolding.update({ where: { id: current.id }, data: { quantity: nextQty, costBasis: nextCost } }) : await tx.investmentHolding.create({ data: { accountId: input.accountId, assetId: asset.id, quantity, costBasis: cost } });
-      await tx.investmentTransaction.create({ data: { accountId: input.accountId, assetId: asset.id, holdingId: holding.id, transactionType: InvestmentTransactionType.BUY, transactionDate: date, quantity, unitPrice: buyPrice, grossAmount, feeAmount: buyFee, taxAmount: 0, otherCharges: money(cost.minus(grossAmount).minus(buyFee)), totalCashAmount: cost, netCashAmount: cost.neg(), costBasisAmount: cost, currencyId: account.currencyId, note: buyNote, status: "IMPORTED" } });
+      await tx.investmentTransaction.create({ data: { accountId: input.accountId, assetId: asset.id, holdingId: holding.id, transactionType: InvestmentTransactionType.BUY, transactionDate: date, quantity, unitPrice: buyPrice, grossAmount, feeAmount: buyFee, taxAmount: 0, otherCharges: money(cost.minus(grossAmount).minus(buyFee)), totalCashAmount: cost, netCashAmount: cost.neg(), costBasisAmount: cost, currencyId: account.currencyId, note: meta(LOT, lotNote), status: "IMPORTED" } });
       if (sellDate instanceof Date && Number.isFinite(sell) && sell > 0) {
         const grossSell = quantity.mul(sell); const actualSellFee = Number.isFinite(sellFee) && sellFee > 0 ? new D(sellFee) : money(grossSell.mul(0.0029)); const netSell = money(grossSell.minus(actualSellFee)); const realized = money(netSell.minus(cost));
-        await tx.investmentTransaction.create({ data: { accountId: input.accountId, assetId: asset.id, holdingId: holding.id, transactionType: InvestmentTransactionType.SELL, transactionDate: sellDate, quantity, unitPrice: sell, grossAmount: grossSell, feeAmount: actualSellFee, taxAmount: 0, otherCharges: 0, totalCashAmount: grossSell, netCashAmount: netSell, costBasisAmount: cost, realizedGainLoss: realized, currencyId: account.currencyId, note: meta(LOT, { lotId: crypto.randomUUID(), source: "IMPORT", ...importInfo, allocations: [{ lotId, quantity: quantity.toString() }] }) + meta(IMPORT, importInfo), status: "IMPORTED" } });
+        await tx.investmentTransaction.create({ data: { accountId: input.accountId, assetId: asset.id, holdingId: holding.id, transactionType: InvestmentTransactionType.SELL, transactionDate: sellDate, quantity, unitPrice: sell, grossAmount: grossSell, feeAmount: actualSellFee, taxAmount: 0, otherCharges: 0, totalCashAmount: grossSell, netCashAmount: netSell, costBasisAmount: cost, realizedGainLoss: realized, currencyId: account.currencyId, note: meta(LOT, { lotId: crypto.randomUUID(), ...importInfo, allocations: [{ lotId, quantity: quantity.toString() }] }), status: "IMPORTED" } });
         await tx.investmentHolding.update({ where: { id: holding.id }, data: { quantity: nextQty.minus(quantity), costBasis: money(nextCost.minus(cost)) } });
       }
       imported += 1;
