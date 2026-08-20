@@ -12,7 +12,7 @@ function money(value: number, symbol: string) { return `${symbol}${value.toLocal
 function date(value: Date | string | null) { return value ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric" }).format(new Date(value)) : "—"; }
 function inputDate(value: Date | string | null) { return value ? new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date(value)) : ""; }
 function todayInputValue() { return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
-function statusMeta(status: string) { if (status === "RECEIVED") return { label: "RECEIVED", className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" }; if (status === "PARTIALLY_RECEIVED") return { label: "PARTIALLY RECEIVED", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" }; if (status === "OVERDUE") return { label: "OVERDUE", className: "border-red-400/20 bg-red-400/10 text-red-300" }; return { label: "OUTSTANDING", className: "border-red-400/20 bg-red-400/10 text-red-300" }; }
+function statusMeta(status: string) { if (status === "RECEIVED") return { label: "RECEIVED", className: "border-emerald-400/20 bg-emerald-400/10 text-emerald-300" }; if (status === "PARTIALLY_RECEIVED") return { label: "PARTIALLY RECEIVED", className: "border-amber-400/20 bg-amber-400/10 text-amber-300" }; if (status === "OVERDUE") return { label: "OVERDUE", className: "border-red-400/20 bg-red-400/[0.04] text-red-300" }; return { label: "OUTSTANDING", className: "border-red-400/20 bg-red-400/[0.04] text-red-300" }; }
 const inputClass = "rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600";
 const selectClass = "rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none";
 
@@ -28,7 +28,7 @@ export default async function ReceivablesPage() {
   const totalsByCurrency = outstanding.reduce<Record<string, { symbol: string; amount: number }>>((map, item) => { const key = item.currency.code; map[key] ??= { symbol: item.currency.symbol, amount: 0 }; map[key].amount += item.remaining; return map; }, {});
   const idrCurrency = currencies.find((currency) => currency.code === "IDR") ?? currencies[0] ?? null;
   const today = todayInputValue();
-  const updatePaymentFormAction = async (formData: FormData): Promise<void> => { await updateReceivablePaymentAction(formData); };
+  const updatePaymentFormAction = async (formData: FormData): Promise<void> => { "use server"; await updateReceivablePaymentAction(formData); };
 
   return <AppShell sidebar={<Sidebar />} header={<Header />}><div className="space-y-6">
     <div className="flex flex-col justify-between gap-4 md:flex-row md:items-end"><div><p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Money to receive</p><h1 className="mt-1 text-3xl font-bold text-white">Receivables</h1><p className="mt-2 text-sm text-slate-500">Track money others owe you without treating reimbursements as personal income.</p></div><ReceivableForm currencies={currencies} wallets={wallets} defaultCurrencyId={idrCurrency?.id ?? ""} today={today} /></div>
