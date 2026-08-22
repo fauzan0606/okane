@@ -90,7 +90,7 @@ export async function createReconciliationSession(input: { walletId: string; sou
     const likelyPaymentTransfer = transferCandidates.find((candidate) => /(payment|bayar|credit card|cc payment)/i.test(raw.entryType || raw.description));
     const dateAmountConflict = transactions.some((tx) => !usedTransactionIds.has(tx.id) && dayDistance(date, tx.transactionDate) === 0 && !tx.amount.eq(amount) && tokenSimilarity(raw.description, tx.payee?.name || tx.category?.name || tx.note || "") >= 0.6);
 
-    let matchStatus = ReconciliationMatchStatus.STATEMENT_ONLY;
+    let matchStatus: ReconciliationMatchStatus = ReconciliationMatchStatus.STATEMENT_ONLY;
     let confidence = 0;
     let matchedTransactionId: string | null = null;
     let matchedTransferId: string | null = null;

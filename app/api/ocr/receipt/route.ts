@@ -4,97 +4,571 @@ const MODEL = "gemini-3.1-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
+type DiscountScope = "ORDER" | "DELIVERY" | "ITEM";
+
+type ReceiptItem = {
+  name: string;
+  quantity?: number;
+  unitPrice?: number;
+  amount?: number;
+  [key: string]: unknown;
+};
+
+type ReceiptDiscount = {
+  name?: string;
+  amount?: number;
+  percent?: number;
+  scope?: string;
+  [key: string]: unknown;
+};
+
+type ReceiptResult = {
+  merchantName?: string;
+  items?: ReceiptItem[];
+  discounts?: ReceiptDiscount[];
+  subtotal?: number;
+  taxPercent?: number;
+  taxAmount?: number;
+  taxMode?: ChargeTreatment;
+  servicePercent?: number;
+  serviceAmount?: number;
+  serviceMode?: ChargeTreatment;
+  deliveryFeeAmount?: number;
+  deliveryDiscountAmount?: number;
+  rounding?: number;
+  grandTotal?: number;
+  date?: string;
+  [key: string]: unknown;
+};
+
+type GeminiResponse = {
+  candidates?: Array<{
+    content?: {
+      parts?: Array<{
+        text?: string;
+      }>;
+    };
+  }>;
+};
 
 const responseSchema = {
   type: "object",
   properties: {
     merchantName: { type: "string" },
-    items: { type: "array", items: { type: "object", properties: { name: { type: "string" }, quantity: { type: "number" }, unitPrice: { type: "number" }, amount: { type: "number" } }, required: ["name", "quantity", "unitPrice", "amount"] } },
-    discounts: { type: "array", items: { type: "object", properties: { name: { type: "string" }, amount: { type: "number" }, percent: { type: "number" }, scope: { type: "string", enum: ["ORDER", "DELIVERY", "ITEM"] } }, required: ["name", "amount", "scope"] } },
-    subtotal: { type: "number" }, taxPercent: { type: "number" }, taxAmount: { type: "number" }, taxMode: { type: "string", enum: ["INCLUDED", "EXCLUDED", "UNKNOWN"] }, servicePercent: { type: "number" }, serviceAmount: { type: "number" }, serviceMode: { type: "string", enum: ["INCLUDED", "EXCLUDED", "UNKNOWN"] }, deliveryFeeAmount: { type: "number" }, deliveryDiscountAmount: { type: "number" }, rounding: { type: "number" }, grandTotal: { type: "number" }, date: { type: "string" },
+
+    items: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          quantity: { type: "number" },
+          unitPrice: { type: "number" },
+          amount: { type: "number" },
+        },
+        required: [
+          "name",
+          "quantity",
+          "unitPrice",
+          "amount",
+        ],
+      },
+    },
+
+    discounts: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          name: { type: "string" },
+          amount: { type: "number" },
+          percent: { type: "number" },
+          scope: {
+            type: "string",
+            enum: [
+              "ORDER",
+              "DELIVERY",
+              "ITEM",
+            ],
+          },
+        },
+        required: [
+          "name",
+          "amount",
+          "scope",
+        ],
+      },
+    },
+
+    subtotal: { type: "number" },
+    taxPercent: { type: "number" },
+    taxAmount: { type: "number" },
+
+    taxMode: {
+      type: "string",
+      enum: [
+        "INCLUDED",
+        "EXCLUDED",
+        "UNKNOWN",
+      ],
+    },
+
+    servicePercent: { type: "number" },
+    serviceAmount: { type: "number" },
+
+    serviceMode: {
+      type: "string",
+      enum: [
+        "INCLUDED",
+        "EXCLUDED",
+        "UNKNOWN",
+      ],
+    },
+
+    deliveryFeeAmount: {
+      type: "number",
+    },
+
+    deliveryDiscountAmount: {
+      type: "number",
+    },
+
+    rounding: { type: "number" },
+    grandTotal: { type: "number" },
+    date: { type: "string" },
   },
-  required: ["merchantName", "items", "discounts", "taxMode", "serviceMode"],
+
+  required: [
+    "merchantName",
+    "items",
+    "discounts",
+    "taxMode",
+    "serviceMode",
+  ],
 };
 
-function jsonError(message: string, status = 400) { return NextResponse.json({ error: message }, { status }); }
-function round(value: number) { return Math.round((value + Number.EPSILON) * 100) / 100; }
-function treatment(value: unknown): ChargeTreatment { return value === "INCLUDED" || value === "EXCLUDED" ? value : "UNKNOWN"; }
-function closeEnough(a: number, b: number, tolerance = 1) { return Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= tolerance; }
+function jsonError(
+  message: string,
+  status = 400,
+) {
+  return NextResponse.json(
+    { error: message },
+    { status },
+  );
+}
 
-function normalizeResult(raw: any) {
-  const items = Array.isArray(raw.items) ? raw.items.map((item: any) => {
-    const quantity = Number(item.quantity) > 0 ? Number(item.quantity) : 1;
-    const amount = Number(item.amount);
-    const unitPrice = Number(item.unitPrice);
-    const safeAmount = Number.isFinite(amount) ? round(amount) : round(quantity * (Number.isFinite(unitPrice) ? unitPrice : 0));
-    const safeUnitPrice = Number.isFinite(unitPrice) ? unitPrice : round(safeAmount / quantity);
-    return { ...item, quantity, unitPrice: safeUnitPrice, amount: safeAmount };
-  }) : [];
+function round(value: number) {
+  return (
+    Math.round(
+      (value + Number.EPSILON) * 100,
+    ) / 100
+  );
+}
 
-  const deliveryFee = Math.max(0, Number(raw.deliveryFeeAmount) || 0);
-  let discounts = Array.isArray(raw.discounts) ? raw.discounts.map((discount: any) => ({
-    ...discount,
-    amount: Math.abs(Number(discount.amount) || 0),
-    scope: discount.scope === "DELIVERY" || discount.scope === "ITEM" ? discount.scope : "ORDER",
-  })) : [];
+function treatment(
+  value: unknown,
+): ChargeTreatment {
+  return value === "INCLUDED" ||
+    value === "EXCLUDED"
+    ? value
+    : "UNKNOWN";
+}
+
+function discountScope(
+  value: unknown,
+): DiscountScope {
+  return value === "DELIVERY" ||
+    value === "ITEM"
+    ? value
+    : "ORDER";
+}
+
+function closeEnough(
+  a: number,
+  b: number,
+  tolerance = 1,
+) {
+  return (
+    Number.isFinite(a) &&
+    Number.isFinite(b) &&
+    Math.abs(a - b) <= tolerance
+  );
+}
+
+function normalizeResult(
+  raw: ReceiptResult,
+): ReceiptResult {
+  const items: ReceiptItem[] =
+    Array.isArray(raw.items)
+      ? raw.items.map(
+          (
+            item: ReceiptItem,
+          ) => {
+            const quantity =
+              Number(item.quantity) > 0
+                ? Number(item.quantity)
+                : 1;
+
+            const amount =
+              Number(item.amount);
+
+            const unitPrice =
+              Number(item.unitPrice);
+
+            const safeAmount =
+              Number.isFinite(amount)
+                ? round(amount)
+                : round(
+                    quantity *
+                      (Number.isFinite(
+                        unitPrice,
+                      )
+                        ? unitPrice
+                        : 0),
+                  );
+
+            const safeUnitPrice =
+              Number.isFinite(unitPrice)
+                ? unitPrice
+                : round(
+                    safeAmount / quantity,
+                  );
+
+            return {
+              ...item,
+              quantity,
+              unitPrice:
+                safeUnitPrice,
+              amount: safeAmount,
+            };
+          },
+        )
+      : [];
+
+  const deliveryFee =
+    Math.max(
+      0,
+      Number(
+        raw.deliveryFeeAmount,
+      ) || 0,
+    );
+
+  let discounts: ReceiptDiscount[] =
+    Array.isArray(raw.discounts)
+      ? raw.discounts.map(
+          (
+            discount: ReceiptDiscount,
+          ) => ({
+            ...discount,
+            amount: Math.abs(
+              Number(
+                discount.amount,
+              ) || 0,
+            ),
+            scope: discountScope(
+              discount.scope,
+            ),
+          }),
+        )
+      : [];
 
   if (deliveryFee > 0) {
-    discounts = discounts.map((discount: any) => {
-      const name = String(discount.name || "").toLowerCase();
-      const looksLikeDelivery = /(ongkir|delivery|shipping|shipment|freight|delivery fee)/i.test(name);
-      return looksLikeDelivery ? { ...discount, scope: "DELIVERY" } : discount;
-    });
+    discounts = discounts.map(
+      (
+        discount: ReceiptDiscount,
+      ) => {
+        const name = String(
+          discount.name || "",
+        ).toLowerCase();
+
+        const looksLikeDelivery =
+          /(ongkir|delivery|shipping|shipment|freight|delivery fee)/i.test(
+            name,
+          );
+
+        return looksLikeDelivery
+          ? {
+              ...discount,
+              scope: "DELIVERY",
+            }
+          : discount;
+      },
+    );
   }
 
-  const detectedDeliveryDiscount = discounts.filter((discount: any) => discount.scope === "DELIVERY").reduce((sum: number, discount: any) => sum + discount.amount, 0);
-  const deliveryDiscount = deliveryFee > 0 ? Math.min(deliveryFee, round(Math.max(Number(raw.deliveryDiscountAmount) || 0, detectedDeliveryDiscount))) : 0;
-  const netDelivery = round(Math.max(deliveryFee - deliveryDiscount, 0));
-  const itemSubtotal = round(items.reduce((sum: number, item: any) => sum + item.amount, 0));
-  const orderDiscount = round(discounts.filter((discount: any) => discount.scope === "ORDER").reduce((sum: number, discount: any) => sum + discount.amount, 0));
-  const discountedSubtotal = round(Math.max(itemSubtotal - orderDiscount, 0));
-  const taxAmount = Number(raw.taxAmount);
-  const serviceAmount = Number(raw.serviceAmount);
-  let taxMode = treatment(raw.taxMode);
-  let serviceMode = treatment(raw.serviceMode);
-  const grandTotal = raw.grandTotal !== undefined && Number.isFinite(Number(raw.grandTotal)) ? round(Number(raw.grandTotal)) : undefined;
+  const detectedDeliveryDiscount =
+    discounts
+      .filter(
+        (
+          discount: ReceiptDiscount,
+        ) =>
+          discount.scope ===
+          "DELIVERY",
+      )
+      .reduce(
+        (
+          sum: number,
+          discount: ReceiptDiscount,
+        ) =>
+          sum +
+          (Number(
+            discount.amount,
+          ) || 0),
+        0,
+      );
+
+  const deliveryDiscount =
+    deliveryFee > 0
+      ? Math.min(
+          deliveryFee,
+          round(
+            Math.max(
+              Number(
+                raw.deliveryDiscountAmount,
+              ) || 0,
+              detectedDeliveryDiscount,
+            ),
+          ),
+        )
+      : 0;
+
+  const netDelivery = round(
+    Math.max(
+      deliveryFee -
+        deliveryDiscount,
+      0,
+    ),
+  );
+
+  const itemSubtotal = round(
+    items.reduce(
+      (
+        sum: number,
+        item: ReceiptItem,
+      ) =>
+        sum +
+        (Number(item.amount) ||
+          0),
+      0,
+    ),
+  );
+
+  const orderDiscount = round(
+    discounts
+      .filter(
+        (
+          discount: ReceiptDiscount,
+        ) =>
+          discount.scope ===
+          "ORDER",
+      )
+      .reduce(
+        (
+          sum: number,
+          discount: ReceiptDiscount,
+        ) =>
+          sum +
+          (Number(
+            discount.amount,
+          ) || 0),
+        0,
+      ),
+  );
+
+  const discountedSubtotal =
+    round(
+      Math.max(
+        itemSubtotal -
+          orderDiscount,
+        0,
+      ),
+    );
+
+  const taxAmount =
+    Number(raw.taxAmount);
+
+  const serviceAmount =
+    Number(
+      raw.serviceAmount,
+    );
+
+  let taxMode =
+    treatment(raw.taxMode);
+
+  const serviceMode =
+    treatment(
+      raw.serviceMode,
+    );
+
+  const grandTotal =
+    raw.grandTotal !==
+      undefined &&
+    Number.isFinite(
+      Number(raw.grandTotal),
+    )
+      ? round(
+          Number(
+            raw.grandTotal,
+          ),
+        )
+      : undefined;
 
   // When a receipt prints tax as separate components but the grand total already
   // equals the discounted merchandise subtotal, the tax is INCLUDED in that total.
   // This is a deterministic reconciliation using printed receipt components, not
   // a guess made merely to force an arbitrary balance.
-  if (grandTotal !== undefined && Number.isFinite(taxAmount) && taxAmount >= 0) {
-    const serviceExcluded = serviceMode === "EXCLUDED" && Number.isFinite(serviceAmount) ? round(serviceAmount) : 0;
-    const merchandiseAndTaxBase = round(grandTotal - netDelivery - serviceExcluded);
-    if (closeEnough(merchandiseAndTaxBase, discountedSubtotal)) taxMode = "INCLUDED";
-    else if (closeEnough(merchandiseAndTaxBase, round(discountedSubtotal + taxAmount))) taxMode = "EXCLUDED";
+  if (
+    grandTotal !==
+      undefined &&
+    Number.isFinite(
+      taxAmount,
+    ) &&
+    taxAmount >= 0
+  ) {
+    const serviceExcluded =
+      serviceMode ===
+        "EXCLUDED" &&
+      Number.isFinite(
+        serviceAmount,
+      )
+        ? round(
+            serviceAmount,
+          )
+        : 0;
+
+    const merchandiseAndTaxBase =
+      round(
+        grandTotal -
+          netDelivery -
+          serviceExcluded,
+      );
+
+    if (
+      closeEnough(
+        merchandiseAndTaxBase,
+        discountedSubtotal,
+      )
+    ) {
+      taxMode = "INCLUDED";
+    } else if (
+      closeEnough(
+        merchandiseAndTaxBase,
+        round(
+          discountedSubtotal +
+            taxAmount,
+        ),
+      )
+    ) {
+      taxMode = "EXCLUDED";
+    }
   }
 
   return {
     ...raw,
     items,
     discounts,
-    subtotal: itemSubtotal,
+
+    subtotal:
+      itemSubtotal,
+
     taxMode,
     serviceMode,
-    serviceAmount: Number.isFinite(serviceAmount) && serviceAmount > 0 ? round(serviceAmount) : undefined,
-    servicePercent: Number.isFinite(serviceAmount) && serviceAmount > 0 ? raw.servicePercent : undefined,
-    deliveryFeeAmount: deliveryFee > 0 ? deliveryFee : undefined,
-    deliveryDiscountAmount: deliveryDiscount > 0 ? deliveryDiscount : undefined,
-    taxAmount: Number.isFinite(taxAmount) && taxAmount >= 0 ? round(taxAmount) : undefined,
+
+    serviceAmount:
+      Number.isFinite(
+        serviceAmount,
+      ) &&
+      serviceAmount > 0
+        ? round(
+            serviceAmount,
+          )
+        : undefined,
+
+    servicePercent:
+      Number.isFinite(
+        serviceAmount,
+      ) &&
+      serviceAmount > 0
+        ? Number(
+            raw.servicePercent,
+          )
+        : undefined,
+
+    deliveryFeeAmount:
+      deliveryFee > 0
+        ? deliveryFee
+        : undefined,
+
+    deliveryDiscountAmount:
+      deliveryDiscount > 0
+        ? deliveryDiscount
+        : undefined,
+
+    taxAmount:
+      Number.isFinite(
+        taxAmount,
+      ) &&
+      taxAmount >= 0
+        ? round(
+            taxAmount,
+          )
+        : undefined,
+
     grandTotal,
   };
 }
 
-export async function POST(request: Request) {
-  const apiKey = process.env.GEMINI_API_KEY;
-  if (!apiKey) return jsonError("GEMINI_API_KEY is not configured on the server.", 500);
-  const formData = await request.formData();
-  const file = formData.get("file");
-  if (!(file instanceof File)) return jsonError("Receipt image is required.");
-  if (!file.type.startsWith("image/")) return jsonError("Please upload an image receipt.");
-  if (file.size > 12 * 1024 * 1024) return jsonError("Receipt image must be 12 MB or smaller.");
+export async function POST(
+  request: Request,
+) {
+  const apiKey =
+    process.env.GEMINI_API_KEY;
 
-  const base64 = Buffer.from(new Uint8Array(await file.arrayBuffer())).toString("base64");
+  if (!apiKey) {
+    return jsonError(
+      "GEMINI_API_KEY is not configured on the server.",
+      500,
+    );
+  }
+
+  const formData =
+    await request.formData();
+
+  const file =
+    formData.get("file");
+
+  if (!(file instanceof File)) {
+    return jsonError(
+      "Receipt image is required.",
+    );
+  }
+
+  if (
+    !file.type.startsWith(
+      "image/",
+    )
+  ) {
+    return jsonError(
+      "Please upload an image receipt.",
+    );
+  }
+
+  if (
+    file.size >
+    12 * 1024 * 1024
+  ) {
+    return jsonError(
+      "Receipt image must be 12 MB or smaller.",
+    );
+  }
+
+  const base64 =
+    Buffer.from(
+      new Uint8Array(
+        await file.arrayBuffer(),
+      ),
+    ).toString("base64");
+
   const prompt = `Analyze this restaurant receipt image and transcribe the bill into the JSON schema exactly.
 Rules:
 - This is a TRANSCRIPTION task. Do not recalculate, normalize, rebalance, or redistribute prices.
@@ -113,22 +587,116 @@ Rules:
 - Do not include grand total, delivery fee, tax, service charge, or discounts as food/drink items.
 - The grand total is informational source-of-truth and must never be used to alter line-item prices.`;
 
-  const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64 } }] }], generationConfig: { responseMimeType: "application/json", responseJsonSchema: responseSchema } }),
-  });
+  const response =
+    await fetch(
+      `${GEMINI_URL}?key=${encodeURIComponent(
+        apiKey,
+      )}`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json",
+        },
+
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: prompt,
+                },
+                {
+                  inlineData: {
+                    mimeType:
+                      file.type,
+                    data: base64,
+                  },
+                },
+              ],
+            },
+          ],
+
+          generationConfig: {
+            responseMimeType:
+              "application/json",
+            responseJsonSchema:
+              responseSchema,
+          },
+        }),
+      },
+    );
 
   if (!response.ok) {
-    const body = await response.text();
-    console.error("Gemini receipt OCR failed", response.status, body);
-    if (response.status === 429) return jsonError("Gemini OCR rate limit reached. Please try again shortly.", 429);
-    if (response.status === 401 || response.status === 403) return jsonError("Gemini API key is invalid or does not have access to this model.", 502);
-    return jsonError("Gemini could not process this receipt.", 502);
+    const body =
+      await response.text();
+
+    console.error(
+      "Gemini receipt OCR failed",
+      response.status,
+      body,
+    );
+
+    if (
+      response.status === 429
+    ) {
+      return jsonError(
+        "Gemini OCR rate limit reached. Please try again shortly.",
+        429,
+      );
+    }
+
+    if (
+      response.status === 401 ||
+      response.status === 403
+    ) {
+      return jsonError(
+        "Gemini API key is invalid or does not have access to this model.",
+        502,
+      );
+    }
+
+    return jsonError(
+      "Gemini could not process this receipt.",
+      502,
+    );
   }
 
-  const data = await response.json() as { candidates?: { content?: { parts?: { text?: string }[] } }[] };
-  const text = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("").trim();
-  if (!text) return jsonError("Gemini returned an empty OCR result.", 502);
-  try { return NextResponse.json(normalizeResult(JSON.parse(text))); } catch { return jsonError("Gemini returned an invalid OCR result.", 502); }
+  const data =
+    (await response.json()) as GeminiResponse;
+
+  const text =
+    data.candidates?.[0]?.content?.parts
+      ?.map(
+        (part) =>
+          part.text ?? "",
+      )
+      .join("")
+      .trim();
+
+  if (!text) {
+    return jsonError(
+      "Gemini returned an empty OCR result.",
+      502,
+    );
+  }
+
+  try {
+    const parsed =
+      JSON.parse(
+        text,
+      ) as ReceiptResult;
+
+    return NextResponse.json(
+      normalizeResult(
+        parsed,
+      ),
+    );
+  } catch {
+    return jsonError(
+      "Gemini returned an invalid OCR result.",
+      502,
+    );
+  }
 }
