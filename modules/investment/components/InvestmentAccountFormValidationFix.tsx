@@ -13,12 +13,30 @@ function normalizeInvestmentForms() {
   });
 }
 
+function autoResolveTypedAsset(target: EventTarget | null) {
+  if (!(target instanceof HTMLInputElement)) return;
+  if (target.getAttribute("placeholder") !== "Asset / Stock (type to search)") return;
+
+  const query = target.value.trim().toLowerCase();
+  if (!query || query.includes(" · ")) return;
+
+  window.setTimeout(() => {
+    const container = target.parentElement;
+    if (!container) return;
+
+    const buttons = Array.from(container.querySelectorAll<HTMLButtonElement>('button[type="button"]'));
+    const match = buttons.find((button) => {
+      const primary = button.querySelector("span span")?.textContent?.trim().toLowerCase() ?? "";
+      const label = button.textContent?.trim().toLowerCase() ?? "";
+      return primary === query || label === query;
+    });
+
+    if (match) match.click();
+  }, 0);
+}
+
 export default function InvestmentAccountFormValidationFix({ children }: PropsWithChildren) {
   useEffect(() => {
-    // Investment account website accepts bare domains such as indopremier.com.
-    // Safari's native URL constraint validation rejects those values. The account
-    // form can also be mounted after the first render, so a one-time query is not
-    // sufficient; normalize newly inserted forms/inputs as well.
     normalizeInvestmentForms();
 
     const observer = new MutationObserver(() => {
@@ -37,11 +55,17 @@ export default function InvestmentAccountFormValidationFix({ children }: PropsWi
       }
     };
 
+    const handleInput = (event: Event) => {
+      autoResolveTypedAsset(event.target);
+    };
+
     document.addEventListener("focusin", handleFocusIn, true);
+    document.addEventListener("input", handleInput, true);
 
     return () => {
       observer.disconnect();
       document.removeEventListener("focusin", handleFocusIn, true);
+      document.removeEventListener("input", handleInput, true);
     };
   }, []);
 
