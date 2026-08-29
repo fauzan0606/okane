@@ -5,7 +5,6 @@ import InvestmentAccountFormValidationFix from "@/modules/investment/components/
 import InvestmentTransactionSplitView from "@/modules/investment/components/InvestmentTransactionSplitView";
 import InvestmentTransactionLayoutFix from "@/modules/investment/components/InvestmentTransactionLayoutFix";
 import InvestmentCashWithdrawPortal from "@/modules/investment/components/InvestmentCashWithdrawPortal";
-import InvestmentRdnLayoutFix from "@/modules/investment/components/InvestmentRdnLayoutFix";
 
 export default function InvestmentsPage() {
   return (
@@ -13,7 +12,6 @@ export default function InvestmentsPage() {
       <InvestmentAccountFormValidationFix>
         <InvestmentTransactionLayoutFix />
         <InvestmentCashWithdrawPortal />
-        <InvestmentRdnLayoutFix />
         <InvestmentTransactionSplitView>
           <InvestmentDashboardFinal />
         </InvestmentTransactionSplitView>
