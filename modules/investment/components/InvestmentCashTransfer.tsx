@@ -11,6 +11,7 @@ function money(value: string | number, code: string) {
 }
 
 export default function InvestmentCashTransfer() {
+  const [visible, setVisible] = useState(false);
   const [wallets, setWallets] = useState<Wallet[]>([]);
   const [cashAccounts, setCashAccounts] = useState<CashAccount[]>([]);
   const [walletId, setWalletId] = useState("");
@@ -21,18 +22,34 @@ export default function InvestmentCashTransfer() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
+  const refreshVisibility = () => {
+    const cashHeading = Array.from(document.querySelectorAll("h2")).some((h) => h.textContent?.trim() === "RDN Cash");
+    setVisible(cashHeading);
+    return cashHeading;
+  };
+
   useEffect(() => {
+    const observer = new MutationObserver(refreshVisibility);
+    observer.observe(document.body, { childList: true, subtree: true });
+    refreshVisibility();
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!visible) return;
     fetch("/api/investments/cash-transfer", { cache: "no-store" })
       .then(async (r) => { const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || "Unable to load cash transfer data."); return j; })
       .then((j) => { setWallets(j.wallets ?? []); setCashAccounts(j.cashAccounts ?? []); if (j.wallets?.[0]) setWalletId(j.wallets[0].id); if (j.cashAccounts?.[0]) setCashAccountId(j.cashAccounts[0].id); })
       .catch((e) => setError(e instanceof Error ? e.message : "Unable to load cash transfer data."));
-  }, []);
+  }, [visible]);
+
+  if (!visible) return null;
 
   const sourceWallet = wallets.find((w) => w.id === walletId);
   const target = cashAccounts.find((c) => c.id === cashAccountId);
   const compatibleCash = sourceWallet ? cashAccounts.filter((c) => c.account.currency.code === sourceWallet.currency.code) : cashAccounts;
   const value = Number(amount || 0);
-  const valid = sourceWallet && target && value > 0 && Number.isFinite(value) && sourceWallet.currency.code === target.account.currency.code && value <= Number(sourceWallet.balance);
+  const valid = Boolean(sourceWallet && target && value > 0 && Number.isFinite(value) && sourceWallet.currency.code === target.account.currency.code && value <= Number(sourceWallet.balance));
 
   async function submit() {
     setBusy(true); setError(""); setMessage("");
@@ -42,14 +59,14 @@ export default function InvestmentCashTransfer() {
       if (!r.ok || j.error) throw new Error(j.error || "Transfer failed.");
       setMessage(`Transfer berhasil: ${money(value, sourceWallet!.currency.code)} dari ${sourceWallet!.name} ke ${target!.account.provider.name}.`);
       setAmount("");
-      const refreshed = await fetch("/api/investments/cash-transfer", { cache: "no-store" }).then((x) => x.json());
-      setWallets(refreshed.wallets ?? []); setCashAccounts(refreshed.cashAccounts ?? []);
+      setWallets((prev) => prev.map((w) => w.id === walletId ? { ...w, balance: Number(w.balance) - value } : w));
+      setCashAccounts((prev) => prev.map((c) => c.id === cashAccountId ? { ...c, balance: Number(c.balance) + value } : c));
     } catch (e) { setError(e instanceof Error ? e.message : "Transfer failed."); }
     finally { setBusy(false); }
   }
 
-  return <section className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
-    <div><h2 className="text-lg font-semibold text-white">Transfer from Wallet</h2><p className="mt-1 text-xs text-slate-500">Pindahkan dana dari Wallet OKANE ke RDN. Set actual balance tetap tersedia di bawah panel ini.</p></div>
+  return <section className="mb-5 rounded-2xl border border-white/10 bg-[#0d151e] p-5">
+    <div><h2 className="text-lg font-semibold text-white">Transfer from Wallet</h2><p className="mt-1 text-xs text-slate-500">Pindahkan dana dari Wallet OKANE ke RDN. Set actual balance tetap tersedia di bawah.</p></div>
     {error && <div className="mt-3 rounded-xl border border-red-400/20 bg-red-400/[.05] px-3 py-2 text-xs text-red-300">{error}</div>}
     {message && <div className="mt-3 rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-3 py-2 text-xs text-emerald-300">{message}</div>}
     <div className="mt-4 grid gap-3 lg:grid-cols-[1fr_1fr_.8fr_.7fr_auto]">
