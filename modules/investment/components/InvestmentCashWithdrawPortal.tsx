@@ -8,6 +8,8 @@ type Wallet = { id: string; name: string; balance: string | number; currency: { 
 type CashAccount = { id: string; balance: string | number; account: { id: string; name: string; provider: { name: string }; currency: { code: string } } };
 type RdnHistoryRow = { id: string; date: string; description: string; debit: string | number; credit: string | number; balance: string | number; movementType: string };
 
+const control = "w-full rounded-xl border border-white/10 bg-[#080f17] px-3.5 py-3 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/10";
+
 function money(value: string | number, code: string) {
   const symbols: Record<string, string> = { IDR: "Rp", USD: "US$", SGD: "S$", MYR: "RM", JPY: "¥", EUR: "€", GBP: "£" };
   return `${symbols[code] ?? code}${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
