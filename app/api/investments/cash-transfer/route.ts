@@ -6,8 +6,64 @@ function serialize<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
 }
 
-export async function GET() {
+function movementLabel(type: InvestmentCashMovementType) {
+  switch (type) {
+    case InvestmentCashMovementType.DEPOSIT: return "Transfer masuk dari Wallet";
+    case InvestmentCashMovementType.WITHDRAWAL: return "Transfer ke Wallet";
+    case InvestmentCashMovementType.BUY_SETTLEMENT: return "Pembelian saham";
+    case InvestmentCashMovementType.SELL_SETTLEMENT: return "Penjualan saham";
+    case InvestmentCashMovementType.ADJUSTMENT: return "Penyesuaian saldo aktual";
+    default: return type;
+  }
+}
+
+async function getCashHistory(cashAccountId: string) {
+  const cash = await prisma.investmentCashAccount.findUnique({
+    where: { id: cashAccountId },
+    include: { account: { include: { provider: true, currency: true } } },
+  });
+  if (!cash) throw new Error("Investment RDN cash account not found.");
+
+  const movements = await prisma.investmentCashMovement.findMany({
+    where: { cashAccountId },
+    include: {
+      sourceWallet: { select: { id: true, name: true } },
+      investmentTransaction: { select: { id: true, transactionType: true, asset: { select: { symbol: true, name: true } }, quantity: true, unitPrice: true } },
+    },
+    orderBy: [{ movementDate: "desc" }, { createdAt: "desc" }],
+  });
+
+  let balance = cash.balance;
+  const rows = movements.map((movement) => {
+    const isIn = movement.movementType === InvestmentCashMovementType.DEPOSIT || movement.movementType === InvestmentCashMovementType.SELL_SETTLEMENT;
+    const isOut = movement.movementType === InvestmentCashMovementType.WITHDRAWAL || movement.movementType === InvestmentCashMovementType.BUY_SETTLEMENT;
+    const delta = isIn ? movement.amount : isOut ? movement.amount.negated() : movement.note?.includes("+") ? movement.amount : movement.amount.negated();
+    const balanceAfter = balance;
+    balance = balance.minus(delta);
+    const transaction = movement.investmentTransaction;
+    const assetLabel = transaction?.asset ? ` · ${transaction.asset.symbol || transaction.asset.name}` : "";
+    const walletLabel = movement.sourceWallet ? ` · ${movement.sourceWallet.name}` : "";
+    return {
+      id: movement.id,
+      date: movement.movementDate.toISOString(),
+      description: `${movementLabel(movement.movementType)}${assetLabel}${walletLabel}`,
+      debit: isOut || (!isIn && delta.isNegative()) ? movement.amount.toString() : "0",
+      credit: isIn || (!isOut && delta.isPositive()) ? movement.amount.toString() : "0",
+      balance: balanceAfter.toString(),
+      movementType: movement.movementType,
+      transactionId: movement.investmentTransactionId,
+    };
+  });
+
+  return { cashAccount: cash, rows };
+}
+
+export async function GET(request: Request) {
   try {
+    const url = new URL(request.url);
+    const cashAccountId = url.searchParams.get("cashAccountId");
+    if (cashAccountId) return NextResponse.json(serialize(await getCashHistory(cashAccountId)));
+
     const [wallets, cashAccounts] = await Promise.all([
       prisma.wallet.findMany({ where: { isActive: true }, include: { currency: true }, orderBy: { name: "asc" } }),
       prisma.investmentCashAccount.findMany({ include: { account: { include: { provider: true, currency: true } } }, orderBy: { account: { name: "asc" } } }),
@@ -17,7 +73,7 @@ export async function GET() {
       cashAccounts: cashAccounts.map((c) => ({ id: c.id, balance: c.balance, account: { id: c.account.id, name: c.account.name, provider: c.account.provider, currency: c.account.currency } })),
     }));
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load investment cash transfer data." }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load investment cash data." }, { status: 500 });
   }
 }
 
