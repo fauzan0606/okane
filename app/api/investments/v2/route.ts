@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { InvestmentAccountType, InvestmentAssetType } from "@prisma/client";
+import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addDefaultFeeRules, createInvestmentProvider } from "@/modules/investment/service";
 import { createInvestmentTransactionV3, getInvestmentAccountLedger, importInvestmentWorkbook, refreshInvestmentStockPrices, setInvestmentCashBalance } from "@/modules/investment/service-v3";
@@ -108,6 +108,51 @@ export async function POST(request: Request) {
       const account = await prisma.investmentAccount.findUnique({ where: { id: String(body.accountId) }, include: { cashAccount: true } });
       if (!account || !account.isActive) return NextResponse.json({ error: "Investment account not found or already closed." }, { status: 400 });
       return NextResponse.json(serialize(await createInvestmentTransactionV3({ ...body, transactionType: String(body.transactionType) as "BUY" | "SELL", transactionDate: new Date(body.transactionDate), quantity: Number(body.quantity), unitPrice: Number(body.unitPrice), feeAmount: Number(body.feeAmount || 0), taxAmount: Number(body.taxAmount || 0), otherCharges: Number(body.otherCharges || 0), fundingCashAccountId: body.fundingCashAccountId || account.cashAccount?.id, sourceLotId: body.sourceLotId ? String(body.sourceLotId) : undefined })));
+    }
+
+    if (action === "transaction.delete") {
+      const transactionId = String(body.transactionId || "");
+      if (!transactionId) return NextResponse.json({ error: "transactionId is required." }, { status: 400 });
+      const result = await prisma.$transaction(async tx => {
+        const target = await tx.investmentTransaction.findUnique({ where: { id: transactionId }, include: { account: true, asset: true, holding: true, cashMovements: true } });
+        if (!target) throw new Error("Investment transaction not found.");
+        if (target.transactionType !== InvestmentTransactionType.BUY) throw new Error("Only BUY lot rows can be deleted from this ledger.");
+
+        const marker = "__OKANE_LOT__";
+        const note = target.note || "";
+        const start = note.indexOf(marker);
+        let lotId = target.id;
+        if (start >= 0) {
+          try {
+            const raw = note.slice(start + marker.length);
+            const end = raw.indexOf("}");
+            const parsed = JSON.parse(end >= 0 ? raw.slice(0, end + 1) : raw) as { lotId?: string };
+            if (parsed.lotId) lotId = parsed.lotId;
+          } catch {}
+        }
+        const sells = await tx.investmentTransaction.findMany({ where: { accountId: target.accountId, assetId: target.assetId, transactionType: InvestmentTransactionType.SELL } });
+        const linked = sells.some(s => (s.note || "").includes(`\"lotId\":\"${lotId}\"`));
+        if (linked) throw new Error("This purchase lot has linked sales. Delete or reverse those sales first.");
+
+        const holding = target.holdingId ? await tx.investmentHolding.findUnique({ where: { id: target.holdingId } }) : null;
+        if (holding && holding.quantity.lt(target.quantity)) throw new Error("This purchase cannot be deleted because its quantity has already been consumed.");
+        if (target.fundingCashAccountId) {
+          const cash = await tx.investmentCashAccount.findUnique({ where: { id: target.fundingCashAccountId } });
+          if (!cash) throw new Error("Investment cash account not found.");
+          await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { increment: target.totalCashAmount } } });
+        } else if (target.fundingWalletId) {
+          const wallet = await tx.wallet.findUnique({ where: { id: target.fundingWalletId } });
+          if (!wallet) throw new Error("Funding wallet not found.");
+          await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: target.totalCashAmount } } });
+        }
+        if (holding) {
+          await tx.investmentHolding.update({ where: { id: holding.id }, data: { quantity: holding.quantity.minus(target.quantity), costBasis: holding.costBasis.minus(target.costBasisAmount) } });
+        }
+        await tx.investmentCashMovement.deleteMany({ where: { investmentTransactionId: target.id } });
+        await tx.investmentTransaction.delete({ where: { id: target.id } });
+        return { id: target.id };
+      });
+      return NextResponse.json(serialize(result));
     }
 
     if (action === "cash.setBalance") return NextResponse.json(serialize(await setInvestmentCashBalance({ cashAccountId: String(body.cashAccountId), balance: Number(body.balance), date: new Date(body.date), note: body.note ? String(body.note) : undefined })));
