@@ -13,7 +13,6 @@ type LotRow = { id: string; lotId: string; transactionDate: string; asset: Asset
 type Ledger = { account: Account; rows: LotRow[]; summary: { openLots: number; openQuantity: string | number; realizedGainLoss: string | number } };
 type Overview = { currencies: Currency[]; providers: Provider[]; accounts: Account[]; assets: Asset[]; holdings: Holding[]; cashAccounts: Cash[]; summary: { totalValue: string | number; totalCash: string | number; totalInvestmentValue: string | number; unrealized: string | number; returnPct: string | number } };
 type FeeConfig = { rdnBankName?: string; rdnAccountNumber?: string; buyFeePct?: number; sellFeePct?: number };
-
 type Trade = { type: "BUY" | "SELL"; assetId: string; assetQuery: string; quantity: string; unitPrice: string; fee: string; tax: string; other: string; date: string; sourceLotId: string; fundingCashAccountId: string };
 
 const input = "w-full rounded-xl border border-white/10 bg-[#080f17] px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600";
@@ -26,16 +25,17 @@ const money = (v: string | number | null | undefined, c = "IDR") => `${cs(c)}${n
 const rdn = (a: Account): FeeConfig => { try { return a.note ? JSON.parse(a.note) as FeeConfig : {}; } catch { return {}; } };
 const assetLabel = (a: Asset) => a.symbol ? `${a.symbol} · ${a.name}` : a.name;
 const stockUnits = (a?: Asset) => a?.assetType === "STOCK" ? 100 : 1;
+const normalizeAssetQuery = (v: string) => v.trim().replace(/\s+/g, " ").toLowerCase();
 
 async function getOverview(): Promise<Overview> { const r = await fetch("/api/investments", { cache: "no-store" }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || "Unable to load investments."); return j; }
 async function postInvestment(body: Record<string, unknown>) { const r = await fetch("/api/investments/v2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || "Investment operation failed."); return j; }
 
 function AssetPicker({ assets, value, selectedId, onQueryChange, onSelect }: { assets: Asset[]; value: string; selectedId: string; onQueryChange: (value: string) => void; onSelect: (asset: Asset) => void }) {
   const [open, setOpen] = useState(false);
-  const q = value.trim().toLowerCase();
-  const filtered = useMemo(() => assets.filter(a => !q || assetLabel(a).toLowerCase().includes(q) || (a.symbol ?? "").toLowerCase() === q || a.name.toLowerCase().includes(q)), [assets, q]);
+  const q = normalizeAssetQuery(value);
+  const filtered = useMemo(() => assets.filter(a => !q || normalizeAssetQuery(assetLabel(a)).includes(q) || normalizeAssetQuery(a.symbol ?? "") === q || normalizeAssetQuery(a.name).includes(q)), [assets, q]);
   return <div className="relative">
-    <input required className={`${input} ${selectedId ? "border-emerald-400/40" : ""}`} placeholder="Asset / Stock (type to search)" value={value} autoComplete="off" onFocus={() => setOpen(true)} onChange={e => { const next = e.target.value; onQueryChange(next); setOpen(true); const exact = assets.find(a => (a.symbol ?? "").toLowerCase() === next.trim().toLowerCase() || assetLabel(a).toLowerCase() === next.trim().toLowerCase()); if (exact) onSelect(exact); }} onBlur={() => window.setTimeout(() => setOpen(false), 150)} />
+    <input className={`${input} ${selectedId ? "border-emerald-400/40" : ""}`} placeholder="Asset / Stock (type to search)" value={value} autoComplete="off" onFocus={() => setOpen(true)} onChange={e => { const next = e.target.value; onQueryChange(next); setOpen(true); const exact = assets.find(a => normalizeAssetQuery(a.symbol ?? "") === normalizeAssetQuery(next) || normalizeAssetQuery(assetLabel(a)) === normalizeAssetQuery(next)); if (exact) onSelect(exact); }} onBlur={() => window.setTimeout(() => setOpen(false), 150)} />
     {open && <div className="absolute z-[70] mt-1 max-h-64 w-full overflow-y-auto rounded-xl border border-white/10 bg-[#0b121a] p-1 shadow-2xl">
       {filtered.length ? filtered.map(a => <button type="button" key={a.id} onMouseDown={e => e.preventDefault()} onClick={() => { onSelect(a); setOpen(false); }} className="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left hover:bg-white/[.06]"><span><span className="block text-sm font-semibold text-white">{a.symbol || a.name}</span><span className="block text-[10px] text-slate-500">{a.name}</span></span><span className="ml-3 text-[9px] uppercase tracking-wide text-slate-600">{a.assetType}</span></button>) : <div className="px-3 py-4 text-xs text-slate-600">Asset tidak ditemukan.</div>}
     </div>}
@@ -71,7 +71,12 @@ export default function InvestmentDashboardFinal() {
   const accountHoldings = useMemo(() => holdings.filter(h => h.account.id === accountId), [holdings, accountId]);
   const transactionAssets = useMemo(() => { const seen = new Set<string>(); const out: Asset[] = []; for (const row of ledger?.rows ?? []) { if (!seen.has(row.asset.id)) { seen.add(row.asset.id); out.push(row.asset); } } for (const h of accountHoldings) { if (!seen.has(h.asset.id)) { seen.add(h.asset.id); out.push(h.asset); } } return out; }, [ledger?.rows, accountHoldings]);
   const pickerAssets = useMemo(() => { const seen = new Set<string>(); return [...transactionAssets, ...assets].filter(a => { if (seen.has(a.id)) return false; seen.add(a.id); return true; }); }, [transactionAssets, assets]);
-  const selectedAsset = pickerAssets.find(a => a.id === trade.assetId);
+  const exactQueriedAsset = useMemo(() => {
+    const q = normalizeAssetQuery(trade.assetQuery);
+    if (!q) return undefined;
+    return pickerAssets.find(a => normalizeAssetQuery(a.symbol ?? "") === q || normalizeAssetQuery(assetLabel(a)) === q || normalizeAssetQuery(a.name) === q);
+  }, [pickerAssets, trade.assetQuery]);
+  const selectedAsset = pickerAssets.find(a => a.id === trade.assetId) ?? exactQueriedAsset;
   const compatibleCash = cashAccounts.filter(c => selected && c.account.provider.id === selected.provider.id && c.account.currency.id === selected.currency.id);
   const feeConfig = selected ? rdn(selected) : {};
   const feePct = trade.type === "BUY" ? Number(feeConfig.buyFeePct || 0) : Number(feeConfig.sellFeePct || 0);
@@ -85,7 +90,16 @@ export default function InvestmentDashboardFinal() {
   const chooseAsset = (a: Asset) => setTrade(x => ({ ...x, assetId: a.id, assetQuery: assetLabel(a), sourceLotId: x.type === "SELL" ? x.sourceLotId : "" }));
   const openTrade = (type: "BUY" | "SELL", row?: LotRow) => { setTrade(x => ({ ...x, type, assetId: row?.asset.id ?? "", assetQuery: row ? assetLabel(row.asset) : "", quantity: "", unitPrice: row?.currentPrice ? String(row.currentPrice) : "", sourceLotId: row?.lotId ?? "", fundingCashAccountId: compatibleCash[0]?.id ?? "" })); setShowTrade(true); };
 
-  const submitTrade = async (e: FormEvent) => { e.preventDefault(); if (!selected || !selectedAsset) return; if (!trade.fundingCashAccountId) { setMessage("Pilih RDN / investment cash account terlebih dahulu."); return; } const qty = Number(trade.quantity) * stockUnits(selectedAsset); const ok = await run({ action: "transaction.create", accountId: selected.id, assetId: selectedAsset.id, transactionType: trade.type, transactionDate: new Date(trade.date).toISOString(), quantity: qty, unitPrice: Number(trade.unitPrice), feeAmount: autoFee, taxAmount: Number(trade.tax || 0), otherCharges: Number(trade.other || 0), fundingCashAccountId: trade.fundingCashAccountId, sourceLotId: trade.sourceLotId || undefined }, "Transaction saved."); if (ok) { setShowTrade(false); setTrade(x => ({ ...x, quantity: "", unitPrice: "", sourceLotId: "", tax: "0", other: "0" })); } };
+  const submitTrade = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!selected) return;
+    const effectiveAsset = selectedAsset ?? exactQueriedAsset;
+    if (!effectiveAsset) { setMessage("Pilih atau masukkan asset yang valid."); return; }
+    if (!trade.fundingCashAccountId) { setMessage("Pilih RDN / investment cash account terlebih dahulu."); return; }
+    const qty = Number(trade.quantity) * stockUnits(effectiveAsset);
+    const ok = await run({ action: "transaction.create", accountId: selected.id, assetId: effectiveAsset.id, transactionType: trade.type, transactionDate: new Date(trade.date).toISOString(), quantity: qty, unitPrice: Number(trade.unitPrice), feeAmount: autoFee, taxAmount: Number(trade.tax || 0), otherCharges: Number(trade.other || 0), fundingCashAccountId: trade.fundingCashAccountId, sourceLotId: trade.sourceLotId || undefined }, "Transaction saved.");
+    if (ok) { setShowTrade(false); setTrade(x => ({ ...x, quantity: "", unitPrice: "", sourceLotId: "", tax: "0", other: "0" })); }
+  };
   const importExcel = async (file: File) => { if (!selected) return; setImporting(true); setMessage(""); try { const f = new FormData(); f.append("action", "import.excel"); f.append("accountId", selected.id); f.append("file", file); const r = await fetch("/api/investments/v2", { method: "POST", body: f }); const j = await r.json(); if (!r.ok || j.error) throw new Error(j.error || "Import failed."); await reload(); await loadLedger(selected.id); setMessage(`Imported ${j.imported} rows. Skipped ${j.skipped}.`); } catch (e) { setMessage(e instanceof Error ? e.message : "Import failed."); } finally { setImporting(false); } };
 
   const saveAccount = async (e: FormEvent) => { e.preventDefault(); const action = editing ? "account.update" : "account.create"; const payload = { ...accountForm, buyFeePct: Number(accountForm.buyFeePct || 0), sellFeePct: Number(accountForm.sellFeePct || 0) }; const ok = await run(editing ? { action, accountId: editing.id, ...payload } : { action, ...payload }, editing ? "Account updated." : "Account created."); if (ok && !editing) setAccountForm(x => ({ ...x, providerName: "", websiteUrl: "", rdnBankName: "", rdnAccountNumber: "", buyFeePct: "", sellFeePct: "" })); };
@@ -96,7 +110,7 @@ export default function InvestmentDashboardFinal() {
 
   return <div className="mx-auto max-w-[1450px] px-5 py-8 lg:px-8">
     <header className="mb-6 flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><p className="text-[10px] font-semibold uppercase tracking-[.18em] text-emerald-400">Portfolio</p><h1 className="mt-1 text-3xl font-bold text-white">Investments</h1><p className="mt-2 text-sm text-slate-500">Accounts, transactions, lots, RDN cash and unrealized performance.</p></div><nav className="flex flex-wrap gap-1 rounded-xl border border-white/10 bg-[#0b121a] p-1">{([["overview","Overview"],["transactions","Transactions"],["cash","Cash"],["accounts","Accounts"]] as const).map(([k,l]) => <button key={k} onClick={() => setScreen(k)} className={`rounded-lg px-4 py-2 text-xs font-bold uppercase tracking-wide ${screen === k ? "bg-white/[.09] text-white" : "text-slate-500 hover:text-slate-300"}`}>{l}</button>)}</nav></header>
-    {message && <div className={`mb-4 rounded-xl border px-4 py-3 text-xs ${/error|failed|insufficient|cannot|not found|select|must/i.test(message) ? "border-red-400/20 bg-red-400/[.05] text-red-300" : "border-emerald-400/20 bg-emerald-400/[.05] text-emerald-300"}`}>{message}</div>}
+    {message && <div className={`mb-4 rounded-xl border px-4 py-3 text-xs ${/error|failed|insufficient|cannot|not found|select|must|valid/i.test(message) ? "border-red-400/20 bg-red-400/[.05] text-red-300" : "border-emerald-400/20 bg-emerald-400/[.05] text-emerald-300"}`}>{message}</div>}
 
     {screen === "overview" && <div className="space-y-5"><div className="grid gap-3 md:grid-cols-4">{[["Total Investment",data.summary.totalInvestmentValue,"portfolio + cash"],["Cash",data.summary.totalCash,"RDN / settlement"],["Portfolio",data.summary.totalValue,"current value"],["Unrealized P/L",data.summary.unrealized,`${Number(data.summary.returnPct || 0).toFixed(2)}% return`]].map(([l,v,s]) => <div className={card} key={String(l)}><p className="text-[10px] uppercase tracking-widest text-slate-500">{l}</p><p className="mt-2 text-xl font-bold text-white">{money(v as number)}</p><p className="mt-1 text-[10px] text-slate-600">{s}</p></div>)}</div><section className={card}><div className="mb-4 flex items-end justify-between"><div><h2 className="font-semibold text-white">Investment Accounts</h2><p className="text-xs text-slate-600">Klik account untuk membuka transaction ledger.</p></div><button onClick={() => { setEditing(null); setScreen("accounts"); }} className="rounded-lg bg-emerald-400 px-3 py-2 text-xs font-bold text-[#07110b]">+ Account</button></div>{accounts.length ? <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">{accounts.map(a => <button key={a.id} onClick={() => chooseAccount(a.id)} className="rounded-2xl border border-white/10 bg-white/[.02] p-5 text-left hover:border-emerald-400/30"><div className="flex items-start justify-between"><div><p className="text-base font-semibold text-white">{a.provider.name}</p><p className="mt-1 text-xs text-slate-500">{rdn(a).rdnBankName ? `RDN ${rdn(a).rdnBankName}` : "Investment account"} · {a.currency.code}</p></div><span className="text-[10px] font-bold uppercase tracking-widest text-emerald-300">Open →</span></div><div className="mt-5 grid grid-cols-2 gap-y-3 text-xs"><div><p className="text-slate-600">Cash</p><p className="mt-1 font-semibold text-white">{money(a.cashAccount?.balance ?? 0,a.currency.code)}</p></div><div><p className="text-slate-600">Portfolio</p><p className="mt-1 font-semibold text-white">{money(holdings.filter(h=>h.account.id===a.id).reduce((s,h)=>s+Number(h.marketValue),0),a.currency.code)}</p></div></div></button>)}</div> : <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-xs text-slate-600">Belum ada investment account.</div>}</section></div>}
 
