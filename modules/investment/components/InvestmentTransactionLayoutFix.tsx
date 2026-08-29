@@ -38,19 +38,31 @@ function applyTransactionLayout() {
 function applyRdnLayout() {
   const heading = Array.from(document.querySelectorAll<HTMLElement>("h2")).find((h) => h.textContent?.trim() === "RDN Cash");
   if (!heading) return;
-  const panel = heading.closest<HTMLElement>("section");
-  if (!panel) return;
-  const grid = panel.parentElement as HTMLElement | null;
+
+  // The RDN Cash and Balances cards are children of the same grid section.
+  const grid = heading.closest<HTMLElement>("section");
   if (!grid) return;
-  const balances = Array.from(grid.children).find((child) => (child as HTMLElement).querySelector?.("h2")?.textContent?.trim() === "Balances") as HTMLElement | undefined;
-  if (!balances) return;
+  const hasBalances = Array.from(grid.querySelectorAll("h2")).some((h) => h.textContent?.trim() === "Balances");
+  if (!hasBalances) return;
 
   grid.style.gridTemplateColumns = "minmax(0, 1fr)";
   grid.style.width = "100%";
-  panel.style.width = "100%";
-  balances.style.width = "100%";
-  panel.style.gridColumn = "1 / -1";
-  balances.style.gridColumn = "1 / -1";
+  grid.style.display = "grid";
+  Array.from(grid.children).forEach((child) => {
+    const element = child as HTMLElement;
+    element.style.width = "100%";
+    element.style.gridColumn = "1 / -1";
+  });
+
+  // RDN history is driven by clicking a balance card; do not duplicate that
+  // interaction with a second account selector.
+  const historyHeading = Array.from(grid.querySelectorAll<HTMLElement>("h3")).find((h) => h.textContent?.trim() === "Riwayat Transaksi RDN");
+  const historySection = historyHeading?.closest<HTMLElement>("section");
+  if (historySection) {
+    const selectors = Array.from(historySection.querySelectorAll<HTMLSelectElement>("select"));
+    const historySelector = selectors[0];
+    if (historySelector) historySelector.style.display = "none";
+  }
 }
 
 function applyLayout() {
