@@ -8,16 +8,17 @@ function money(value: string | number, code: string) {
 }
 
 async function enhanceTable() {
-  const table = Array.from(document.querySelectorAll<HTMLTableElement>("table")).find((t) => t.innerText.includes("Transaction Lots")) ?? document.querySelector<HTMLTableElement>("table.min-w-\\[1200px\\]");
+  const table = Array.from(document.querySelectorAll<HTMLTableElement>("table")).find((t) => Array.from(t.querySelectorAll("thead th")).some((cell) => cell.textContent?.trim() === "Current"));
   if (!table || table.dataset.minSellEnhanced === "1") return;
 
   const headerCells = Array.from(table.querySelectorAll("thead th"));
-  if (!headerCells.length || headerCells.some((cell) => cell.textContent?.trim() === "Min. Sell")) return;
-
   const header = headerCells.find((cell) => cell.textContent?.trim() === "Current");
-  if (!header) return;
+  if (!header || headerCells.some((cell) => cell.textContent?.trim() === "Min. Sell")) return;
 
-  const heading = Array.from(document.querySelectorAll("h2")).find((h) => h.textContent?.trim() && table.closest("section")?.contains(h));
+  const heading = Array.from(document.querySelectorAll("h2")).find((h) => {
+    const text = h.textContent?.trim() ?? "";
+    return text && !["Transaction Lots", "Investment Accounts", "RDN Cash", "Asset master"].includes(text) && Array.from(h.parentElement?.parentElement?.querySelectorAll("button") ?? []).some((b) => b.textContent?.includes("+ Transaction"));
+  });
   const providerName = heading?.textContent?.trim();
   if (!providerName) return;
 
@@ -38,18 +39,14 @@ async function enhanceTable() {
     header.insertAdjacentElement("afterend", th);
 
     const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
+    const currentIndex = headerCells.indexOf(header);
     rows.forEach((row, index) => {
       const data = ledger.rows[index];
       const td = document.createElement("td");
       td.className = "whitespace-nowrap font-medium text-amber-300";
       td.textContent = data?.remainingQuantity > 0 ? money(data.minimumSellPrice, data.asset?.currency?.code ?? account.currency?.code ?? "IDR") : "—";
-      const currentCell = Array.from(row.children).find((cell) => {
-        const cells = Array.from(row.children);
-        const currentIndex = headerCells.indexOf(header);
-        return cells[currentIndex] === cell;
-      });
+      const currentCell = row.children[currentIndex];
       if (currentCell) currentCell.insertAdjacentElement("afterend", td);
-      else row.appendChild(td);
     });
 
     table.dataset.minSellEnhanced = "1";
