@@ -98,7 +98,7 @@ export async function POST(request: Request) {
       if (!accountId || !symbol || !currencyId) return NextResponse.json({ error: "Account, asset symbol and currency are required." }, { status: 400 });
       const account = await prisma.investmentAccount.findUnique({ where: { id: accountId } });
       if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 404 });
-      const existing = await prisma.investmentAsset.findFirst({ where: { symbol: { equals: symbol, mode: "insensitive" }, currencyId } });
+      const existing = await prisma.investmentAsset.findFirst({ where: { symbol, currencyId } });
       if (existing) return NextResponse.json(serialize(existing));
       const asset = await prisma.investmentAsset.create({ data: { symbol, name: String(body.name || symbol).trim(), assetType, currencyId, unitName: String(body.unitName || (assetType === "STOCK" ? "share" : "unit")).trim() } });
       return NextResponse.json(serialize(asset));
