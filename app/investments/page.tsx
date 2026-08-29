@@ -4,14 +4,12 @@ import InvestmentDashboardFinal from "@/modules/investment/components/Investment
 import InvestmentAccountFormValidationFix from "@/modules/investment/components/InvestmentAccountFormValidationFix";
 import InvestmentTransactionSplitView from "@/modules/investment/components/InvestmentTransactionSplitView";
 import InvestmentTransactionLayoutFix from "@/modules/investment/components/InvestmentTransactionLayoutFix";
-import InvestmentCashWithdrawPortal from "@/modules/investment/components/InvestmentCashWithdrawPortal";
 
 export default function InvestmentsPage() {
   return (
     <AppShell sidebar={<Sidebar />} header={null}>
       <InvestmentAccountFormValidationFix>
         <InvestmentTransactionLayoutFix />
-        <InvestmentCashWithdrawPortal />
         <InvestmentTransactionSplitView>
           <InvestmentDashboardFinal />
         </InvestmentTransactionSplitView>
