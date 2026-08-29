@@ -47,10 +47,13 @@ export default function InvestmentCashWithdrawPortal() {
       const cashTab = navButtons.find((button) => button.textContent?.trim() === "Cash");
       if (cashTab) cashTab.textContent = "RDN";
 
-      const balancesHeading = Array.from(target.querySelectorAll("h2")).find((h) => h.textContent?.trim() === "Balances");
+      const balancesHeading = Array.from(target.parentElement?.querySelectorAll("h2") ?? []).find((h) => h.textContent?.trim() === "Balances");
       const balancesSection = balancesHeading?.closest("section");
       if (balancesSection) {
         Array.from(balancesSection.querySelectorAll<HTMLButtonElement>("button")).forEach((button) => {
+          const text = button.textContent?.trim().toLowerCase() ?? "";
+          const match = cashAccounts.find((c) => text.includes(c.account.provider.name.toLowerCase()));
+          if (match) button.dataset.rdnHistoryAccountId = match.id;
           button.classList.add("cursor-pointer", "transition", "hover:border-emerald-400/30", "hover:bg-white/[.03]");
         });
       }
@@ -63,22 +66,14 @@ export default function InvestmentCashWithdrawPortal() {
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button") : null;
+      const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-rdn-history-account-id]") : null;
       if (!target) return;
-      const balancesSection = target.closest("section");
-      const heading = balancesSection?.querySelector("h2")?.textContent?.trim();
-      if (heading !== "Balances") return;
-      const text = target.textContent?.trim() ?? "";
-      if (!text || text === "Balances") return;
-      const provider = cashAccounts.find((c) => text.toLowerCase().includes(c.account.provider.name.toLowerCase()));
-      if (provider) {
-        setHistoryAccountId(provider.id);
-        setHistoryOpen(true);
-      }
+      const id = target.dataset.rdnHistoryAccountId;
+      if (id) { setHistoryAccountId(id); setHistoryOpen(true); }
     };
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
-  }, [cashAccounts]);
+  }, []);
 
   useEffect(() => {
     if (!host) return;
@@ -111,7 +106,21 @@ export default function InvestmentCashWithdrawPortal() {
 
   useEffect(() => {
     if (source && (!target || target.currency.code !== source.account.currency.code)) setWalletId(compatibleWallets[0]?.id || "");
-  }, [cashAccountId, source?.account.currency.code, compatibleWallets, target]);
+  }, [source, target, compatibleWallets]);
+
+  async function loadData() {
+    const r = await fetch("/api/investments/cash-transfer", { cache: "no-store" });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || "Unable to refresh RDN data.");
+    setWallets(j.wallets ?? []); setCashAccounts(j.cashAccounts ?? []);
+  }
+
+  async function loadHistory(id: string) {
+    const r = await fetch(`/api/investments/cash-transfer?cashAccountId=${encodeURIComponent(id)}`, { cache: "no-store" });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || "Unable to refresh RDN history.");
+    setHistoryRows(j.rows ?? []);
+  }
 
   async function submit() {
     if (!valid || !source || !target) return;
@@ -129,24 +138,10 @@ export default function InvestmentCashWithdrawPortal() {
     finally { setBusy(false); }
   }
 
-  async function loadData() {
-    const r = await fetch("/api/investments/cash-transfer", { cache: "no-store" });
-    const j = await r.json();
-    if (!r.ok || j.error) throw new Error(j.error || "Unable to refresh RDN data.");
-    setWallets(j.wallets ?? []); setCashAccounts(j.cashAccounts ?? []);
-  }
-
-  async function loadHistory(id: string) {
-    const r = await fetch(`/api/investments/cash-transfer?cashAccountId=${encodeURIComponent(id)}`, { cache: "no-store" });
-    const j = await r.json();
-    if (!r.ok || j.error) throw new Error(j.error || "Unable to refresh RDN history.");
-    setHistoryRows(j.rows ?? []);
-  }
-
   if (!host) return null;
   return createPortal(
-    <div className="mt-5 space-y-5 border-t border-white/5 pt-5" data-rdn-withdraw-panel>
-      <section className="rounded-2xl border border-white/10 bg-[#080f17] p-5">
+    <div className="mt-5 w-full space-y-5 border-t border-white/5 pt-5" data-rdn-withdraw-panel>
+      <section className="w-full rounded-2xl border border-white/10 bg-[#080f17] p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-emerald-400">RDN → Wallet</p><h3 className="mt-1 text-base font-semibold text-white">Tarik dana dari RDN</h3><p className="mt-1 text-xs text-slate-500">Kembalikan dana dari RDN ke salah satu Wallet OKANE.</p></div>
           {source && <div className="rounded-xl border border-white/10 px-4 py-3 text-right"><p className="text-[10px] uppercase tracking-wider text-slate-500">Saldo tersedia</p><p className="mt-1 font-semibold text-emerald-300">{money(source.balance,source.account.currency.code)}</p></div>}
@@ -162,7 +157,7 @@ export default function InvestmentCashWithdrawPortal() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d151e]">
+      <section className="w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0d151e]">
         <button type="button" onClick={()=>setHistoryOpen(v=>!v)} className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-white/[.02]"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">RDN history</p><h3 className="mt-1 text-base font-semibold text-white">Riwayat Transaksi RDN</h3><p className="mt-1 text-xs text-slate-600">Klik box pada Balances untuk membuka riwayat RDN tersebut.</p></div><ChevronDown size={18} className={`text-slate-500 transition ${historyOpen ? "rotate-180" : ""}`}/></button>
         {historyOpen && <div className="border-t border-white/5">{historyLoading?<div className="p-8 text-center text-xs text-slate-600">Loading RDN history…</div>:historyRows.length===0?<div className="p-8 text-center text-xs text-slate-600">Belum ada transaksi pada RDN ini.</div>:<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600"><tr><th className="px-5 py-3">Date</th><th>Type</th><th>Description</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th className="px-5 text-right">Balance</th></tr></thead><tbody className="divide-y divide-white/5">{historyRows.map(row=><tr key={row.id}><td className="px-5 py-3 text-slate-400">{new Date(row.date).toLocaleDateString("id-ID")}</td><td><span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase text-slate-400">{typeLabel(row.movementType)}</span></td><td className="text-slate-300">{row.description}</td><td className="text-right text-red-300">{Number(row.debit)?money(row.debit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="text-right text-emerald-300">{Number(row.credit)?money(row.credit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="px-5 text-right font-semibold text-white">{money(row.balance,historyCash?.account.currency.code??"IDR")}</td></tr>)}</tbody></table></div>}</div>}
       </section>
