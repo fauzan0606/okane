@@ -6,18 +6,14 @@ import { createPortal } from "react-dom";
 
 type Wallet = { id: string; name: string; balance: string | number; currency: { code: string; symbol: string } };
 type CashAccount = { id: string; balance: string | number; account: { id: string; name: string; provider: { name: string }; currency: { code: string } } };
-type RdnHistoryRow = { id: string; date: string; description: string; debit: string | number; credit: string | number; balance: string | number; movementType: string };
+type HistoryRow = { id: string; date: string; description: string; debit: string | number; credit: string | number; balance: string | number; movementType: string };
 
 const control = "w-full rounded-xl border border-white/10 bg-[#080f17] px-3.5 py-3 text-sm text-white outline-none transition focus:border-emerald-400/40 focus:ring-2 focus:ring-emerald-400/10";
-
-function money(value: string | number, code: string) {
+const money = (value: string | number, code: string) => {
   const symbols: Record<string, string> = { IDR: "Rp", USD: "US$", SGD: "S$", MYR: "RM", JPY: "¥", EUR: "€", GBP: "£" };
   return `${symbols[code] ?? code}${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value) || 0)}`;
-}
-
-function typeLabel(type: string) {
-  return ({ DEPOSIT: "Transfer masuk", WITHDRAWAL: "Transfer ke Wallet", BUY_SETTLEMENT: "Pembelian", SELL_SETTLEMENT: "Penjualan", ADJUSTMENT: "Penyesuaian" } as Record<string, string>)[type] ?? type;
-}
+};
+const typeLabel = (type: string) => ({ DEPOSIT: "Transfer masuk", WITHDRAWAL: "Transfer ke Wallet", BUY_SETTLEMENT: "Pembelian", SELL_SETTLEMENT: "Penjualan", ADJUSTMENT: "Penyesuaian" } as Record<string, string>)[type] ?? type;
 
 export default function InvestmentCashWithdrawPortal() {
   const [host, setHost] = useState<HTMLElement | null>(null);
@@ -32,32 +28,43 @@ export default function InvestmentCashWithdrawPortal() {
   const [error, setError] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
   const [historyAccountId, setHistoryAccountId] = useState("");
-  const [historyRows, setHistoryRows] = useState<RdnHistoryRow[]>([]);
+  const [historyRows, setHistoryRows] = useState<HistoryRow[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
 
   useEffect(() => {
     const locate = () => {
       const target = Array.from(document.querySelectorAll<HTMLElement>("section")).find((section) => section.querySelector("h2")?.textContent?.trim() === "RDN Cash");
       if (!target) return;
-      let mount = target.querySelector<HTMLElement>("[data-rdn-withdraw-mount]");
-      if (!mount) { mount = document.createElement("div"); mount.dataset.rdnWithdrawMount = "1"; target.appendChild(mount); }
+
+      let grid: HTMLElement | null = target.parentElement;
+      while (grid && grid !== document.body && !(typeof grid.className === "string" && /(^|\s)grid(\s|$)/.test(grid.className))) grid = grid.parentElement;
+      const parent = grid?.parentElement ?? target.parentElement;
+      if (!parent) return;
+
+      let mount = parent.querySelector<HTMLElement>("[data-rdn-withdraw-mount]");
+      if (!mount) {
+        mount = document.createElement("div");
+        mount.dataset.rdnWithdrawMount = "1";
+        parent.insertBefore(mount, grid?.nextSibling ?? null);
+      }
+      if (mount.parentElement !== parent && grid) parent.insertBefore(mount, grid.nextSibling);
       setHost(mount);
 
-      const navButtons = Array.from(document.querySelectorAll("button"));
-      const cashTab = navButtons.find((button) => button.textContent?.trim() === "Cash");
+      const cashTab = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Cash");
       if (cashTab) cashTab.textContent = "RDN";
 
-      const balancesHeading = Array.from(target.parentElement?.querySelectorAll("h2") ?? []).find((h) => h.textContent?.trim() === "Balances");
+      const balancesHeading = Array.from(grid?.querySelectorAll("h2") ?? []).find((h) => h.textContent?.trim() === "Balances");
       const balancesSection = balancesHeading?.closest("section");
       if (balancesSection) {
         Array.from(balancesSection.querySelectorAll<HTMLButtonElement>("button")).forEach((button) => {
           const text = button.textContent?.trim().toLowerCase() ?? "";
-          const match = cashAccounts.find((c) => text.includes(c.account.provider.name.toLowerCase()));
-          if (match) button.dataset.rdnHistoryAccountId = match.id;
+          const account = cashAccounts.find((c) => text.includes(c.account.provider.name.toLowerCase()));
+          if (account) button.dataset.rdnHistoryAccountId = account.id;
           button.classList.add("cursor-pointer", "transition", "hover:border-emerald-400/30", "hover:bg-white/[.03]");
         });
       }
     };
+
     locate();
     const observer = new MutationObserver(locate);
     observer.observe(document.body, { childList: true, subtree: true });
@@ -66,10 +73,11 @@ export default function InvestmentCashWithdrawPortal() {
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-rdn-history-account-id]") : null;
-      if (!target) return;
-      const id = target.dataset.rdnHistoryAccountId;
-      if (id) { setHistoryAccountId(id); setHistoryOpen(true); }
+      const button = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-rdn-history-account-id]") : null;
+      const id = button?.dataset.rdnHistoryAccountId;
+      if (!id) return;
+      setHistoryAccountId(id);
+      setHistoryOpen(true);
     };
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
@@ -82,7 +90,10 @@ export default function InvestmentCashWithdrawPortal() {
       .then((j) => {
         setWallets(j.wallets ?? []);
         setCashAccounts(j.cashAccounts ?? []);
-        if (j.cashAccounts?.[0]) { setCashAccountId((current) => current || j.cashAccounts[0].id); setHistoryAccountId((current) => current || j.cashAccounts[0].id); }
+        if (j.cashAccounts?.[0]) {
+          setCashAccountId((current) => current || j.cashAccounts[0].id);
+          setHistoryAccountId((current) => current || j.cashAccounts[0].id);
+        }
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Unable to load RDN data."));
   }, [host]);
@@ -101,21 +112,21 @@ export default function InvestmentCashWithdrawPortal() {
   const compatibleWallets = useMemo(() => source ? wallets.filter((w) => w.currency.code === source.account.currency.code) : wallets, [source, wallets]);
   const target = compatibleWallets.find((w) => w.id === walletId);
   const value = Number(amount || 0);
-  const valid = !!source && !!target && value > 0 && Number.isFinite(value) && source.account.currency.code === target.currency.code && value <= Number(source.balance);
+  const valid = !!source && !!target && value > 0 && Number.isFinite(value) && value <= Number(source.balance) && source.account.currency.code === target.currency.code;
   const historyCash = cashAccounts.find((c) => c.id === historyAccountId);
 
   useEffect(() => {
     if (source && (!target || target.currency.code !== source.account.currency.code)) setWalletId(compatibleWallets[0]?.id || "");
   }, [source, target, compatibleWallets]);
 
-  async function loadData() {
+  async function refresh() {
     const r = await fetch("/api/investments/cash-transfer", { cache: "no-store" });
     const j = await r.json();
     if (!r.ok || j.error) throw new Error(j.error || "Unable to refresh RDN data.");
     setWallets(j.wallets ?? []); setCashAccounts(j.cashAccounts ?? []);
   }
 
-  async function loadHistory(id: string) {
+  async function refreshHistory(id: string) {
     const r = await fetch(`/api/investments/cash-transfer?cashAccountId=${encodeURIComponent(id)}`, { cache: "no-store" });
     const j = await r.json();
     if (!r.ok || j.error) throw new Error(j.error || "Unable to refresh RDN history.");
@@ -131,16 +142,15 @@ export default function InvestmentCashWithdrawPortal() {
       if (!r.ok || j.error) throw new Error(j.error || "RDN withdrawal failed.");
       setMessage(`${money(value, source.account.currency.code)} dipindahkan ke ${target.name}.`);
       setAmount("");
-      setHistoryAccountId(source.id);
-      setHistoryOpen(true);
-      await Promise.all([loadData(), loadHistory(source.id)]);
+      setHistoryAccountId(source.id); setHistoryOpen(true);
+      await Promise.all([refresh(), refreshHistory(source.id)]);
     } catch (e) { setError(e instanceof Error ? e.message : "RDN withdrawal failed."); }
     finally { setBusy(false); }
   }
 
   if (!host) return null;
   return createPortal(
-    <div className="mt-5 w-full space-y-5 border-t border-white/5 pt-5" data-rdn-withdraw-panel>
+    <div className="mt-5 w-full space-y-5 border-t border-white/5 pt-5">
       <section className="w-full rounded-2xl border border-white/10 bg-[#080f17] p-5">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
           <div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-emerald-400">RDN → Wallet</p><h3 className="mt-1 text-base font-semibold text-white">Tarik dana dari RDN</h3><p className="mt-1 text-xs text-slate-500">Kembalikan dana dari RDN ke salah satu Wallet OKANE.</p></div>
@@ -159,7 +169,7 @@ export default function InvestmentCashWithdrawPortal() {
 
       <section className="w-full overflow-hidden rounded-2xl border border-white/10 bg-[#0d151e]">
         <button type="button" onClick={()=>setHistoryOpen(v=>!v)} className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-white/[.02]"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">RDN history</p><h3 className="mt-1 text-base font-semibold text-white">Riwayat Transaksi RDN</h3><p className="mt-1 text-xs text-slate-600">Klik box pada Balances untuk membuka riwayat RDN tersebut.</p></div><ChevronDown size={18} className={`text-slate-500 transition ${historyOpen ? "rotate-180" : ""}`}/></button>
-        {historyOpen && <div className="border-t border-white/5">{historyLoading?<div className="p-8 text-center text-xs text-slate-600">Loading RDN history…</div>:historyRows.length===0?<div className="p-8 text-center text-xs text-slate-600">Belum ada transaksi pada RDN ini.</div>:<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600"><tr><th className="px-5 py-3">Date</th><th>Type</th><th>Description</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th className="px-5 text-right">Balance</th></tr></thead><tbody className="divide-y divide-white/5">{historyRows.map(row=><tr key={row.id}><td className="px-5 py-3 text-slate-400">{new Date(row.date).toLocaleDateString("id-ID")}</td><td><span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase text-slate-400">{typeLabel(row.movementType)}</span></td><td className="text-slate-300">{row.description}</td><td className="text-right text-red-300">{Number(row.debit)?money(row.debit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="text-right text-emerald-300">{Number(row.credit)?money(row.credit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="px-5 text-right font-semibold text-white">{money(row.balance,historyCash?.account.currency.code??"IDR")}</td></tr>)}</tbody></table></div>}</div>}
+        {historyOpen && <div className="border-t border-white/5">{historyCash && <div className="border-b border-white/5 px-5 py-4"><p className="text-sm font-semibold text-white">{historyCash.account.provider.name} · {historyCash.account.name}</p><p className="mt-1 text-xs text-slate-600">Saldo {money(historyCash.balance,historyCash.account.currency.code)}</p></div>}{historyLoading?<div className="p-8 text-center text-xs text-slate-600">Loading RDN history…</div>:historyRows.length===0?<div className="p-8 text-center text-xs text-slate-600">Belum ada transaksi pada RDN ini.</div>:<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600"><tr><th className="px-5 py-3">Date</th><th>Type</th><th>Description</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th className="px-5 text-right">Balance</th></tr></thead><tbody className="divide-y divide-white/5">{historyRows.map(row=><tr key={row.id}><td className="px-5 py-3 text-slate-400">{new Date(row.date).toLocaleDateString("id-ID")}</td><td><span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase text-slate-400">{typeLabel(row.movementType)}</span></td><td className="text-slate-300">{row.description}</td><td className="text-right text-red-300">{Number(row.debit)?money(row.debit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="text-right text-emerald-300">{Number(row.credit)?money(row.credit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="px-5 text-right font-semibold text-white">{money(row.balance,historyCash?.account.currency.code??"IDR")}</td></tr>)}</tbody></table></div>}</div>}
       </section>
     </div>, host
   );
