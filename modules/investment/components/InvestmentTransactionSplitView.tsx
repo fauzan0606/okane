@@ -7,7 +7,6 @@ type Row = {
   transactionDate: string;
   asset: { symbol?: string | null; name: string; assetType: string; currency: { code: string } };
   quantity: string | number;
-  soldQuantity: string | number;
   remainingQuantity: string | number;
   unitPrice: string | number;
   totalCost: string | number;
@@ -25,11 +24,12 @@ function qty(value: string | number, assetType: string) {
   const divisor = assetType === "STOCK" ? 100 : 1;
   return new Intl.NumberFormat("id-ID", { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format((Number(value) || 0) / divisor);
 }
-function price(value: string | number, code: string) { return money(value, code); }
+function esc(value: unknown) {
+  return String(value ?? "").replace(/[&<>\"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '\"': "&quot;" } as Record<string, string>)[c]);
+}
 
 async function renderSplitLedger() {
-  const tables = Array.from(document.querySelectorAll<HTMLTableElement>("table"));
-  const table = tables.find((t) => Array.from(t.querySelectorAll("thead th")).some((th) => th.textContent?.trim() === "P/L"));
+  const table = Array.from(document.querySelectorAll<HTMLTableElement>("table")).find((t) => Array.from(t.querySelectorAll("thead th")).some((th) => th.textContent?.trim() === "P/L"));
   if (!table || table.dataset.splitLedgerEnhanced === "1") return;
 
   const heading = Array.from(document.querySelectorAll("h2")).find((h) => {
@@ -40,8 +40,7 @@ async function renderSplitLedger() {
 
   const overviewResponse = await fetch("/api/investments", { cache: "no-store" });
   const overview = await overviewResponse.json();
-  const candidates = (overview.accounts ?? []).filter((a: any) => a.provider?.name === heading.textContent?.trim() && a.isActive !== false);
-  const account = candidates[0];
+  const account = (overview.accounts ?? []).find((a: any) => a.provider?.name === heading.textContent?.trim() && a.isActive !== false);
   if (!account?.id) return;
 
   const ledgerResponse = await fetch(`/api/investments/v2?accountId=${encodeURIComponent(account.id)}`, { cache: "no-store" });
@@ -51,82 +50,78 @@ async function renderSplitLedger() {
   const header = table.querySelector("thead tr");
   const body = table.querySelector("tbody");
   if (!header || !body) return;
+  const originalRows = Array.from(body.querySelectorAll<HTMLTableRowElement>(":scope > tr"));
+  if (originalRows.length !== ledger.rows.length) return;
 
+  const headers = ["Date", "Asset", "Buy", "Sell", "Cost", "Remaining", "Current", "Min. Sell", "P/L", "Action"];
   header.innerHTML = "";
-  [
-    ["Date", "w-[10%]"], ["Asset", "w-[11%]"], ["Buy", "w-[10%]"], ["Sell", "w-[10%]"],
-    ["Cost", "w-[14%]"], ["Remaining", "w-[10%]"], ["Current", "w-[11%]"], ["Min. Sell", "w-[11%]"], ["P/L", "w-[10%]"], ["Action", "w-[11%] text-right pr-2"],
-  ].forEach(([label, className]) => {
-    const th = document.createElement("th");
-    th.className = String(className);
-    th.textContent = String(label);
-    if (label === "Date") th.classList.add("px-2", "py-3");
-    header.appendChild(th);
-  });
+  headers.forEach((label, i) => { const th = document.createElement("th"); th.className = i === 1 ? "w-[11%]" : i === 9 ? "w-[11%] text-right pr-2" : ""; th.textContent = label; if (i === 0) th.classList.add("px-2", "py-3"); header.appendChild(th); });
 
-  body.innerHTML = "";
-  for (const row of ledger.rows as Row[]) {
+  const addCell = (tr: HTMLTableRowElement, text: string, className = "") => { const td = document.createElement("td"); td.className = className; td.textContent = text; tr.appendChild(td); return td; };
+
+  ledger.rows.forEach((row: Row, rowIndex: number) => {
+    const original = originalRows[rowIndex];
     const code = row.asset.currency.code;
-    const stock = row.asset.assetType === "STOCK";
     const originalQty = Number(row.quantity) || 0;
-    const sales = row.sales ?? [];
-    const sold = sales.reduce((sum, s) => sum + Number(s.quantity || 0), 0);
     const remaining = Math.max(0, Number(row.remainingQuantity) || 0);
-
-    const makeRow = (cells: Array<string>, soldState: boolean) => {
-      const tr = document.createElement("tr");
-      cells.forEach((text, index) => {
-        const td = document.createElement("td");
-        td.className = index === 9 ? "text-right pr-2" : index === 0 ? "px-2 py-3 text-slate-400" : "";
-        if (index === 1) td.innerHTML = `<b class="text-white">${row.asset.symbol || row.asset.name}</b><div class="text-[10px] text-slate-600">${row.asset.name}</div>`;
-        else td.textContent = text;
-        if (soldState) tr.className = "bg-white/[.012]";
-        tr.appendChild(td);
-      });
-      body.appendChild(tr);
-    };
+    const sales = row.sales ?? [];
+    const originalAction = original.lastElementChild;
+    const originalAssetHtml = original.children[1]?.innerHTML ?? `<b class="text-white">${esc(row.asset.symbol || row.asset.name)}</b><div class="text-[10px] text-slate-600">${esc(row.asset.name)}</div>`;
 
     for (const sale of sales) {
+      const soldRow = document.createElement("tr");
+      soldRow.className = "bg-white/[.012]";
+      addCell(soldRow, new Date(sale.date).toLocaleDateString("id-ID"), "px-2 py-3 text-slate-400");
+      const assetCell = document.createElement("td"); assetCell.innerHTML = originalAssetHtml; soldRow.appendChild(assetCell);
+      addCell(soldRow, money(row.unitPrice, code));
+      addCell(soldRow, money(sale.price, code));
       const soldCost = originalQty > 0 ? Number(row.totalCost) * (Number(sale.quantity) / originalQty) : 0;
-      makeRow([
-        new Date(sale.date).toLocaleDateString("id-ID"),
-        "", price(row.unitPrice, code), price(sale.price, code), money(soldCost, code), `${qty(sale.quantity, row.asset.assetType)} sold`, "—", "—", money(sale.realized, code), "SOLD",
-      ], true);
+      addCell(soldRow, money(soldCost, code));
+      addCell(soldRow, `${qty(sale.quantity, row.asset.assetType)} sold`, "font-medium text-slate-300");
+      addCell(soldRow, "—");
+      addCell(soldRow, "—");
+      addCell(soldRow, money(sale.realized, code), Number(sale.realized) >= 0 ? "text-emerald-300" : "text-red-300");
+      addCell(soldRow, "SOLD", "text-right pr-2 font-semibold text-slate-500");
+      original.before(soldRow);
     }
 
+    // Add Sell column to the existing open row and retain the React-owned Action cell.
+    if (original.children.length === 8) {
+      const sellCell = document.createElement("td");
+      sellCell.textContent = "—";
+      original.children[2].insertAdjacentElement("afterend", sellCell);
+    }
     if (remaining > 0) {
-      makeRow([
-        new Date(row.transactionDate).toLocaleDateString("id-ID"),
-        "", price(row.unitPrice, code), "—", money(Number(row.totalCost) * (remaining / Math.max(originalQty, 1)), code), qty(remaining, row.asset.assetType), row.currentPrice == null ? "—" : price(row.currentPrice, code), money(row.minimumSellPrice, code), money(row.unrealizedGainLoss, code), "",
-      ], false);
-      const tr = body.lastElementChild as HTMLTableRowElement | null;
-      if (tr) {
-        const action = tr.lastElementChild;
-        if (action) {
-          const source = Array.from(table.querySelectorAll("tbody tr"))[table.querySelectorAll("tbody tr").length - 1];
-          void source;
-          action.textContent = "OPEN";
-          action.className = "text-right pr-2 font-semibold text-emerald-300";
-        }
-      }
+      const costCell = original.children[4];
+      if (costCell) costCell.textContent = money(originalQty > 0 ? Number(row.totalCost) * (remaining / originalQty) : 0, code);
+      const remainingCell = original.children[5];
+      if (remainingCell) remainingCell.textContent = qty(remaining, row.asset.assetType);
+      const currentCell = original.children[6];
+      if (currentCell) currentCell.textContent = row.currentPrice == null ? "—" : money(row.currentPrice, code);
+      const minSellCell = document.createElement("td");
+      minSellCell.textContent = money(row.minimumSellPrice, code);
+      minSellCell.className = "whitespace-nowrap font-medium text-amber-300";
+      original.children[6].insertAdjacentElement("afterend", minSellCell);
+      const pnlCell = original.children[8];
+      if (pnlCell) { pnlCell.textContent = money(row.unrealizedGainLoss, code); pnlCell.className = Number(row.unrealizedGainLoss) >= 0 ? "text-emerald-300" : "text-red-300"; }
+    } else {
+      original.remove();
     }
-  }
+    void originalAction;
+  });
 
+  table.classList.add("table-fixed");
   table.dataset.splitLedgerEnhanced = "1";
 }
 
 export default function InvestmentTransactionSplitView({ children }: PropsWithChildren) {
   useEffect(() => {
     let timer: number | undefined;
-    const run = () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(() => { void renderSplitLedger().catch(() => undefined); }, 80);
-    };
+    const run = () => { window.clearTimeout(timer); timer = window.setTimeout(() => { void renderSplitLedger().catch(() => undefined); }, 80); };
     run();
     const observer = new MutationObserver(run);
     observer.observe(document.body, { childList: true, subtree: true });
     return () => { window.clearTimeout(timer); observer.disconnect(); };
   }, []);
-
   return <>{children}</>;
 }
