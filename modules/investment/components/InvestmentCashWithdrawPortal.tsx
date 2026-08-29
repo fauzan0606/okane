@@ -38,22 +38,31 @@ export default function InvestmentCashWithdrawPortal() {
 
       let grid: HTMLElement | null = target.parentElement;
       while (grid && grid !== document.body && !(typeof grid.className === "string" && /(^|\s)grid(\s|$)/.test(grid.className))) grid = grid.parentElement;
-      const parent = grid?.parentElement ?? target.parentElement;
+      if (!grid) return;
+
+      // Keep RDN Cash + Balances as the original two-column row.
+      grid.style.display = "grid";
+      grid.style.gap = "1.25rem";
+      const twoColumn = window.matchMedia("(min-width: 1024px)").matches;
+      grid.style.gridTemplateColumns = twoColumn ? "minmax(0, 1.1fr) minmax(0, 0.9fr)" : "minmax(0, 1fr)";
+
+      const parent = grid.parentElement;
       if (!parent) return;
 
       let mount = parent.querySelector<HTMLElement>("[data-rdn-withdraw-mount]");
       if (!mount) {
         mount = document.createElement("div");
         mount.dataset.rdnWithdrawMount = "1";
-        parent.insertBefore(mount, grid?.nextSibling ?? null);
+        parent.insertBefore(mount, grid.nextSibling);
+      } else if (mount.parentElement !== parent) {
+        parent.insertBefore(mount, grid.nextSibling);
       }
-      if (mount.parentElement !== parent && grid) parent.insertBefore(mount, grid.nextSibling);
       setHost(mount);
 
       const cashTab = Array.from(document.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Cash");
       if (cashTab) cashTab.textContent = "RDN";
 
-      const balancesHeading = Array.from(grid?.querySelectorAll("h2") ?? []).find((h) => h.textContent?.trim() === "Balances");
+      const balancesHeading = Array.from(grid.querySelectorAll("h2")).find((h) => h.textContent?.trim() === "Balances");
       const balancesSection = balancesHeading?.closest("section");
       if (balancesSection) {
         Array.from(balancesSection.querySelectorAll<HTMLButtonElement>("button")).forEach((button) => {
@@ -68,7 +77,9 @@ export default function InvestmentCashWithdrawPortal() {
     locate();
     const observer = new MutationObserver(locate);
     observer.observe(document.body, { childList: true, subtree: true });
-    return () => observer.disconnect();
+    const resize = () => locate();
+    window.addEventListener("resize", resize);
+    return () => { observer.disconnect(); window.removeEventListener("resize", resize); };
   }, [cashAccounts]);
 
   useEffect(() => {
