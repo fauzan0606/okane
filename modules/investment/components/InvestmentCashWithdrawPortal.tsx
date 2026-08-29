@@ -50,8 +50,7 @@ export default function InvestmentCashWithdrawPortal() {
       const balancesHeading = Array.from(target.querySelectorAll("h2")).find((h) => h.textContent?.trim() === "Balances");
       const balancesSection = balancesHeading?.closest("section");
       if (balancesSection) {
-        Array.from(balancesSection.querySelectorAll<HTMLButtonElement>("button")).forEach((button, index) => {
-          button.dataset.rdnHistoryIndex = String(index);
+        Array.from(balancesSection.querySelectorAll<HTMLButtonElement>("button")).forEach((button) => {
           button.classList.add("cursor-pointer", "transition", "hover:border-emerald-400/30", "hover:bg-white/[.03]");
         });
       }
@@ -64,11 +63,18 @@ export default function InvestmentCashWithdrawPortal() {
 
   useEffect(() => {
     const onClick = (event: MouseEvent) => {
-      const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button[data-rdn-history-index]") : null;
+      const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button") : null;
       if (!target) return;
-      const index = Number(target.dataset.rdnHistoryIndex ?? "-1");
-      const id = index >= 0 ? cashAccounts[index]?.id : undefined;
-      if (id) { setHistoryAccountId(id); setHistoryOpen(true); }
+      const balancesSection = target.closest("section");
+      const heading = balancesSection?.querySelector("h2")?.textContent?.trim();
+      if (heading !== "Balances") return;
+      const text = target.textContent?.trim() ?? "";
+      if (!text || text === "Balances") return;
+      const provider = cashAccounts.find((c) => text.toLowerCase().includes(c.account.provider.name.toLowerCase()));
+      if (provider) {
+        setHistoryAccountId(provider.id);
+        setHistoryOpen(true);
+      }
     };
     document.addEventListener("click", onClick, true);
     return () => document.removeEventListener("click", onClick, true);
@@ -148,7 +154,7 @@ export default function InvestmentCashWithdrawPortal() {
         {message && <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/[.04] px-3 py-2 text-xs text-emerald-300">{message}</div>}
         {error && <div className="mt-4 rounded-xl border border-red-400/20 bg-red-400/[.04] px-3 py-2 text-xs text-red-300">{error}</div>}
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_1fr_.8fr_180px_auto]">
-          <div><label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">RDN source</label><select className={control} value={cashAccountId} onChange={(e)=>{setCashAccountId(e.target.value);setHistoryAccountId(e.target.value);}}><option value="">Select RDN</option>{cashAccounts.map(c=><option key={c.id} value={c.id}>{c.account.provider.name} · {c.account.name} · {money(c.balance,c.account.currency.code)}</option>)}</select></div>
+          <div><label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">RDN source</label><select className={control} value={cashAccountId} onChange={(e)=>setCashAccountId(e.target.value)}><option value="">Select RDN</option>{cashAccounts.map(c=><option key={c.id} value={c.id}>{c.account.provider.name} · {c.account.name} · {money(c.balance,c.account.currency.code)}</option>)}</select></div>
           <div><label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">Wallet destination</label><div className="relative"><WalletCards size={15} className="pointer-events-none absolute left-3 top-3.5 text-slate-500"/><select className={`${control} pl-9`} value={walletId} onChange={(e)=>setWalletId(e.target.value)}><option value="">Select wallet</option>{compatibleWallets.map(w=><option key={w.id} value={w.id}>{w.name} · {w.currency.code} · {money(w.balance,w.currency.code)}</option>)}</select></div></div>
           <div><label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">Amount</label><input type="number" min="0.01" step="0.01" max={source ? String(source.balance) : undefined} className={control} placeholder="0" value={amount} onChange={(e)=>setAmount(e.target.value)}/></div>
           <div><label className="mb-1.5 block text-[10px] font-semibold uppercase tracking-wider text-slate-500">Date</label><input type="date" className={control} value={date} onChange={(e)=>setDate(e.target.value)}/></div>
@@ -157,8 +163,8 @@ export default function InvestmentCashWithdrawPortal() {
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0d151e]">
-        <button type="button" onClick={()=>setHistoryOpen(v=>!v)} className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-white/[.02]"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">RDN history</p><h3 className="mt-1 text-base font-semibold text-white">Riwayat Transaksi RDN</h3><p className="mt-1 text-xs text-slate-600">Saldo RDN di atas dapat diklik untuk membuka riwayat akun.</p></div><ChevronDown size={18} className={`text-slate-500 transition ${historyOpen ? "rotate-180" : ""}`}/></button>
-        {historyOpen && <div className="border-t border-white/5"><div className="flex flex-col gap-3 border-b border-white/5 px-5 py-4 sm:flex-row sm:items-center sm:justify-between"><select className="max-w-md rounded-xl border border-white/10 bg-[#080f17] px-3 py-2.5 text-xs text-white" value={historyAccountId} onChange={(e)=>setHistoryAccountId(e.target.value)}>{cashAccounts.map(c=><option key={c.id} value={c.id}>{c.account.provider.name} · {c.account.name}</option>)}</select>{historyCash&&<span className="text-xs font-semibold text-emerald-300">Saldo {money(historyCash.balance,historyCash.account.currency.code)}</span>}</div>{historyLoading?<div className="p-8 text-center text-xs text-slate-600">Loading RDN history…</div>:historyRows.length===0?<div className="p-8 text-center text-xs text-slate-600">Belum ada transaksi pada RDN ini.</div>:<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600"><tr><th className="px-5 py-3">Date</th><th>Type</th><th>Description</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th className="px-5 text-right">Balance</th></tr></thead><tbody className="divide-y divide-white/5">{historyRows.map(row=><tr key={row.id}><td className="px-5 py-3 text-slate-400">{new Date(row.date).toLocaleDateString("id-ID")}</td><td><span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase text-slate-400">{typeLabel(row.movementType)}</span></td><td className="text-slate-300">{row.description}</td><td className="text-right text-red-300">{Number(row.debit)?money(row.debit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="text-right text-emerald-300">{Number(row.credit)?money(row.credit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="px-5 text-right font-semibold text-white">{money(row.balance,historyCash?.account.currency.code??"IDR")}</td></tr>)}</tbody></table></div>}</div>}
+        <button type="button" onClick={()=>setHistoryOpen(v=>!v)} className="flex w-full items-center justify-between px-5 py-4 text-left hover:bg-white/[.02]"><div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">RDN history</p><h3 className="mt-1 text-base font-semibold text-white">Riwayat Transaksi RDN</h3><p className="mt-1 text-xs text-slate-600">Klik box pada Balances untuk membuka riwayat RDN tersebut.</p></div><ChevronDown size={18} className={`text-slate-500 transition ${historyOpen ? "rotate-180" : ""}`}/></button>
+        {historyOpen && <div className="border-t border-white/5">{historyLoading?<div className="p-8 text-center text-xs text-slate-600">Loading RDN history…</div>:historyRows.length===0?<div className="p-8 text-center text-xs text-slate-600">Belum ada transaksi pada RDN ini.</div>:<div className="overflow-x-auto"><table className="w-full min-w-[760px] text-left text-xs"><thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600"><tr><th className="px-5 py-3">Date</th><th>Type</th><th>Description</th><th className="text-right">Debit</th><th className="text-right">Credit</th><th className="px-5 text-right">Balance</th></tr></thead><tbody className="divide-y divide-white/5">{historyRows.map(row=><tr key={row.id}><td className="px-5 py-3 text-slate-400">{new Date(row.date).toLocaleDateString("id-ID")}</td><td><span className="rounded-full border border-white/10 px-2 py-1 text-[9px] uppercase text-slate-400">{typeLabel(row.movementType)}</span></td><td className="text-slate-300">{row.description}</td><td className="text-right text-red-300">{Number(row.debit)?money(row.debit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="text-right text-emerald-300">{Number(row.credit)?money(row.credit,historyCash?.account.currency.code??"IDR"):"—"}</td><td className="px-5 text-right font-semibold text-white">{money(row.balance,historyCash?.account.currency.code??"IDR")}</td></tr>)}</tbody></table></div>}</div>}
       </section>
     </div>, host
   );
