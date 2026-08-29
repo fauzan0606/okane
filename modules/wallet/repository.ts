@@ -45,7 +45,7 @@ export async function getWalletById(id: string): Promise<WalletWithRelations | n
 }
 
 export async function getWalletHistory(walletId: string): Promise<WalletHistoryEntry[]> {
-  const [wallet, transactions, transfers] = await Promise.all([
+  const [wallet, transactions, transfers, investmentMovements] = await Promise.all([
     prisma.wallet.findUnique({ where: { id: walletId }, select: { currentBalance: true } }),
     prisma.transaction.findMany({
       where: { walletId },
@@ -60,6 +60,13 @@ export async function getWalletHistory(walletId: string): Promise<WalletHistoryE
         creditCardPayment: { select: { id: true } },
       },
       orderBy: [{ transferDate: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.investmentCashMovement.findMany({
+      where: { sourceWalletId: walletId },
+      include: {
+        cashAccount: { include: { account: { include: { provider: true } } } },
+      },
+      orderBy: [{ movementDate: "desc" }, { createdAt: "desc" }],
     }),
   ]);
 
@@ -85,6 +92,19 @@ export async function getWalletHistory(walletId: string): Promise<WalletHistoryE
         ? (isOutgoing ? `Credit Card Payment → ${transfer.toWallet.name}` : `Credit Card Payment ← ${transfer.fromWallet.name}`)
         : (isOutgoing ? `Transfer → ${transfer.toWallet.name}` : `Transfer ← ${transfer.fromWallet.name}`),
       delta: isOutgoing ? transfer.amount.negated() : transfer.amount,
+      kind: "TRANSFER",
+    });
+  }
+
+  for (const movement of investmentMovements) {
+    const outgoing = movement.movementType === "DEPOSIT";
+    const providerName = movement.cashAccount.account.provider.name;
+    movements.push({
+      id: `investment-${movement.id}`,
+      date: movement.movementDate,
+      createdAt: movement.createdAt,
+      description: outgoing ? `Transfer → ${providerName} RDN` : `Transfer ← ${providerName} RDN`,
+      delta: outgoing ? movement.amount.negated() : movement.amount,
       kind: "TRANSFER",
     });
   }
