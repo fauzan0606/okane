@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType } from "@prisma/client";
+import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addDefaultFeeRules, createInvestmentProvider } from "@/modules/investment/service";
 import { createInvestmentTransactionV3, getInvestmentAccountLedger, importInvestmentWorkbook, refreshInvestmentStockPrices, setInvestmentCashBalance } from "@/modules/investment/service-v3";
 
+const D = Prisma.Decimal;
 function serialize<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
 function sellFeePctFromNote(note: string | null | undefined) {
   try {
@@ -21,19 +22,17 @@ export async function GET(request: Request) {
     await refreshInvestmentStockPrices({ accountId, staleAfterMinutes: 15 });
     const ledger = await getInvestmentAccountLedger(accountId);
     const sellFeePct = sellFeePctFromNote(ledger.account.note);
-    const sellFactor = new PrismaDecimal(1).minus(new PrismaDecimal(sellFeePct).div(100));
+    const sellFactor = new D(1).minus(new D(sellFeePct).div(100));
     const rows = ledger.rows.map((row) => {
-      const remaining = new PrismaDecimal(row.remainingQuantity);
-      const currentPrice = row.currentPrice == null ? null : new PrismaDecimal(row.currentPrice);
-      const grossCurrentValue = currentPrice == null ? new PrismaDecimal(0) : remaining.mul(currentPrice);
+      const remaining = new D(row.remainingQuantity);
+      const currentPrice = row.currentPrice == null ? null : new D(row.currentPrice);
+      const grossCurrentValue = currentPrice == null ? new D(0) : remaining.mul(currentPrice);
       const estimatedSellFee = grossCurrentValue.mul(sellFeePct).div(100);
       const netCurrentValue = grossCurrentValue.minus(estimatedSellFee);
-      const remainingCost = row.quantity && Number(row.quantity) > 0
-        ? new PrismaDecimal(row.totalCost).mul(remaining).div(new PrismaDecimal(row.quantity))
-        : new PrismaDecimal(0);
-      const minimumSellPrice = row.quantity && Number(row.quantity) > 0 && sellFactor.gt(0)
-        ? new PrismaDecimal(row.totalCost).div(new PrismaDecimal(row.quantity)).div(sellFactor)
-        : new PrismaDecimal(0);
+      const remainingCost = Number(row.quantity) > 0 ? new D(row.totalCost).mul(remaining).div(new D(row.quantity)) : new D(0);
+      const minimumSellPrice = Number(row.quantity) > 0 && sellFactor.gt(0)
+        ? new D(row.totalCost).div(new D(row.quantity)).div(sellFactor)
+        : new D(0);
       return {
         ...row,
         minimumSellPrice: minimumSellPrice.toDecimalPlaces(2).toString(),
@@ -147,7 +146,6 @@ export async function POST(request: Request) {
         const target = await tx.investmentTransaction.findUnique({ where: { id: transactionId }, include: { account: true, asset: true, holding: true, cashMovements: true } });
         if (!target) throw new Error("Investment transaction not found.");
         if (target.transactionType !== InvestmentTransactionType.BUY) throw new Error("Only BUY lot rows can be deleted from this ledger.");
-
         const marker = "__OKANE_LOT__";
         const note = target.note || "";
         const start = note.indexOf(marker);
@@ -163,7 +161,6 @@ export async function POST(request: Request) {
         const sells = await tx.investmentTransaction.findMany({ where: { accountId: target.accountId, assetId: target.assetId, transactionType: InvestmentTransactionType.SELL } });
         const linked = sells.some(s => (s.note || "").includes(`\"lotId\":\"${lotId}\"`));
         if (linked) throw new Error("This purchase lot has linked sales. Delete or reverse those sales first.");
-
         const holding = target.holdingId ? await tx.investmentHolding.findUnique({ where: { id: target.holdingId } }) : null;
         if (holding && holding.quantity.lt(target.quantity)) throw new Error("This purchase cannot be deleted because its quantity has already been consumed.");
         if (target.fundingCashAccountId) {
@@ -175,9 +172,7 @@ export async function POST(request: Request) {
           if (!wallet) throw new Error("Funding wallet not found.");
           await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: target.totalCashAmount } } });
         }
-        if (holding) {
-          await tx.investmentHolding.update({ where: { id: holding.id }, data: { quantity: holding.quantity.minus(target.quantity), costBasis: holding.costBasis.minus(target.costBasisAmount) } });
-        }
+        if (holding) await tx.investmentHolding.update({ where: { id: holding.id }, data: { quantity: holding.quantity.minus(target.quantity), costBasis: holding.costBasis.minus(target.costBasisAmount) } });
         await tx.investmentCashMovement.deleteMany({ where: { investmentTransactionId: target.id } });
         await tx.investmentTransaction.delete({ where: { id: target.id } });
         return { id: target.id };
