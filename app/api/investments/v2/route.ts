@@ -5,6 +5,13 @@ import { addDefaultFeeRules, createInvestmentProvider } from "@/modules/investme
 import { createInvestmentTransactionV3, getInvestmentAccountLedger, importInvestmentWorkbook, refreshInvestmentStockPrices, setInvestmentCashBalance } from "@/modules/investment/service-v3";
 
 function serialize<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
+function sellFeePctFromNote(note: string | null | undefined) {
+  try {
+    const parsed = note ? JSON.parse(note) as { sellFeePct?: number } : {};
+    const pct = Number(parsed.sellFeePct ?? 0);
+    return Number.isFinite(pct) && pct >= 0 ? pct : 0;
+  } catch { return 0; }
+}
 
 export async function GET(request: Request) {
   try {
@@ -12,7 +19,30 @@ export async function GET(request: Request) {
     const accountId = url.searchParams.get("accountId");
     if (!accountId) return NextResponse.json({ error: "accountId is required." }, { status: 400 });
     await refreshInvestmentStockPrices({ accountId, staleAfterMinutes: 15 });
-    return NextResponse.json(serialize(await getInvestmentAccountLedger(accountId)));
+    const ledger = await getInvestmentAccountLedger(accountId);
+    const sellFeePct = sellFeePctFromNote(ledger.account.note);
+    const sellFactor = new PrismaDecimal(1).minus(new PrismaDecimal(sellFeePct).div(100));
+    const rows = ledger.rows.map((row) => {
+      const remaining = new PrismaDecimal(row.remainingQuantity);
+      const currentPrice = row.currentPrice == null ? null : new PrismaDecimal(row.currentPrice);
+      const grossCurrentValue = currentPrice == null ? new PrismaDecimal(0) : remaining.mul(currentPrice);
+      const estimatedSellFee = grossCurrentValue.mul(sellFeePct).div(100);
+      const netCurrentValue = grossCurrentValue.minus(estimatedSellFee);
+      const remainingCost = row.quantity && Number(row.quantity) > 0
+        ? new PrismaDecimal(row.totalCost).mul(remaining).div(new PrismaDecimal(row.quantity))
+        : new PrismaDecimal(0);
+      const minimumSellPrice = row.quantity && Number(row.quantity) > 0 && sellFactor.gt(0)
+        ? new PrismaDecimal(row.totalCost).div(new PrismaDecimal(row.quantity)).div(sellFactor)
+        : new PrismaDecimal(0);
+      return {
+        ...row,
+        minimumSellPrice: minimumSellPrice.toDecimalPlaces(2).toString(),
+        estimatedSellFee: estimatedSellFee.toDecimalPlaces(2).toString(),
+        netCurrentValue: netCurrentValue.toDecimalPlaces(2).toString(),
+        unrealizedGainLoss: netCurrentValue.minus(remainingCost).toDecimalPlaces(2).toString(),
+      };
+    });
+    return NextResponse.json(serialize({ ...ledger, rows }));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load investment account." }, { status: 500 });
   }
