@@ -90,6 +90,20 @@ export async function POST(request: Request) {
       return NextResponse.json(serialize(asset));
     }
 
+    if (action === "asset.resolve") {
+      const accountId = String(body.accountId || "");
+      const symbol = String(body.symbol || "").trim().toUpperCase();
+      const assetType = String(body.assetType || "STOCK") as InvestmentAssetType;
+      const currencyId = String(body.currencyId || "");
+      if (!accountId || !symbol || !currencyId) return NextResponse.json({ error: "Account, asset symbol and currency are required." }, { status: 400 });
+      const account = await prisma.investmentAccount.findUnique({ where: { id: accountId } });
+      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 404 });
+      const existing = await prisma.investmentAsset.findFirst({ where: { symbol: { equals: symbol, mode: "insensitive" }, currencyId } });
+      if (existing) return NextResponse.json(serialize(existing));
+      const asset = await prisma.investmentAsset.create({ data: { symbol, name: String(body.name || symbol).trim(), assetType, currencyId, unitName: String(body.unitName || (assetType === "STOCK" ? "share" : "unit")).trim() } });
+      return NextResponse.json(serialize(asset));
+    }
+
     if (action === "transaction.create") {
       const account = await prisma.investmentAccount.findUnique({ where: { id: String(body.accountId) }, include: { cashAccount: true } });
       if (!account || !account.isActive) return NextResponse.json({ error: "Investment account not found or already closed." }, { status: 400 });
