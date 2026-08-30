@@ -1,11 +1,11 @@
 import AppShell from "@/components/layout/AppShell";
 import Sidebar from "@/components/layout/Sidebar";
-import InvestmentDashboardV5 from "@/modules/investment/components/InvestmentDashboardV5";
+import InvestmentDashboardV6 from "@/modules/investment/components/InvestmentDashboardV6";
 
 export default function InvestmentsPage() {
   return (
     <AppShell sidebar={<Sidebar />} header={null}>
-      <InvestmentDashboardV5 />
+      <InvestmentDashboardV6 />
     </AppShell>
   );
 }
