@@ -14,37 +14,17 @@ function positive(value: number, label: string) {
   return new D(value);
 }
 
-function nonNegative(value: number | undefined, label: string) {
-  const n = value ?? 0;
-  if (!Number.isFinite(n) || n < 0) throw new Error(`${label} cannot be negative.`);
-  return new D(n);
-}
-
-function readLotId(note: string | null | undefined, fallback: string) {
-  if (!note) return fallback;
+function parseLotMeta(note: string | null | undefined) {
+  if (!note) return null as { lotId?: string; allocations?: Array<{ lotId: string; quantity: string }> } | null;
   const start = note.indexOf(LOT);
-  if (start < 0) return fallback;
+  if (start < 0) return null;
   try {
     const raw = note.slice(start + LOT.length);
-    const match = raw.match(/\{[^]*?\}/);
-    const parsed = match ? JSON.parse(match[0]) as { lotId?: string } : null;
-    return parsed?.lotId || fallback;
+    const separator = raw.indexOf("}{");
+    const json = separator >= 0 ? raw.slice(0, separator + 1) : raw;
+    return JSON.parse(json) as { lotId?: string; allocations?: Array<{ lotId: string; quantity: string }> };
   } catch {
-    return fallback;
-  }
-}
-
-function readAllocations(note: string | null | undefined) {
-  if (!note) return [] as Array<{ lotId: string; quantity: string }>;
-  const start = note.indexOf(LOT);
-  if (start < 0) return [] as Array<{ lotId: string; quantity: string }>;
-  try {
-    const raw = note.slice(start + LOT.length);
-    const match = raw.match(/\{[^]*?\}/);
-    const parsed = match ? JSON.parse(match[0]) as { allocations?: Array<{ lotId: string; quantity: string }> } : null;
-    return parsed?.allocations ?? [];
-  } catch {
-    return [] as Array<{ lotId: string; quantity: string }>;
+    return null;
   }
 }
 
@@ -58,16 +38,14 @@ async function getOpenLots(tx: Prisma.TransactionClient, accountId: string, asse
     orderBy: [{ transactionDate: "asc" }, { createdAt: "asc" }],
   });
 
-  const lots = buys.map((buy) => ({
-    lotId: readLotId(buy.note, buy.id),
-    transactionId: buy.id,
-    quantity: buy.quantity,
-    cost: buy.costBasisAmount,
-    remaining: buy.quantity,
-  }));
+  const lots = buys.map((buy) => {
+    const meta = parseLotMeta(buy.note);
+    return { lotId: meta?.lotId ?? buy.id, transactionId: buy.id, quantity: buy.quantity, cost: buy.costBasisAmount, remaining: buy.quantity };
+  });
 
   for (const sell of sells) {
-    for (const allocation of readAllocations(sell.note)) {
+    const allocations = parseLotMeta(sell.note)?.allocations ?? [];
+    for (const allocation of allocations) {
       const lot = lots.find((item) => item.lotId === allocation.lotId);
       if (lot) lot.remaining = lot.remaining.minus(new D(allocation.quantity));
     }
@@ -92,9 +70,7 @@ export async function sellAllInvestmentAsset(input: {
     if (asset.currencyId !== account.currencyId) throw new Error("Investment account and asset currency must match.");
 
     const cash = await tx.investmentCashAccount.findUnique({ where: { id: input.fundingCashAccountId }, include: { account: true } });
-    if (!cash || cash.account.providerId !== account.providerId || cash.account.currencyId !== account.currencyId) {
-      throw new Error("Settlement cash account must belong to the same investment account currency/provider.");
-    }
+    if (!cash || cash.account.providerId !== account.providerId || cash.account.currencyId !== account.currencyId) throw new Error("Settlement cash account must belong to the same investment account currency/provider.");
 
     const lots = await getOpenLots(tx, account.id, asset.id);
     if (!lots.length) throw new Error("No open quantity remains for this asset.");
@@ -103,8 +79,8 @@ export async function sellAllInvestmentAsset(input: {
 
     let sellFeePct = 0;
     try {
-      const note = account.note ? JSON.parse(account.note) as { sellFeePct?: number } : {};
-      const candidate = Number(note.sellFeePct ?? 0);
+      const parsed = account.note ? JSON.parse(account.note) as { sellFeePct?: number } : {};
+      const candidate = Number(parsed.sellFeePct ?? 0);
       sellFeePct = Number.isFinite(candidate) && candidate >= 0 ? candidate : 0;
     } catch {
       sellFeePct = 0;
@@ -148,24 +124,13 @@ export async function sellAllInvestmentAsset(input: {
           note: `${LOT}${JSON.stringify({ lotId: transactionLotId, source: "SELL_ALL", allocations: [{ lotId: lot.lotId, quantity: quantity.toString() }] })}`,
         },
       });
-      await tx.investmentCashMovement.create({
-        data: {
-          cashAccountId: cash.id,
-          movementType: InvestmentCashMovementType.SELL_SETTLEMENT,
-          amount: net,
-          movementDate: input.transactionDate,
-          investmentTransactionId: transaction.id,
-        },
-      });
+      await tx.investmentCashMovement.create({ data: { cashAccountId: cash.id, movementType: InvestmentCashMovementType.SELL_SETTLEMENT, amount: net, movementDate: input.transactionDate, investmentTransactionId: transaction.id } });
       totalNet = totalNet.plus(net);
       totalCost = totalCost.plus(cost);
       created.push({ id: transaction.id, lotId: lot.lotId, quantity: quantity.toString(), unitPrice: unitPrice.toString(), gross: gross.toString(), fee: fee.toString(), net: net.toString(), cost: cost.toString(), realized: realized.toString() });
     }
 
-    const updatedHolding = await tx.investmentHolding.update({
-      where: { id: holding.id },
-      data: { quantity: new D(0), costBasis: new D(0) },
-    });
+    const updatedHolding = await tx.investmentHolding.update({ where: { id: holding.id }, data: { quantity: new D(0), costBasis: new D(0) } });
     await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { increment: totalNet } } });
 
     return {
