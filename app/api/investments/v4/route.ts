@@ -1,31 +1,10 @@
 import { NextResponse } from "next/server";
-import { InvestmentAccountType, InvestmentTransactionType, Prisma } from "@prisma/client";
+import { InvestmentAccountType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { sellAllInvestmentAsset } from "@/modules/investment/service-v4";
 
 function serialize<T>(value: T): T {
   return JSON.parse(JSON.stringify(value));
-}
-
-function fees(note: string | null | undefined) {
-  try {
-    const parsed = note ? JSON.parse(note) as { buyFeePct?: number; sellFeePct?: number; rdnBankName?: string; rdnAccountNumber?: string } : {};
-    return {
-      buyFeePct: Number.isFinite(Number(parsed.buyFeePct)) ? Number(parsed.buyFeePct) : 0,
-      sellFeePct: Number.isFinite(Number(parsed.sellFeePct)) ? Number(parsed.sellFeePct) : 0,
-      rdnBankName: String(parsed.rdnBankName || ""),
-      rdnAccountNumber: String(parsed.rdnAccountNumber || ""),
-    };
-  } catch {
-    return { buyFeePct: 0, sellFeePct: 0, rdnBankName: "", rdnAccountNumber: "" };
-  }
-}
-
-async function accountPayload(accountId: string) {
-  return prisma.investmentAccount.findUnique({
-    where: { id: accountId },
-    include: { provider: true, currency: true, cashAccount: true },
-  });
 }
 
 export async function POST(request: Request) {
