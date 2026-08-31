@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type MouseEvent } from "react";
+import { useEffect, useState, type MouseEvent } from "react";
 import InvestmentDashboardV7 from "./InvestmentDashboardV7";
 
 type Account = { id: string };
 type OverviewResponse = { accounts?: Account[] };
 type LedgerResponse = { summary?: { realizedGainLoss?: string | number | null } };
-
 type Screen = "overview" | "transactions" | "accounts";
 
 const formatIDR = (value: number) =>
@@ -21,14 +20,12 @@ export default function InvestmentDashboardV8() {
 
   useEffect(() => {
     let cancelled = false;
-
     const loadRealizedPL = async () => {
       try {
         const response = await fetch("/api/investments", { cache: "no-store" });
+        if (!response.ok) return;
         const data = (await response.json()) as OverviewResponse;
-        if (!response.ok || cancelled) return;
-
-        const ledgers = await Promise.all(
+        const values = await Promise.all(
           (data.accounts ?? []).map(async (account) => {
             try {
               const ledgerResponse = await fetch(
@@ -43,19 +40,13 @@ export default function InvestmentDashboardV8() {
             }
           }),
         );
-
-        if (!cancelled) {
-          setRealizedPL(ledgers.reduce((sum, value) => sum + value, 0));
-        }
+        if (!cancelled) setRealizedPL(values.reduce((sum, value) => sum + value, 0));
       } catch {
         if (!cancelled) setRealizedPL(0);
       }
     };
-
     void loadRealizedPL();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, []);
 
   const handleClickCapture = (event: MouseEvent<HTMLDivElement>) => {
@@ -67,41 +58,20 @@ export default function InvestmentDashboardV8() {
     if (label === "accounts") setScreen("accounts");
   };
 
-  const realizedStyle = {
-    "--realized-pl": formatIDR(realizedPL),
-    "--realized-color": realizedPL >= 0 ? "#6ee7b7" : "#fca5a5",
-  } as CSSProperties;
-
   return (
-    <div
-      onClickCapture={handleClickCapture}
-      className={`investment-shell ${screen}`}
-      style={realizedStyle}
-    >
-      <style>{`
-        @media (min-width: 768px) {
-          .investment-shell.overview .okane-investment-shell > div > section:first-of-type > div:first-child {
-            grid-template-columns: repeat(5, minmax(0, 1fr));
-          }
-
-          .investment-shell.overview .okane-investment-shell > div > section:first-of-type > div:first-child::after {
-            content: "REALIZED P/L\\A" var(--realized-pl) "\\A Net realized profit after selling costs";
-            white-space: pre-line;
-            display: block;
-            min-height: 120px;
-            border: 1px solid rgba(52, 211, 153, 0.15);
-            border-radius: 1rem;
-            background: #0d151e;
-            padding: 1.25rem;
-            color: var(--realized-color);
-            box-sizing: border-box;
-            font-size: 0.875rem;
-            font-weight: 700;
-            line-height: 1.55;
-            letter-spacing: 0.01em;
-          }
-        }
-      `}</style>
+    <div onClickCapture={handleClickCapture} className="relative w-full">
+      {screen === "overview" && (
+        <div
+          aria-label="Realized P/L"
+          className="pointer-events-none absolute right-8 top-[132px] z-10 hidden h-[120px] min-w-[210px] max-w-[280px] rounded-2xl border border-emerald-400/15 bg-[#0d151e] p-5 md:block"
+        >
+          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Realized P/L</p>
+          <p className={`mt-2 text-xl font-bold ${realizedPL >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+            {formatIDR(realizedPL)}
+          </p>
+          <p className="mt-1 text-[10px] text-slate-600">Net realized profit after selling costs</p>
+        </div>
+      )}
       <InvestmentDashboardV7 />
     </div>
   );
