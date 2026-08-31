@@ -36,13 +36,8 @@ export async function POST(request: Request) {
     const action = String(body.action || "");
     const transactionId = String(body.transactionId || "");
 
-    if (!transactionId) {
-      return NextResponse.json({ error: "transactionId is required." }, { status: 400 });
-    }
-
-    if (!["delete", "update"].includes(action)) {
-      return NextResponse.json({ error: "Unknown closed transaction action." }, { status: 400 });
-    }
+    if (!transactionId) return NextResponse.json({ error: "transactionId is required." }, { status: 400 });
+    if (!["delete", "update"].includes(action)) return NextResponse.json({ error: "Unknown closed transaction action." }, { status: 400 });
 
     const result = await prisma.$transaction(async (tx) => {
       const target = await tx.investmentTransaction.findUnique({
@@ -57,49 +52,29 @@ export async function POST(request: Request) {
 
       if (action === "delete") {
         if (target.fundingCashAccountId) {
-          const cash = await tx.investmentCashAccount.findUnique({
-            where: { id: target.fundingCashAccountId },
-          });
+          const cash = await tx.investmentCashAccount.findUnique({ where: { id: target.fundingCashAccountId } });
           if (!cash) throw new Error("Investment cash account not found.");
-          await tx.investmentCashAccount.update({
-            where: { id: cash.id },
-            data: { balance: { decrement: target.netCashAmount } },
-          });
+          if (cash.balance.lt(target.netCashAmount)) throw new Error("RDN balance is too low to reverse this sale. Move funds back before deleting it.");
+          await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { decrement: target.netCashAmount } } });
         } else if (target.fundingWalletId) {
-          const wallet = await tx.wallet.findUnique({
-            where: { id: target.fundingWalletId },
-          });
+          const wallet = await tx.wallet.findUnique({ where: { id: target.fundingWalletId } });
           if (!wallet) throw new Error("Funding wallet not found.");
-          if (wallet.currentBalance.lt(target.netCashAmount)) {
-            throw new Error(`Insufficient balance in ${wallet.name} to reverse this sale.`);
-          }
-          await tx.wallet.update({
-            where: { id: wallet.id },
-            data: { currentBalance: { decrement: target.netCashAmount } },
-          });
+          if (wallet.currentBalance.lt(target.netCashAmount)) throw new Error(`Insufficient balance in ${wallet.name} to reverse this sale.`);
+          await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { decrement: target.netCashAmount } } });
         } else {
           throw new Error("This SELL transaction has no settlement account to reverse.");
         }
 
-        if (target.holdingId) {
-          const holding = await tx.investmentHolding.findUnique({
-            where: { id: target.holdingId },
-          });
-          if (!holding) throw new Error("Investment holding not found.");
+        const holding = target.holdingId ? await tx.investmentHolding.findUnique({ where: { id: target.holdingId } }) : null;
+        if (holding) {
           await tx.investmentHolding.update({
             where: { id: holding.id },
-            data: {
-              quantity: holding.quantity.plus(target.quantity),
-              costBasis: holding.costBasis.plus(target.costBasisAmount),
-            },
+            data: { quantity: holding.quantity.plus(target.quantity), costBasis: holding.costBasis.plus(target.costBasisAmount) },
           });
         }
 
-        await tx.investmentCashMovement.deleteMany({
-          where: { investmentTransactionId: target.id },
-        });
+        await tx.investmentCashMovement.deleteMany({ where: { investmentTransactionId: target.id } });
         await tx.investmentTransaction.delete({ where: { id: target.id } });
-
         return { id: target.id, action: "deleted" as const };
       }
 
@@ -114,45 +89,28 @@ export async function POST(request: Request) {
       if (net.lt(0)) throw new Error("Charges cannot exceed gross sale proceeds.");
 
       const delta = net.minus(target.netCashAmount).toDecimalPlaces(2);
-
       if (target.fundingCashAccountId) {
-        const cash = await tx.investmentCashAccount.findUnique({
-          where: { id: target.fundingCashAccountId },
-        });
+        const cash = await tx.investmentCashAccount.findUnique({ where: { id: target.fundingCashAccountId } });
         if (!cash) throw new Error("Investment cash account not found.");
         if (delta.gt(0)) {
-          await tx.investmentCashAccount.update({
-            where: { id: cash.id },
-            data: { balance: { increment: delta } },
-          });
+          await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { increment: delta } } });
         } else if (delta.lt(0)) {
           const debit = delta.abs();
-          if (cash.balance.lt(debit)) {
-            throw new Error(`Insufficient balance in ${cash.account?.name ?? "RDN"} to reduce this sale proceeds.`);
-          }
-          await tx.investmentCashAccount.update({
-            where: { id: cash.id },
-            data: { balance: { decrement: debit } },
-          });
+          if (cash.balance.lt(debit)) throw new Error("RDN balance is too low to reduce the sale proceeds.");
+          await tx.investmentCashAccount.update({ where: { id: cash.id }, data: { balance: { decrement: debit } } });
         }
       } else if (target.fundingWalletId) {
         const wallet = await tx.wallet.findUnique({ where: { id: target.fundingWalletId } });
         if (!wallet) throw new Error("Funding wallet not found.");
         if (delta.gt(0)) {
-          await tx.wallet.update({
-            where: { id: wallet.id },
-            data: { currentBalance: { increment: delta } },
-          });
+          await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { increment: delta } } });
         } else if (delta.lt(0)) {
           const debit = delta.abs();
-          if (wallet.currentBalance.lt(debit)) {
-            throw new Error(`Insufficient balance in ${wallet.name} to reduce this sale proceeds.`);
-          }
-          await tx.wallet.update({
-            where: { id: wallet.id },
-            data: { currentBalance: { decrement: debit } },
-          });
+          if (wallet.currentBalance.lt(debit)) throw new Error(`Insufficient balance in ${wallet.name} to reduce the sale proceeds.`);
+          await tx.wallet.update({ where: { id: wallet.id }, data: { currentBalance: { decrement: debit } } });
         }
+      } else {
+        throw new Error("This SELL transaction has no settlement account to update.");
       }
 
       const transactionDate = body.transactionDate ? new Date(String(body.transactionDate)) : target.transactionDate;
@@ -175,10 +133,7 @@ export async function POST(request: Request) {
 
       const movement = target.cashMovements[0];
       if (movement) {
-        await tx.investmentCashMovement.update({
-          where: { id: movement.id },
-          data: { amount: net, movementDate: transactionDate },
-        });
+        await tx.investmentCashMovement.update({ where: { id: movement.id }, data: { amount: net, movementDate: transactionDate } });
       }
 
       return { id: updated.id, action: "updated" as const };
@@ -186,9 +141,6 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serialize(result));
   } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Closed transaction operation failed." },
-      { status: 400 },
-    );
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Closed transaction operation failed." }, { status: 400 });
   }
 }
