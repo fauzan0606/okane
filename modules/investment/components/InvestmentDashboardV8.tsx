@@ -26,7 +26,7 @@ export default function InvestmentDashboardV8() {
         if (!response.ok) return;
         const data = (await response.json()) as OverviewResponse;
         const values = await Promise.all(
-          (data.accounts ?? []).map(async (account) => {
+          (data.accounts ?? []).filter(a => a.isActive !== false).map(async (account) => {
             try {
               const ledgerResponse = await fetch(
                 `/api/investments/v2?accountId=${encodeURIComponent(account.id)}`,
@@ -58,20 +58,54 @@ export default function InvestmentDashboardV8() {
     if (label === "accounts") setScreen("accounts");
   };
 
+  const realized = formatIDR(realizedPL);
+  const realizedColor = realizedPL >= 0 ? "#6ee7b7" : "#fca5a5";
+
   return (
-    <div onClickCapture={handleClickCapture} className="relative w-full">
-      {screen === "overview" && (
-        <div
-          aria-label="Realized P/L"
-          className="pointer-events-none absolute right-8 top-[132px] z-10 hidden h-[120px] min-w-[210px] max-w-[280px] rounded-2xl border border-emerald-400/15 bg-[#0d151e] p-5 md:block"
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-widest text-slate-500">Realized P/L</p>
-          <p className={`mt-2 text-xl font-bold ${realizedPL >= 0 ? "text-emerald-300" : "text-red-300"}`}>
-            {formatIDR(realizedPL)}
-          </p>
-          <p className="mt-1 text-[10px] text-slate-600">Net realized profit after selling costs</p>
-        </div>
-      )}
+    <div onClickCapture={handleClickCapture} className="investment-shell relative w-full" style={{ "--realized-pl": `"${realized}"`, "--realized-color": realizedColor } as React.CSSProperties}>
+      <style>{`
+        /* Overview summary: make the Realized P/L a real fifth grid item visually,
+           without absolute positioning or overlap. */
+        @media (min-width: 768px) {
+          .investment-shell.overview .okane-investment-shell [class~="md:grid-cols-4"] {
+            grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
+          }
+
+          .investment-shell.overview .okane-investment-shell [class~="md:grid-cols-4"]::after {
+            content: "REALIZED P/L\\A" var(--realized-pl) "\\A Net realized profit after selling costs";
+            white-space: pre-line;
+            min-height: 120px;
+            border: 1px solid rgba(255,255,255,.10);
+            border-radius: 1rem;
+            background: #0d151e;
+            padding: 1.25rem;
+            box-sizing: border-box;
+            color: var(--realized-color);
+            font-size: 0.875rem;
+            font-weight: 700;
+            line-height: 1.55;
+          }
+
+          .investment-shell.overview .okane-investment-shell [class~="xl:grid-cols-3"] {
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+          }
+
+          .investment-shell.overview .okane-investment-shell [class~="xl:grid-cols-3"] > button:nth-child(1)::after,
+          .investment-shell.overview .okane-investment-shell [class~="xl:grid-cols-3"] > button:nth-child(2)::after,
+          .investment-shell.overview .okane-investment-shell [class~="xl:grid-cols-3"] > button:nth-child(3)::after {
+            content: "REALIZED P/L · NET\\A" var(--realized-pl);
+            white-space: pre-line;
+            display: block;
+            margin-top: 1rem;
+            padding-top: .75rem;
+            border-top: 1px solid rgba(255,255,255,.05);
+            color: var(--realized-color);
+            font-size: .75rem;
+            line-height: 1.5;
+            font-weight: 700;
+          }
+        }
+      `}</style>
       <InvestmentDashboardV7 />
     </div>
   );
