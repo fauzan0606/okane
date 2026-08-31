@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import InvestmentDashboardV6 from "./InvestmentDashboardV6";
-import styles from "./InvestmentDashboardV7.module.css";
 
 type OverviewData = {
   summary?: {
@@ -18,7 +17,8 @@ type OverviewData = {
 
 type Screen = "overview" | "transactions" | "accounts";
 
-const money = (v: number) => `Rp${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}`;
+const money = (v: number) =>
+  `Rp${new Intl.NumberFormat("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)}`;
 const numeric = (v: string | number | null | undefined) => Number(v ?? 0) || 0;
 
 export default function InvestmentDashboardV7() {
@@ -31,84 +31,182 @@ export default function InvestmentDashboardV7() {
 
   useEffect(() => {
     let cancelled = false;
+
     const load = async () => {
       try {
         const r = await fetch("/api/investments", { cache: "no-store" });
         const d = await r.json();
         if (!r.ok || cancelled) return;
+
         setOverview(d);
-        const ts = (d.holdings ?? []).map((h: { priceAsOf?: string | null }) => h.priceAsOf).filter(Boolean);
-        if (ts.length) setLastUpdate(new Date(ts.reduce((a: string, b: string) => new Date(b).getTime() > new Date(a).getTime() ? b : a)));
-        const ids = (d.accounts ?? []).filter((a: { isActive?: boolean }) => a.isActive !== false).map((a: { id: string }) => a.id);
-        const ledgers = await Promise.all(ids.map(async (id: string) => {
-          try {
-            const lr = await fetch(`/api/investments/v2?accountId=${encodeURIComponent(id)}`, { cache: "no-store" });
-            const l = await lr.json();
-            return Number(l.summary?.realizedGainLoss ?? 0) || 0;
-          } catch { return 0; }
-        }));
+
+        const timestamps = (d.holdings ?? [])
+          .map((h: { priceAsOf?: string | null }) => h.priceAsOf)
+          .filter(Boolean) as string[];
+        if (timestamps.length) {
+          const latest = timestamps.reduce((a, b) =>
+            new Date(b).getTime() > new Date(a).getTime() ? b : a
+          );
+          setLastUpdate(new Date(latest));
+        }
+
+        const ids = (d.accounts ?? [])
+          .filter((a: { isActive?: boolean }) => a.isActive !== false)
+          .map((a: { id: string }) => a.id);
+
+        const ledgers = await Promise.all(
+          ids.map(async (id: string) => {
+            try {
+              const lr = await fetch(
+                `/api/investments/v2?accountId=${encodeURIComponent(id)}`,
+                { cache: "no-store" }
+              );
+              const l = await lr.json();
+              return Number(l.summary?.realizedGainLoss ?? 0) || 0;
+            } catch {
+              return 0;
+            }
+          })
+        );
+
         if (!cancelled) setRealized(ledgers);
       } catch {
         // Supplemental metadata must not block the dashboard.
       }
     };
+
     void load();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  // V6 owns the actual tab state. Listen at document capture level so the
+  // wrapper can follow the active tab without touching or rewriting V6 DOM.
+  useEffect(() => {
+    const onClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const button = target?.closest("button");
+      const label = button?.textContent?.trim().toLowerCase();
+      if (label === "overview") setScreen("overview");
+      else if (label === "transactions") setScreen("transactions");
+      else if (label === "accounts") setScreen("accounts");
+    };
+
+    document.addEventListener("click", onClick, true);
+    return () => document.removeEventListener("click", onClick, true);
   }, []);
 
   const refreshPrices = async () => {
-    setRefreshing(true); setError("");
+    setRefreshing(true);
+    setError("");
     try {
-      const r = await fetch("/api/investments/v2", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "market.refresh" }) });
+      const r = await fetch("/api/investments/v2", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "market.refresh" }),
+      });
       const d = await r.json();
-      if (!r.ok || d.error) throw new Error(d.error || "Unable to refresh market prices.");
-      const ts = (d.updated ?? []).map((x: { asOf?: string | null }) => x.asOf).filter(Boolean);
-      setLastUpdate(new Date(ts.length ? ts.sort((a: string, b: string) => new Date(b).getTime() - new Date(a).getTime())[0] : Date.now()));
+      if (!r.ok || d.error) {
+        throw new Error(d.error || "Unable to refresh market prices.");
+      }
+
+      const timestamps = (d.updated ?? [])
+        .map((x: { asOf?: string | null }) => x.asOf)
+        .filter(Boolean) as string[];
+      setLastUpdate(
+        new Date(
+          timestamps.length
+            ? timestamps.sort(
+                (a: string, b: string) =>
+                  new Date(b).getTime() - new Date(a).getTime()
+              )[0]
+            : Date.now()
+        )
+      );
       window.location.reload();
-    } catch (e) { setError(e instanceof Error ? e.message : "Unable to refresh market prices."); }
-    finally { setRefreshing(false); }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unable to refresh market prices.");
+    } finally {
+      setRefreshing(false);
+    }
   };
 
-  const totalRealized = useMemo(() => realized.reduce((s, v) => s + v, 0), [realized]);
-  const formatted = lastUpdate ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(lastUpdate) : "Belum tersedia";
-  const realizedVars = {
-    "--realized-total": `"${money(totalRealized)}"`,
-    "--realized-1": `"${money(realized[0] ?? 0)}"`,
-    "--realized-2": `"${money(realized[1] ?? 0)}"`,
-    "--realized-3": `"${money(realized[2] ?? 0)}"`,
-    "--realized-4": `"${money(realized[3] ?? 0)}"`,
-    "--realized-5": `"${money(realized[4] ?? 0)}"`,
-    "--realized-6": `"${money(realized[5] ?? 0)}"`,
-  } as React.CSSProperties;
+  const totalRealized = useMemo(
+    () => realized.reduce((sum, value) => sum + value, 0),
+    [realized]
+  );
 
-  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement | null;
-    const button = target?.closest("button");
-    const label = button?.textContent?.trim().toLowerCase();
-    if (label === "overview") setScreen("overview");
-    else if (label === "transactions") setScreen("transactions");
-    else if (label === "accounts") setScreen("accounts");
-  };
+  const formatted = lastUpdate
+    ? new Intl.DateTimeFormat("id-ID", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+        timeZone: "Asia/Jakarta",
+      }).format(lastUpdate)
+    : "Belum tersedia";
 
   const summary = overview?.summary;
 
   return (
-    <div className={`${styles.shell} ${styles[screen]}`} onClickCapture={handleClickCapture} style={realizedVars}>
+    <div className="min-w-0">
       {screen === "overview" && summary && (
-        <div className="investment-overview-summary mx-auto mb-5 grid w-full max-w-[1450px] grid-cols-1 gap-3 px-5 pt-1 md:grid-cols-5 lg:px-8">
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Total Investment</p><p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalInvestmentValue))}</p><p className="mt-1 text-[10px] text-slate-600">portfolio + cash</p></div>
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">RDN Cash</p><p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalCash))}</p><p className="mt-1 text-[10px] text-slate-600">all settlement balances</p></div>
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Portfolio</p><p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalValue))}</p><p className="mt-1 text-[10px] text-slate-600">current market value</p></div>
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Unrealized P/L</p><p className={`mt-2 text-xl font-bold ${numeric(summary.unrealized) >= 0 ? "text-emerald-300" : "text-red-300"}`}>{money(numeric(summary.unrealized))}</p><p className="mt-1 text-[10px] text-slate-600">{numeric(summary.returnPct).toFixed(2)}% return</p></div>
-          <div className="rounded-2xl border border-emerald-400/15 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Realized P/L</p><p className={`mt-2 text-xl font-bold ${totalRealized >= 0 ? "text-emerald-300" : "text-red-300"}`}>{money(totalRealized)}</p><p className="mt-1 text-[10px] text-slate-600">net after selling costs</p></div>
+        <div className="mx-auto mb-5 grid w-full max-w-[1450px] grid-cols-1 gap-3 px-5 pt-1 md:grid-cols-5 lg:px-8">
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">Total Investment</p>
+            <p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalInvestmentValue))}</p>
+            <p className="mt-1 text-[10px] text-slate-600">portfolio + cash</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">RDN Cash</p>
+            <p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalCash))}</p>
+            <p className="mt-1 text-[10px] text-slate-600">all settlement balances</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">Portfolio</p>
+            <p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalValue))}</p>
+            <p className="mt-1 text-[10px] text-slate-600">current market value</p>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">Unrealized P/L</p>
+            <p className={`mt-2 text-xl font-bold ${numeric(summary.unrealized) >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {money(numeric(summary.unrealized))}
+            </p>
+            <p className="mt-1 text-[10px] text-slate-600">{numeric(summary.returnPct).toFixed(2)}% return</p>
+          </div>
+          <div className="rounded-2xl border border-emerald-400/15 bg-[#0d151e] p-5">
+            <p className="text-[10px] uppercase tracking-widest text-slate-500">Realized P/L</p>
+            <p className={`mt-2 text-xl font-bold ${totalRealized >= 0 ? "text-emerald-300" : "text-red-300"}`}>
+              {money(totalRealized)}
+            </p>
+            <p className="mt-1 text-[10px] text-slate-600">net after selling costs</p>
+          </div>
         </div>
       )}
-      <div className={styles.marketData}>
-        <div className="market-data-panel mx-auto mb-4 w-full max-w-[1450px] items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
-          <div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p><p className="mt-1 text-xs text-slate-400">Last price update: <span className="font-semibold text-slate-300">{formatted} WIB</span></p><p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>{error && <p className="mt-1 text-[10px] text-red-300">{error}</p>}</div>
-          <button type="button" onClick={refreshPrices} disabled={refreshing} className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50">{refreshing ? "Refreshing…" : "↻ Refresh Prices"}</button>
+
+      {screen === "transactions" && (
+        <div className="mx-auto mb-4 flex w-full max-w-[1450px] items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
+          <div>
+            <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p>
+            <p className="mt-1 text-xs text-slate-400">
+              Last price update: <span className="font-semibold text-slate-300">{formatted} WIB</span>
+            </p>
+            <p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>
+            {error && <p className="mt-1 text-[10px] text-red-300">{error}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={refreshPrices}
+            disabled={refreshing}
+            className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50"
+          >
+            {refreshing ? "Refreshing…" : "↻ Refresh Prices"}
+          </button>
         </div>
-      </div>
+      )}
+
       <InvestmentDashboardV6 />
     </div>
   );
