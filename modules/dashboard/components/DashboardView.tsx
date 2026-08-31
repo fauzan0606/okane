@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { ArrowDownRight, ArrowUpRight, Bell, CalendarDays, ChevronDown, ChevronLeft, ChevronRight, CreditCard, Landmark, MoreHorizontal, ReceiptText, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import type { ReactNode } from "react";
 import type { DashboardData, DashboardPeriod } from "../types";
 import CreditCardSummary from "./CreditCardSummary";
 import ReceivableSummary from "@/modules/receivable/components/ReceivableSummary";
@@ -16,6 +17,13 @@ function formatCompactCurrency(value: number, currencyCode: string) { return new
 function formatCalendarMoney(value: number, currencyCode: string) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: currencyCode, notation: "compact", maximumFractionDigits: 0 }).format(value); }
 function formatDate(value: Date) { return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short" }).format(value); }
 function periodHref(period: DashboardPeriod, currencyCode: string) { return `/?period=${period}&currency=${encodeURIComponent(currencyCode)}`; }
+
+function SummaryCard({ icon, tone, title, value, detail }: { icon: ReactNode; tone: "green" | "orange" | "blue" | "purple"; title: string; value: string; detail: string }) {
+  const toneClass = { green: "bg-emerald-500/10 text-emerald-400", orange: "bg-orange-500/10 text-orange-400", blue: "bg-blue-500/10 text-blue-400", purple: "bg-violet-500/10 text-violet-400" }[tone];
+  return <div className="rounded-[18px] border border-white/10 bg-[#0d151e] px-4 py-4"><div className={`mb-3 flex h-9 w-9 items-center justify-center rounded-xl ${toneClass}`}>{icon}</div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">{title}</p><p className="mt-1 text-xl font-semibold text-white">{value}</p><p className="mt-1 text-[10px] text-slate-600">{detail}</p></div>;
+}
+function DarkPanel({ children }: { children: ReactNode }) { return <section className="rounded-[20px] border border-white/10 bg-[#0d151e] p-5 md:p-6">{children}</section>; }
+function EmptyState({ message }: { message: string }) { return <p className="py-8 text-center text-sm text-slate-500">{message}</p>; }
 
 export default function DashboardView({ data }: { data: DashboardData }) {
   const { summary } = data;
@@ -84,4 +92,4 @@ function DashboardCalendar({ calendar, currencyCode }: { calendar: DashboardData
   );
 }
 
-function PanelHeading({ eyebrow, title, children }: { eyebrow: string; title: string; children?: React.ReactNode }) { return <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{eyebrow}</p><h2 className="mt-1 text-lg font-semibold tracking-tight text-white">{title}</h2></div>{children}</div>; }
+function PanelHeading({ eyebrow, title, children }: { eyebrow: string; title: string; children?: ReactNode }) { return <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{eyebrow}</p><h2 className="mt-1 text-lg font-semibold tracking-tight text-white">{title}</h2></div>{children}</div>; }

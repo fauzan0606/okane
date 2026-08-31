@@ -30,7 +30,7 @@ export async function getBudgetOverview(month = currentMonthKey(), currencyCode 
     const actual = transactions.filter((transaction) => item.subcategoryId ? transaction.subcategoryId === item.subcategoryId : item.categoryId ? transaction.categoryId === item.categoryId : false).reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
     const budgetAmount = item.amount;
     const remaining = budgetAmount.minus(actual);
-    return { id: item.id, categoryId: item.categoryId, categoryName: item.category?.name ?? null, subcategoryId: item.subcategoryId, subcategoryName: item.subcategory?.name ?? null, amount: budgetAmount.toNumber(), actualAmount: actual.toNumber(), remainingAmount: remaining.toNumber(), percentage: budgetAmount.gt(0) ? actual.div(budgetAmount).mul(100).toNumber() : 0 };
+    return { id: item.id, categoryId: item.categoryId, categoryName: item.category?.name ?? null, subcategoryId: item.subcategoryId, subcategoryName: item.subcategory?.name ?? null, amount: budgetAmount.toNumber(), budgetAmount: budgetAmount.toNumber(), actualAmount: actual.toNumber(), remainingAmount: remaining.toNumber(), percentage: budgetAmount.gt(0) ? actual.div(budgetAmount).mul(100).toNumber() : 0 };
   });
   const totalBudget = overallBudgetAmount ?? items.reduce((sum, item) => sum + item.amount, 0);
   const budgetedActual = overallBudgetAmount !== null ? totalActual.toNumber() : items.reduce((sum, item) => sum + item.actualAmount, 0);

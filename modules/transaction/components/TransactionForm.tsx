@@ -2,7 +2,6 @@
 
 import { useActionState, useState, useTransition, type ReactElement } from "react";
 import { toast } from "sonner";
-import type { Category, Payee, Subcategory } from "@prisma/client";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +14,10 @@ import type { TransactionActionState } from "../types";
 import type { TransactionWithRelations } from "../repository";
 
 type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
-type TransactionFormProps = { mode: "create" | "edit"; transaction?: TransactionWithRelations; wallets: WalletOption[]; categories: Category[]; subcategories: Subcategory[]; payees: Payee[]; trigger: ReactElement; reviewMode?: boolean; sameMerchantCount?: number };
+type CategoryOption = { id: string; name: string; type: "INCOME" | "EXPENSE"; icon: string | null; color: string | null };
+type SubcategoryOption = { id: string; categoryId: string; name: string; isActive?: boolean; sortOrder?: number };
+type PayeeOption = { id: string; name: string; note: string | null };
+type TransactionFormProps = { mode: "create" | "edit"; transaction?: TransactionWithRelations; wallets: WalletOption[]; categories: CategoryOption[]; subcategories: SubcategoryOption[]; payees: PayeeOption[]; trigger: ReactElement; reviewMode?: boolean; sameMerchantCount?: number };
 const initialState: TransactionActionState = { success: false };
 function dateInputValue(value?: Date | string | null) { return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10); }
 

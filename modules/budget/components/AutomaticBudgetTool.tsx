@@ -12,7 +12,8 @@ export default function AutomaticBudgetTool({ month, currencyCode, currencySymbo
   const [mode, setMode] = useState<"OVERALL" | "CATEGORY" | null>(null);
   const [suggestion, setSuggestion] = useState<BudgetSuggestion | null>(null);
   const [busy, start] = useTransition();
-  const calculate = () => { if (!mode) return; start(async () => { const form = new FormData(); form.set("month", month); form.set("currencyCode", currencyCode); const result = await getBudgetSuggestionAction(form); if (!result.success) { toast.error(result.message ?? "Failed to calculate budget."); return; } setSuggestion(result.suggestion); }); };
+  const calculate = () => { if (!mode) return; start(async () => { const form = new FormData(); form.set("month", month); form.set("currencyCode", currencyCode); const result = await getBudgetSuggestionAction(form); if (!result.success) { toast.error(result.message ?? "Failed to calculate budget."); return; } if (!result.suggestion) { toast.error("No budget suggestion was returned."); return; }
+    setSuggestion(result.suggestion); }); };
   const apply = () => {
     if (!suggestion || !mode) return;
     start(async () => {
