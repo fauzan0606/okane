@@ -6,7 +6,12 @@ import InvestmentDashboardV6 from "./InvestmentDashboardV6";
 type PriceSnapshot = { priceAsOf?: string | null };
 type OverviewResponse = { holdings?: PriceSnapshot[] };
 
-export default function InvestmentDashboardV7() {
+type Props = {
+  active?: boolean;
+  onMarketData?: (node: React.ReactNode) => void;
+};
+
+export default function InvestmentDashboardV7({ active = true, onMarketData }: Props) {
   const [refreshingPrices, setRefreshingPrices] = useState(false);
   const [priceRefreshError, setPriceRefreshError] = useState("");
   const [lastPriceUpdate, setLastPriceUpdate] = useState<Date | null>(null);
@@ -82,7 +87,7 @@ export default function InvestmentDashboardV7() {
     : "Belum tersedia";
 
   const marketData = (
-    <div className="mb-0 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
+    <div className="mb-4 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
       <div>
         <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p>
         <p className="mt-1 text-xs text-slate-400">
@@ -102,5 +107,5 @@ export default function InvestmentDashboardV7() {
     </div>
   );
 
-  return <InvestmentDashboardV6 marketData={marketData} />;
+  return <InvestmentDashboardV6 marketData={active ? marketData : null} />;
 }
