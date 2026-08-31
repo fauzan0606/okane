@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import InvestmentDashboardV6 from "./InvestmentDashboardV6";
 
 type PriceSnapshot = { priceAsOf?: string | null };
-
-type OverviewResponse = {
-  holdings?: PriceSnapshot[];
-};
+type OverviewResponse = { holdings?: PriceSnapshot[] };
 
 export default function InvestmentDashboardV7() {
   const [refreshingPrices, setRefreshingPrices] = useState(false);
@@ -16,30 +13,24 @@ export default function InvestmentDashboardV7() {
 
   useEffect(() => {
     let cancelled = false;
-
     const loadLatestPriceUpdate = async () => {
       try {
         const response = await fetch("/api/investments", { cache: "no-store" });
         const data = (await response.json()) as OverviewResponse;
         if (!response.ok || cancelled) return;
-
         const timestamps = (data.holdings ?? [])
           .map((holding) => holding.priceAsOf)
           .filter((value): value is string => Boolean(value));
-
         if (!timestamps.length) return;
-
         const latest = timestamps.reduce((max, value) =>
           new Date(value).getTime() > new Date(max).getTime() ? value : max,
         );
-
         setLastPriceUpdate(new Date(latest));
       } catch {
-        // The underlying investment dashboard remains usable if price metadata cannot load.
+        // Keep dashboard usable when market metadata is unavailable.
       }
     };
-
-    loadLatestPriceUpdate();
+    void loadLatestPriceUpdate();
     return () => {
       cancelled = true;
     };
@@ -48,7 +39,6 @@ export default function InvestmentDashboardV7() {
   const refreshPrices = async () => {
     setRefreshingPrices(true);
     setPriceRefreshError("");
-
     try {
       const response = await fetch("/api/investments/v2", {
         method: "POST",
@@ -56,15 +46,12 @@ export default function InvestmentDashboardV7() {
         body: JSON.stringify({ action: "market.refresh" }),
       });
       const result = await response.json();
-
       if (!response.ok || result.error) {
         throw new Error(result.error || "Unable to refresh market prices.");
       }
-
       const timestamps = (result.updated ?? [])
         .map((item: { asOf?: string }) => item.asOf)
         .filter((value: string | undefined): value is string => Boolean(value));
-
       if (timestamps.length) {
         const latest = timestamps.reduce((max: string, value: string) =>
           new Date(value).getTime() > new Date(max).getTime() ? value : max,
@@ -73,7 +60,6 @@ export default function InvestmentDashboardV7() {
       } else {
         setLastPriceUpdate(new Date());
       }
-
       window.location.reload();
     } catch (error) {
       setPriceRefreshError(
@@ -95,35 +81,26 @@ export default function InvestmentDashboardV7() {
       }).format(lastPriceUpdate)
     : "Belum tersedia";
 
-  return (
-    <div className="mx-auto w-full max-w-[1450px]">
-      <div className="mb-4 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">
-            Market Data
-          </p>
-          <p className="mt-1 text-xs text-slate-400">
-            Last price update:{" "}
-            <span className="font-semibold text-slate-300">{lastPriceLabel} WIB</span>
-          </p>
-          <p className="mt-0.5 text-[10px] text-slate-600">
-            Source: Yahoo Finance · Indonesian stocks
-          </p>
-          {priceRefreshError && (
-            <p className="mt-1 text-[10px] text-red-300">{priceRefreshError}</p>
-          )}
-        </div>
-        <button
-          type="button"
-          onClick={refreshPrices}
-          disabled={refreshingPrices}
-          className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/[.1] disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {refreshingPrices ? "Refreshing…" : "↻ Refresh Prices"}
-        </button>
+  const marketData = (
+    <div className="mb-0 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
+      <div>
+        <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p>
+        <p className="mt-1 text-xs text-slate-400">
+          Last price update: <span className="font-semibold text-slate-300">{lastPriceLabel} WIB</span>
+        </p>
+        <p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>
+        {priceRefreshError && <p className="mt-1 text-[10px] text-red-300">{priceRefreshError}</p>}
       </div>
-
-      <InvestmentDashboardV6 />
+      <button
+        type="button"
+        onClick={refreshPrices}
+        disabled={refreshingPrices}
+        className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/[.1] disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {refreshingPrices ? "Refreshing…" : "↻ Refresh Prices"}
+      </button>
     </div>
   );
+
+  return <InvestmentDashboardV6 marketData={marketData} />;
 }
