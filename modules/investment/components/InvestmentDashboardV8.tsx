@@ -80,11 +80,11 @@ export default function InvestmentDashboardV8() {
     >
       <style>{`
         @media (min-width: 768px) {
-          .investment-shell.overview > div > section:first-of-type > div:first-child {
+          .investment-shell.overview .okane-investment-shell > div > section:first-of-type > div:first-child {
             grid-template-columns: repeat(5, minmax(0, 1fr));
           }
 
-          .investment-shell.overview > div > section:first-of-type > div:first-child::after {
+          .investment-shell.overview .okane-investment-shell > div > section:first-of-type > div:first-child::after {
             content: "REALIZED P/L\\A" var(--realized-pl) "\\A Net realized profit after selling costs";
             white-space: pre-line;
             display: block;
