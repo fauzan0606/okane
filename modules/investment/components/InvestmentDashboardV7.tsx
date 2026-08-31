@@ -112,12 +112,14 @@ export default function InvestmentDashboardV7() {
 
   return (
     <div className={`okane-investment-shell ${screen}`} onClickCapture={handleClickCapture} style={realizedVars}>
-      <style jsx>{`
+      <style>{`
         .okane-investment-shell .market-data-panel { display: none; }
         .okane-investment-shell.transactions .market-data-panel { display: flex; }
 
-        /* The account cards are owned by V6. Add the account-specific realized value
-           inside each card without changing V6's account actions or data flow. */
+        /* These cards live inside InvestmentDashboardV6, a child component.
+           Use a plain <style> so the rules reach the child DOM. */
+        .okane-investment-shell.overview [class*="md:grid-cols-4"] { display: none !important; }
+
         .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(1)::after,
         .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(2)::after,
         .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(3)::after,
