@@ -26,6 +26,9 @@ function addRealizedMetric(parent: HTMLElement, value: number, currencyCode: str
     metric.className = "mt-3 border-t border-white/5 pt-3";
     parent.appendChild(metric);
   }
+  const signature = `${value}|${currencyCode}`;
+  if (metric.dataset.signature === signature) return;
+  metric.dataset.signature = signature;
   metric.innerHTML = `<p class="text-[10px] text-slate-600">Realized P/L · net</p><p class="mt-1 text-sm font-bold ${pnlClass(value)}">${formatMoney(value, currencyCode)}</p><p class="mt-0.5 text-[9px] text-slate-700">After sell fee, tax & other charges</p>`;
 }
 
@@ -46,11 +49,11 @@ export default function InvestmentDashboardV7() {
       const overviewSection = overviewHeading?.closest("section");
 
       if (overviewSection) {
-        const cards = overviewSection.querySelectorAll<HTMLElement>("button");
-        cards.forEach((button) => {
-          const match = realizedByAccount.find((account) =>
-            button.textContent?.trim().startsWith(account.providerName),
-          );
+        const cards = Array.from(overviewSection.querySelectorAll<HTMLElement>("button")).filter(
+          (button) => button.textContent?.includes("Open →"),
+        );
+        cards.forEach((button, index) => {
+          const match = realizedByAccount[index];
           if (match) addRealizedMetric(button, match.realizedGainLoss, match.currencyCode);
         });
       }
@@ -60,7 +63,9 @@ export default function InvestmentDashboardV7() {
       )?.closest("div.rounded-2xl");
       const summaryGrid = totalCard?.parentElement;
       if (summaryGrid) {
-        summaryGrid.className = summaryGrid.className.replace("md:grid-cols-4", "md:grid-cols-5");
+        if (summaryGrid.className.includes("md:grid-cols-4")) {
+          summaryGrid.className = summaryGrid.className.replace("md:grid-cols-4", "md:grid-cols-5");
+        }
         let realizedCard = summaryGrid.querySelector<HTMLElement>("[data-okane-overview-realized]");
         if (!realizedCard) {
           realizedCard = document.createElement("div");
@@ -68,7 +73,11 @@ export default function InvestmentDashboardV7() {
           realizedCard.className = "rounded-2xl border border-white/10 bg-[#0d151e] p-5";
           summaryGrid.appendChild(realizedCard);
         }
-        realizedCard.innerHTML = `<p class="text-[10px] uppercase tracking-widest text-slate-500">Realized P/L</p><p class="mt-2 text-xl font-bold ${pnlClass(totalRealized)}">${formatMoney(totalRealized, primaryCurrency)}</p><p class="mt-1 text-[10px] text-slate-600">Net realized profit after selling costs</p>`;
+        const signature = `${totalRealized}|${primaryCurrency}`;
+        if (realizedCard.dataset.signature !== signature) {
+          realizedCard.dataset.signature = signature;
+          realizedCard.innerHTML = `<p class="text-[10px] uppercase tracking-widest text-slate-500">Realized P/L</p><p class="mt-2 text-xl font-bold ${pnlClass(totalRealized)}">${formatMoney(totalRealized, primaryCurrency)}</p><p class="mt-1 text-[10px] text-slate-600">Net realized profit after selling costs</p>`;
+        }
       }
 
       const accountDetailMarker = Array.from(document.querySelectorAll("p")).find(
@@ -79,8 +88,9 @@ export default function InvestmentDashboardV7() {
         const historyTitle = accountSection
           ? Array.from(accountSection.querySelectorAll("h3")).find((el) => el.textContent?.trim() === "RDN Transaction History")
           : undefined;
-        const showButton = historyTitle?.parentElement?.parentElement
-          ? Array.from(historyTitle.parentElement.parentElement.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Show")
+        const historyControls = historyTitle?.parentElement?.parentElement;
+        const showButton = historyControls
+          ? Array.from(historyControls.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Show")
           : undefined;
         showButton?.click();
       }
@@ -118,7 +128,7 @@ export default function InvestmentDashboardV7() {
         loaded = true;
         decorate();
       } catch {
-        // The underlying V6 dashboard remains fully usable if realized P/L cannot be loaded.
+        // The underlying V6 dashboard remains usable if realized P/L cannot be loaded.
       }
     };
 
