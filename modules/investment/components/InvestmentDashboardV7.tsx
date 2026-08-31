@@ -39,7 +39,7 @@ export default function InvestmentDashboardV7() {
   const [priceRefreshError, setPriceRefreshError] = useState("");
   const [lastPriceUpdate, setLastPriceUpdate] = useState<Date | null>(null);
   const marketRef = useRef<HTMLDivElement | null>(null);
-  const rootRef = useRef<HTMLDivElement | null>(null);
+  const homeRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     let realizedByAccount: AccountSummary[] = [];
@@ -47,6 +47,29 @@ export default function InvestmentDashboardV7() {
     let primaryCurrency = "IDR";
     let loaded = false;
     let decorateTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const findAssetCard = () => {
+      const heading = Array.from(document.querySelectorAll("h2")).find((el) => el.textContent?.trim() === "Asset Summary");
+      return heading?.parentElement?.parentElement as HTMLElement | null;
+    };
+
+    const relocateMarketData = () => {
+      const market = marketRef.current;
+      const home = homeRef.current;
+      if (!market || !home) return;
+
+      const assetCard = findAssetCard();
+      if (assetCard?.parentElement) {
+        market.style.display = "flex";
+        const parent = assetCard.parentElement;
+        if (market.parentElement !== parent || market.nextSibling !== assetCard) {
+          parent.insertBefore(market, assetCard);
+        }
+      } else {
+        market.style.display = "none";
+        if (market.parentElement !== home) home.appendChild(market);
+      }
+    };
 
     const decorate = () => {
       if (!loaded) return;
@@ -87,28 +110,8 @@ export default function InvestmentDashboardV7() {
         const showButton = historyControls ? Array.from(historyControls.querySelectorAll("button")).find((button) => button.textContent?.trim() === "Show") : undefined;
         showButton?.click();
       }
-    };
 
-    const positionMarketData = () => {
-      const market = marketRef.current;
-      const root = rootRef.current;
-      if (!market || !root) return;
-
-      const assetHeading = Array.from(document.querySelectorAll("h2")).find((el) => el.textContent?.trim() === "Asset Summary");
-      const assetCard = assetHeading?.parentElement?.parentElement as HTMLElement | null;
-      const marketHeight = market.getBoundingClientRect().height;
-
-      if (assetCard && marketHeight > 0) {
-        const rootRect = root.getBoundingClientRect();
-        const assetRect = assetCard.getBoundingClientRect();
-        const gap = 12;
-        const top = assetRect.top - rootRect.top - marketHeight - gap;
-        market.style.top = `${Math.max(0, top)}px`;
-        assetCard.style.marginTop = `${marketHeight + gap}px`;
-      } else {
-        market.style.top = "0px";
-        if (assetCard) assetCard.style.marginTop = "";
-      }
+      relocateMarketData();
     };
 
     const loadRealizedAndPriceState = async () => {
@@ -144,7 +147,6 @@ export default function InvestmentDashboardV7() {
         totalRealized = realizedByAccount.filter((account) => account.currencyCode === primaryCurrency).reduce((sum, account) => sum + account.realizedGainLoss, 0);
         loaded = true;
         decorate();
-        positionMarketData();
       } catch {
         // Underlying dashboard remains usable if supplemental realized/price state cannot load.
       }
@@ -154,21 +156,15 @@ export default function InvestmentDashboardV7() {
       if (decorateTimer) clearTimeout(decorateTimer);
       decorateTimer = setTimeout(() => {
         decorate();
-        positionMarketData();
       }, 50);
     };
 
     loadRealizedAndPriceState();
     const observer = new MutationObserver(scheduleDecorate);
     observer.observe(document.body, { childList: true, subtree: true });
-    window.addEventListener("resize", positionMarketData);
     return () => {
       observer.disconnect();
       if (decorateTimer) clearTimeout(decorateTimer);
-      window.removeEventListener("resize", positionMarketData);
-      const assetHeading = Array.from(document.querySelectorAll("h2")).find((el) => el.textContent?.trim() === "Asset Summary");
-      const assetCard = assetHeading?.parentElement?.parentElement as HTMLElement | null;
-      if (assetCard) assetCard.style.marginTop = "";
     };
   }, []);
 
@@ -202,18 +198,26 @@ export default function InvestmentDashboardV7() {
     ? new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit", timeZone: "Asia/Jakarta" }).format(lastPriceUpdate)
     : "Belum tersedia";
 
-  return <div ref={rootRef} className="relative mx-auto w-full max-w-[1450px]">
-    <div ref={marketRef} className="absolute left-0 right-0 z-20 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm transition-[top] duration-150">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p>
-        <p className="mt-1 text-xs text-slate-400">Last price update: <span className="font-semibold text-slate-300">{lastPriceLabel} WIB</span></p>
-        <p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>
-        {priceRefreshError && <p className="mt-1 text-[10px] text-red-300">{priceRefreshError}</p>}
+  return (
+    <div className="mx-auto w-full max-w-[1450px]">
+      <div ref={homeRef} className="hidden" />
+      <div
+        ref={marketRef}
+        className="hidden w-full items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm"
+      >
+        <div>
+          <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p>
+          <p className="mt-1 text-xs text-slate-400">
+            Last price update: <span className="font-semibold text-slate-300">{lastPriceLabel} WIB</span>
+          </p>
+          <p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>
+          {priceRefreshError && <p className="mt-1 text-[10px] text-red-300">{priceRefreshError}</p>}
+        </div>
+        <button type="button" onClick={refreshPrices} disabled={refreshingPrices} className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/[.1] disabled:cursor-not-allowed disabled:opacity-50">
+          {refreshingPrices ? "Refreshing…" : "↻ Refresh Prices"}
+        </button>
       </div>
-      <button type="button" onClick={refreshPrices} disabled={refreshingPrices} className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 transition hover:bg-emerald-400/[.1] disabled:cursor-not-allowed disabled:opacity-50">
-        {refreshingPrices ? "Refreshing…" : "↻ Refresh Prices"}
-      </button>
+      <InvestmentDashboardV6 />
     </div>
-    <div className="pt-0"><InvestmentDashboardV6 /></div>
-  </div>;
+  );
 }
