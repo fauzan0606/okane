@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import InvestmentDashboardV6 from "./InvestmentDashboardV6";
+import "./InvestmentDashboardV7.css";
 
 type OverviewData = {
   summary?: {
@@ -92,13 +93,13 @@ export default function InvestmentDashboardV7() {
       }).format(lastUpdate)
     : "Belum tersedia";
   const realizedVars = {
-    "--realized-total": `"${money(totalRealized)}"`,
-    "--realized-1": `"${money(realized[0] ?? 0)}"`,
-    "--realized-2": `"${money(realized[1] ?? 0)}"`,
-    "--realized-3": `"${money(realized[2] ?? 0)}"`,
-    "--realized-4": `"${money(realized[3] ?? 0)}"`,
-    "--realized-5": `"${money(realized[4] ?? 0)}"`,
-    "--realized-6": `"${money(realized[5] ?? 0)}"`,
+    "--realized-total": money(totalRealized),
+    "--realized-1": money(realized[0] ?? 0),
+    "--realized-2": money(realized[1] ?? 0),
+    "--realized-3": money(realized[2] ?? 0),
+    "--realized-4": money(realized[3] ?? 0),
+    "--realized-5": money(realized[4] ?? 0),
+    "--realized-6": money(realized[5] ?? 0),
   } as React.CSSProperties;
 
   const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -110,84 +111,23 @@ export default function InvestmentDashboardV7() {
     else if (label === "accounts") setScreen("accounts");
   };
 
+  const summary = overview?.summary;
+
   return (
     <div className={`okane-investment-shell ${screen}`} onClickCapture={handleClickCapture} style={realizedVars}>
-      <style>{`
-        .okane-investment-shell .market-data-panel { display: none; }
-        .okane-investment-shell.transactions .market-data-panel { display: flex; }
-
-        /* These cards live inside InvestmentDashboardV6, a child component.
-           Use a plain <style> so the rules reach the child DOM. */
-        .okane-investment-shell.overview [class*="md:grid-cols-4"] { display: none !important; }
-
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(1)::after,
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(2)::after,
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(3)::after,
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(4)::after,
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(5)::after,
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(6)::after {
-          display: block;
-          margin-top: 1rem;
-          padding-top: .8rem;
-          border-top: 1px solid rgba(255,255,255,.06);
-          color: #6ee7b7;
-          font-size: .72rem;
-          font-weight: 700;
-          line-height: 1.45;
-          white-space: pre;
-        }
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(1)::after { content: "Realized P/L · net\\A" var(--realized-1); }
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(2)::after { content: "Realized P/L · net\\A" var(--realized-2); }
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(3)::after { content: "Realized P/L · net\\A" var(--realized-3); }
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(4)::after { content: "Realized P/L · net\\A" var(--realized-4); }
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(5)::after { content: "Realized P/L · net\\A" var(--realized-5); }
-        .okane-investment-shell.overview [class*="xl:grid-cols-3"] > button:nth-child(6)::after { content: "Realized P/L · net\\A" var(--realized-6); }
-
-        @media (max-width: 767px) {
-          .investment-overview-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-        }
-      `}</style>
-
-      {screen === "overview" && overview?.summary && (
+      {screen === "overview" && summary && (
         <div className="investment-overview-summary mx-auto mb-5 grid w-full max-w-[1450px] grid-cols-1 gap-3 px-5 pt-1 md:grid-cols-5 lg:px-8">
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500">Total Investment</p>
-            <p className="mt-2 text-xl font-bold text-white">{money(numeric(overview.summary.totalInvestmentValue))}</p>
-            <p className="mt-1 text-[10px] text-slate-600">portfolio + cash</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500">RDN Cash</p>
-            <p className="mt-2 text-xl font-bold text-white">{money(numeric(overview.summary.totalCash))}</p>
-            <p className="mt-1 text-[10px] text-slate-600">all settlement balances</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500">Portfolio</p>
-            <p className="mt-2 text-xl font-bold text-white">{money(numeric(overview.summary.totalValue))}</p>
-            <p className="mt-1 text-[10px] text-slate-600">current market value</p>
-          </div>
-          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500">Unrealized P/L</p>
-            <p className={`mt-2 text-xl font-bold ${numeric(overview.summary.unrealized) >= 0 ? "text-emerald-300" : "text-red-300"}`}>{money(numeric(overview.summary.unrealized))}</p>
-            <p className="mt-1 text-[10px] text-slate-600">{numeric(overview.summary.returnPct).toFixed(2)}% return</p>
-          </div>
-          <div className="rounded-2xl border border-emerald-400/15 bg-[#0d151e] p-5">
-            <p className="text-[10px] uppercase tracking-widest text-slate-500">Realized P/L</p>
-            <p className={`mt-2 text-xl font-bold ${totalRealized >= 0 ? "text-emerald-300" : "text-red-300"}`}>{money(totalRealized)}</p>
-            <p className="mt-1 text-[10px] text-slate-600">net after selling costs</p>
-          </div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Total Investment</p><p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalInvestmentValue))}</p><p className="mt-1 text-[10px] text-slate-600">portfolio + cash</p></div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">RDN Cash</p><p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalCash))}</p><p className="mt-1 text-[10px] text-slate-600">all settlement balances</p></div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Portfolio</p><p className="mt-2 text-xl font-bold text-white">{money(numeric(summary.totalValue))}</p><p className="mt-1 text-[10px] text-slate-600">current market value</p></div>
+          <div className="rounded-2xl border border-white/10 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Unrealized P/L</p><p className={`mt-2 text-xl font-bold ${numeric(summary.unrealized) >= 0 ? "text-emerald-300" : "text-red-300"}`}>{money(numeric(summary.unrealized))}</p><p className="mt-1 text-[10px] text-slate-600">{numeric(summary.returnPct).toFixed(2)}% return</p></div>
+          <div className="rounded-2xl border border-emerald-400/15 bg-[#0d151e] p-5"><p className="text-[10px] uppercase tracking-widest text-slate-500">Realized P/L</p><p className={`mt-2 text-xl font-bold ${totalRealized >= 0 ? "text-emerald-300" : "text-red-300"}`}>{money(totalRealized)}</p><p className="mt-1 text-[10px] text-slate-600">net after selling costs</p></div>
         </div>
       )}
-
       <div className="market-data-panel mx-auto mb-4 w-full max-w-[1450px] items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p>
-          <p className="mt-1 text-xs text-slate-400">Last price update: <span className="font-semibold text-slate-300">{formatted} WIB</span></p>
-          <p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>
-          {error && <p className="mt-1 text-[10px] text-red-300">{error}</p>}
-        </div>
+        <div><p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Market Data</p><p className="mt-1 text-xs text-slate-400">Last price update: <span className="font-semibold text-slate-300">{formatted} WIB</span></p><p className="mt-0.5 text-[10px] text-slate-600">Source: Yahoo Finance · Indonesian stocks</p>{error && <p className="mt-1 text-[10px] text-red-300">{error}</p>}</div>
         <button type="button" onClick={refreshPrices} disabled={refreshing} className="rounded-xl border border-emerald-400/20 bg-emerald-400/[.05] px-4 py-2 text-xs font-bold text-emerald-300 disabled:opacity-50">{refreshing ? "Refreshing…" : "↻ Refresh Prices"}</button>
       </div>
-
       <InvestmentDashboardV6 />
     </div>
   );
