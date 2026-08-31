@@ -89,6 +89,7 @@ export default function InvestmentDashboardV7() {
     <div
       className={`okane-investment-shell ${screen}`}
       onClickCapture={handleClickCapture}
+      style={{ "--realized-total": `"${money(totalRealized)}"` } as React.CSSProperties}
     >
       <style jsx>{`
         .okane-investment-shell .market-data-panel {
@@ -99,16 +100,14 @@ export default function InvestmentDashboardV7() {
           display: flex;
         }
 
-        /* The V6 dashboard owns the normal four-card overview summary.
-           We expand that same grid and use one static grid pseudo-item as the
-           fifth card. No absolute positioning and no DOM mutation are used. */
         @media (min-width: 768px) {
           .okane-investment-shell.overview [class~="md:grid-cols-4"] {
+            display: grid !important;
             grid-template-columns: repeat(5, minmax(0, 1fr)) !important;
           }
 
           .okane-investment-shell.overview [class~="md:grid-cols-4"]::after {
-            content: "REALIZED P/L\\A" var(--realized-total, "Rp0,00") "\\A Net realized profit after selling costs";
+            content: "REALIZED P/L\\A" var(--realized-total) "\\A Net realized profit after selling costs";
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -129,7 +128,7 @@ export default function InvestmentDashboardV7() {
 
         @media (max-width: 767px) {
           .okane-investment-shell.overview [class~="md:grid-cols-4"]::after {
-            content: "REALIZED P/L\\A" var(--realized-total, "Rp0,00") "\\A Net realized profit after selling costs";
+            content: "REALIZED P/L\\A" var(--realized-total) "\\A Net realized profit after selling costs";
             display: block;
             min-height: 120px;
             box-sizing: border-box;
@@ -145,18 +144,6 @@ export default function InvestmentDashboardV7() {
           }
         }
       `}</style>
-
-      <div
-        className="sr-only"
-        style={{ "--realized-total": `"${money(totalRealized)}"` } as React.CSSProperties}
-      />
-
-      <div
-        className="pointer-events-none hidden"
-        style={{ "--realized-total": `"${money(totalRealized)}"` } as React.CSSProperties}
-      />
-
-      <div className="realized-css-vars" style={{ "--realized-total": `"${money(totalRealized)}"` } as React.CSSProperties} />
 
       <div className="market-data-panel mx-auto mb-4 w-full max-w-[1450px] items-center justify-between rounded-2xl border border-white/10 bg-[#0d151e] px-4 py-3 shadow-sm">
         <div>
