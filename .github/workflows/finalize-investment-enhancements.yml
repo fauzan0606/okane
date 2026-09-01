@@ -5,8 +5,7 @@ on:
     branches:
       - feat/investment-enhancements-local
     paths:
-      - 'scripts/apply-investment-final.mjs'
-      - 'scripts/apply-final-ui-fixes.mjs'
+      - 'scripts/apply-small-final-fix.mjs'
       - '.github/workflows/finalize-investment-enhancements.yml'
   workflow_dispatch:
 
@@ -28,22 +27,17 @@ jobs:
         with:
           node-version: 20
 
-      - name: Apply final investment patch
-        run: node scripts/apply-investment-final.mjs
-
-      - name: Apply final UI fixes
-        run: node scripts/apply-final-ui-fixes.mjs
+      - name: Apply small final fix
+        run: node scripts/apply-small-final-fix.mjs
 
       - name: Commit applied source changes
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add modules/investment/components/InvestmentDashboardV6.tsx \
-                  modules/investment/service-v3.ts \
-                  app/api/investments/v4/route.ts
+          git add modules/investment/components/InvestmentDashboardV6.tsx
           if git diff --cached --quiet; then
             echo 'No source changes to commit.'
           else
-            git commit -m 'feat(investments): complete requested investment UI [skip ci]'
+            git commit -m 'feat(investments): finish sell zero and total profit UI [skip ci]'
             git push origin HEAD:feat/investment-enhancements-local
           fi
