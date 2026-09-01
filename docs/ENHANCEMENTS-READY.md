@@ -1,0 +1,1 @@
+Ready for local testing from the verified investment baseline. Pull branch, run the enhancement patch, run TypeScript validation, then start Next.js.
