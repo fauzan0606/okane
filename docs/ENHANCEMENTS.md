@@ -1,0 +1,1 @@
+Implementation branch for the verified investment baseline. Pull it and run `node scripts/apply-investment-enhancements.mjs`, then validate with `./node_modules/.bin/tsc --noEmit` before starting Next.js.
