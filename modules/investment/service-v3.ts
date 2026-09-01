@@ -189,7 +189,7 @@ export async function importInvestmentWorkbook(input: { accountId: string; buffe
   const workbook = xlsx.read(input.buffer, { type: "buffer", cellDates: true });
   const sheet = workbook.Sheets["stocks dtl"];
   if (!sheet) throw new Error('Sheet "stocks dtl" was not found.');
-  const rows = xlsx.utils.sheet_to_json<Record<string, unknown>>(sheet, { defval: null, raw: true });
+  const rows = xlsx.utils.sheet_to_json(sheet, { defval: null, raw: true }) as Record<string, unknown>[];
   const hash = crypto.createHash("sha256").update(input.buffer).digest("hex");
   const existing = await prisma.investmentTransaction.findMany({ where: { accountId: input.accountId, status: "IMPORTED" }, select: { note: true } });
   const keys = new Set(existing.map((r) => { const m = readMeta<{ sourceHash?: string; sourceRow?: number }>(r.note, LOT); return m ? `${m.sourceHash}:${m.sourceRow}` : ""; }));
