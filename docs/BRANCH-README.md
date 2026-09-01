@@ -1,0 +1,1 @@
+Investment enhancement branch. Pull branch, execute scripts/apply-investment-enhancements.mjs, validate TypeScript, then test localhost.
