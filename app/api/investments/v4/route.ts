@@ -95,7 +95,7 @@ export async function POST(request: Request) {
       const unitPrice = Number(body.unitPrice);
       const transactionDate = new Date(String(body.transactionDate || new Date().toISOString()));
       if (!accountId || !assetId || !fundingCashAccountId) return NextResponse.json({ error: "Account, asset and settlement RDN are required." }, { status: 400 });
-      if (!Number.isFinite(unitPrice) || unitPrice <= 0) return NextResponse.json({ error: "Sell price must be greater than zero." }, { status: 400 });
+      if (!Number.isFinite(unitPrice) || unitPrice < 0) return NextResponse.json({ error: "Sell price cannot be negative." }, { status: 400 });
       if (Number.isNaN(transactionDate.getTime())) return NextResponse.json({ error: "Transaction date is invalid." }, { status: 400 });
       return NextResponse.json(serialize(await sellAllInvestmentAsset({ accountId, assetId, transactionDate, unitPrice, fundingCashAccountId })));
     }

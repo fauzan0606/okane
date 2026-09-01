@@ -95,7 +95,9 @@ export async function createInvestmentTransactionV3(input: {
   feeAmount?: number; taxAmount?: number; otherCharges?: number; fundingCashAccountId?: string; fundingWalletId?: string; sourceLotId?: string; note?: string;
 }) {
   const quantity = positive(input.quantity, "Quantity");
-  const unitPrice = positive(input.unitPrice, "Unit price");
+  const unitPrice = input.transactionType === "SELL"
+    ? (Number.isFinite(input.unitPrice) && input.unitPrice >= 0 ? new D(input.unitPrice) : (() => { throw new Error("Unit price cannot be negative."); })())
+    : positive(input.unitPrice, "Unit price");
   const fee = nonNegative(input.feeAmount, "Fee");
   const tax = nonNegative(input.taxAmount, "Tax");
   const other = nonNegative(input.otherCharges, "Other charges");

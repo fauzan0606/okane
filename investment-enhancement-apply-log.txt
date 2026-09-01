@@ -1,0 +1,10 @@
+OK service-v3 zero SELL
+OK v4 zero SELL
+OK V6 enhancement state
+SKIP V6 preference load
+OK V6 zero SELL UI
+SKIP V6 total profit values
+OK V6 dividend aggregation effect
+OK V6 dividend handler
+OK V6 dividend modal placement
+OK V6 dividend modal
