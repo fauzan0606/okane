@@ -6,6 +6,7 @@ on:
       - feat/investment-enhancements-local
     paths:
       - 'scripts/apply-investment-enhancements.mjs'
+      - '.github/workflows/finalize-investment-enhancements.yml'
   workflow_dispatch:
 
 permissions:
