@@ -1,0 +1,54 @@
+name: Finalize Investment Enhancements
+
+on:
+  push:
+    branches:
+      - feat/investment-enhancements-local
+    paths:
+      - 'scripts/apply-investment-enhancements.mjs'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/investment-enhancements-local
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Apply investment enhancements
+        run: node scripts/apply-investment-enhancements.mjs
+
+      - name: TypeScript validation
+        run: npx tsc --noEmit
+
+      - name: Commit applied source changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add modules/investment/components/InvestmentDashboardV5.tsx \
+                  modules/investment/components/InvestmentDashboardV6.tsx \
+                  modules/investment/components/InvestmentDashboardV7.tsx \
+                  modules/investment/service-v3.ts \
+                  app/api/investments/v2/route.ts \
+                  app/api/investments/v4/route.ts
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+          else
+            git commit -m 'feat(investments): apply enhancement source changes [skip ci]'
+            git push origin HEAD:feat/investment-enhancements-local
+          fi
