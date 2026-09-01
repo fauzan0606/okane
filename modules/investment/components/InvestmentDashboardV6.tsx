@@ -227,7 +227,8 @@ export default function InvestmentDashboardV6() {
   const activeAccounts = accounts.filter(a => a.isActive !== false);
   const totalRealized = Object.values(realizedByAccount).reduce((sum, value) => sum + value, 0);
   const totalDividend = Object.values(dividendByAccount).reduce((sum, value) => sum + value, 0);
-  const totalProfit = totalRealized + totalDividend;
+  const totalUnrealized = Number(data.summary.unrealized ?? 0) || 0;
+  const totalProfit = totalUnrealized + totalRealized + totalDividend;
   const formattedPriceUpdate = lastPriceUpdate
     ? new Intl.DateTimeFormat("id-ID", {
         day: "2-digit",
