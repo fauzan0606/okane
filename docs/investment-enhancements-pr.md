@@ -1,0 +1,1 @@
+Pull `feat/investment-enhancements-local`, run `node scripts/apply-investment-enhancements.mjs`, then run `./node_modules/.bin/tsc --noEmit`. The patch preserves the verified investment baseline and creates backups before editing.
