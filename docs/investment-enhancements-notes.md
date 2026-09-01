@@ -1,0 +1,1 @@
+Investment enhancements are delivered as a source patch script against the verified local baseline. The patch intentionally does not include or modify the local database file. Run the patch after pulling the branch, then run TypeScript validation before restarting Next.js.
