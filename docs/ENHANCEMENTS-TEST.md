@@ -1,0 +1,1 @@
+Enhancement branch source changes: zero-price SELL, dividend recording, Asset Summary Cards/Table selector, and alphabetical Asset Summary ordering. Existing verified investment UI is preserved.
