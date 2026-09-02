@@ -9,8 +9,8 @@ function money(value: Prisma.Decimal) {
   return value.toDecimalPlaces(2);
 }
 
-function positive(value: number, label: string) {
-  if (!Number.isFinite(value) || value <= 0) throw new Error(`${label} must be greater than zero.`);
+function nonNegative(value: number, label: string) {
+  if (!Number.isFinite(value) || value < 0) throw new Error(`${label} cannot be negative.`);
   return new D(value);
 }
 
@@ -60,7 +60,7 @@ export async function sellAllInvestmentAsset(input: {
   unitPrice: number;
   fundingCashAccountId: string;
 }) {
-  const unitPrice = positive(input.unitPrice, "Sell price");
+  const unitPrice = nonNegative(input.unitPrice, "Sell price");
 
   return prisma.$transaction(async (tx) => {
     const account = await tx.investmentAccount.findUnique({ where: { id: input.accountId }, include: { provider: true, currency: true, cashAccount: true } });
