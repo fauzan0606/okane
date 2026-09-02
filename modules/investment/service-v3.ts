@@ -244,3 +244,63 @@ export async function importInvestmentWorkbook(input: { accountId: string; buffe
   });
   return { imported, skipped, warnings, fileName: input.fileName, fileHash: hash };
 }
+
+
+export async function importInvestmentDividendWorkbook(input: { accountId: string; buffer: Buffer; fileName: string }) {
+  const xlsx = await (Function("return import('xlsx')")() as Promise<any>);
+  const workbook = xlsx.read(input.buffer, { type: 'buffer', cellDates: false });
+  const sheetName = workbook.SheetNames.find((name: string) => /dividend|dividen/i.test(name)) ?? workbook.SheetNames[0];
+  if (!sheetName) throw new Error('No worksheet was found in the dividend file.');
+  const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null, raw: true }) as Record<string, unknown>[];
+  const normalizeHeader = (value: unknown) => String(value ?? '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
+  const aliases = {
+    date: ['TANGGAL', 'TGL', 'TGL DIVIDEN', 'TANGGAL DIVIDEN', 'PAY DATE', 'PAYMENT DATE', 'DATE'],
+    symbol: ['STOCKS', 'STOCK', 'SYMBOL', 'TICKER', 'KODE SAHAM', 'KODE'],
+    amount: ['DIVIDEND', 'DIVIDEND AMOUNT', 'DIVIDEND VALUE', 'NET DIVIDEND', 'NET', 'JUMLAH DIVIDEN', 'AMOUNT', 'VALUE']
+  } as const;
+  const findValue = (row: Record<string, unknown>, names: readonly string[]) => {
+    const wanted = new Set(names.map(normalizeHeader));
+    return Object.entries(row).find(([key]) => wanted.has(normalizeHeader(key)))?.[1];
+  };
+  const parseDate = (value: unknown): Date | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86400000);
+    if (value instanceof Date && !Number.isNaN(value.getTime())) return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+    const text = String(value ?? '').trim();
+    let m = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+    if (m) return new Date(Date.UTC(Number(m[3]), Number(m[2]) - 1, Number(m[1])));
+    m = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+    if (m) return new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+    return null;
+  };
+  const parseAmount = (value: unknown): Prisma.Decimal | null => {
+    if (typeof value === 'number' && Number.isFinite(value)) return new D(value);
+    let text = String(value ?? '').trim().replace(/[^0-9,.-]/g, '');
+    if (!text) return null;
+    if (text.includes('.') && text.includes(',')) text = text.lastIndexOf(',') > text.lastIndexOf('.') ? text.replace(/\./g, '').replace(',', '.') : text.replace(/,/g, '');
+    else if (text.includes(',')) { const parts = text.split(','); text = parts.length === 2 && parts[1].length <= 2 ? parts[0].replace(/\./g, '') + '.' + parts[1] : text.replace(/,/g, ''); }
+    else if ((text.match(/\./g) || []).length > 1) text = text.replace(/\./g, '');
+    const n = Number(text);
+    return Number.isFinite(n) && n > 0 ? new D(n) : null;
+  };
+  const account = await prisma.investmentAccount.findUnique({ where: { id: input.accountId }, include: { cashAccount: true } });
+  if (!account) throw new Error('Investment account not found.');
+  let imported = 0; let skipped = 0; const warnings: string[] = [];
+  await prisma.$transaction(async (tx) => {
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i]; const rowNo = i + 2;
+      const date = parseDate(findValue(row, aliases.date));
+      const symbol = String(findValue(row, aliases.symbol) ?? '').trim().toUpperCase().replace(/[^A-Z0-9.-]/g, '');
+      const amount = parseAmount(findValue(row, aliases.amount));
+      if (!date || !symbol || !amount) { skipped += 1; if (Object.values(row).some(v => v != null && String(v).trim() !== '')) warnings.push('Row ' + rowNo + ' skipped: date, stock and dividend are required.'); continue; }
+      let asset = await tx.investmentAsset.findFirst({ where: { symbol, currencyId: account.currencyId } });
+      if (!asset) asset = await tx.investmentAsset.create({ data: { symbol, name: symbol, assetType: 'STOCK', countryCode: 'ID', currencyId: account.currencyId, unitName: 'share' } });
+      const duplicate = await tx.investmentTransaction.findFirst({ where: { accountId: account.id, assetId: asset.id, transactionType: InvestmentTransactionType.DIVIDEND, transactionDate: date, netCashAmount: amount } });
+      if (duplicate) { skipped += 1; continue; }
+      const note = '__OKANE_DIVIDEND_IMPORT__' + JSON.stringify({ source: 'DIVIDEND_EXCEL', sourceFile: input.fileName, sourceRow: rowNo, sheet: sheetName });
+      await tx.investmentTransaction.create({ data: { accountId: account.id, assetId: asset.id, transactionType: InvestmentTransactionType.DIVIDEND, transactionDate: date, quantity: new D(0), unitPrice: new D(0), grossAmount: amount, feeAmount: new D(0), taxAmount: new D(0), otherCharges: new D(0), totalCashAmount: amount, netCashAmount: amount, costBasisAmount: new D(0), currencyId: account.currencyId, fundingCashAccountId: account.cashAccount?.id, note } });
+      if (account.cashAccount) await tx.investmentCashAccount.update({ where: { id: account.cashAccount.id }, data: { balance: { increment: amount } } });
+      imported += 1;
+    }
+  });
+  return { imported, skipped, warnings, fileName: input.fileName, sheetName };
+}

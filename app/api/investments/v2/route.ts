@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { InvestmentAccountType, InvestmentAssetType, InvestmentTransactionType, Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { addDefaultFeeRules, createInvestmentProvider } from "@/modules/investment/service";
-import { createInvestmentTransactionV3, getInvestmentAccountLedger, importInvestmentWorkbook, refreshInvestmentStockPrices, setInvestmentCashBalance } from "@/modules/investment/service-v3";
+import { createInvestmentTransactionV3, getInvestmentAccountLedger, importInvestmentDividendWorkbook, importInvestmentWorkbook, refreshInvestmentStockPrices, setInvestmentCashBalance } from "@/modules/investment/service-v3";
 
 const D = Prisma.Decimal;
 function serialize<T>(value: T): T { return JSON.parse(JSON.stringify(value)); }
@@ -55,6 +55,12 @@ export async function POST(request: Request) {
     if (contentType.includes("multipart/form-data")) {
       const form = await request.formData();
       const action = String(form.get("action") || "");
+      if (action === "dividend.import.excel") {
+        const accountId = String(form.get("accountId") || "");
+        const file = form.get("file");
+        if (!accountId || !(file instanceof File)) return NextResponse.json({ error: "Account and Excel file are required." }, { status: 400 });
+        return NextResponse.json(serialize(await importInvestmentDividendWorkbook({ accountId, buffer: Buffer.from(await file.arrayBuffer()), fileName: file.name })));
+      }
       if (action !== "import.excel") return NextResponse.json({ error: "Unknown investment upload action." }, { status: 400 });
       const accountId = String(form.get("accountId") || "");
       const file = form.get("file");
