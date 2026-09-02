@@ -8,6 +8,7 @@ on:
       - 'scripts/apply-small-final-fix.mjs'
       - 'scripts/apply-final-profit-definition.mjs'
       - 'scripts/apply-compact-rdn-balance.mjs'
+      - 'scripts/apply-closed-transaction-columns.mjs'
       - '.github/workflows/finalize-investment-enhancements.yml'
   workflow_dispatch:
 
@@ -38,6 +39,9 @@ jobs:
       - name: Apply compact RDN balance
         run: node scripts/apply-compact-rdn-balance.mjs
 
+      - name: Apply closed transaction columns
+        run: node scripts/apply-closed-transaction-columns.mjs
+
       - name: Commit applied source changes
         run: |
           git config user.name 'github-actions[bot]'
@@ -46,6 +50,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No source changes to commit.'
           else
-            git commit -m 'feat(investments): compact RDN balance in transactions header [skip ci]'
+            git commit -m 'feat(investments): align closed transaction columns [skip ci]'
             git push origin HEAD:feat/investment-enhancements-local
           fi
