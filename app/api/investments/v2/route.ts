@@ -65,6 +65,24 @@ export async function POST(request: Request) {
     const body = await request.json();
     const action = String(body.action || "");
 
+    if (action === "investment.reset") {
+      const confirmation = String(body.confirmation || "");
+      if (confirmation !== "RESET INVESTMENT") return NextResponse.json({ error: "Confirmation text is required." }, { status: 400 });
+      const result = await prisma.$transaction(async tx => {
+        const accountIds = (await tx.investmentAccount.findMany({ select: { id: true } })).map(x => x.id);
+        await tx.investmentCashMovement.deleteMany({ where: {} });
+        await tx.investmentTransaction.deleteMany({ where: {} });
+        await tx.investmentHolding.deleteMany({ where: {} });
+        await tx.investmentCashAccount.deleteMany({ where: {} });
+        await tx.investmentAccount.deleteMany({ where: {} });
+        await tx.investmentFeeRule.deleteMany({ where: {} });
+        await tx.investmentProvider.deleteMany({ where: {} });
+        await tx.investmentAsset.deleteMany({ where: {} });
+        return { accountsDeleted: accountIds.length };
+      });
+      return NextResponse.json(serialize({ ok: true, ...result }));
+    }
+
     if (action === "account.create") {
       const provider = await createInvestmentProvider({ name: String(body.providerName || ""), countryCode: String(body.countryCode || "ID"), websiteUrl: body.websiteUrl ? String(body.websiteUrl) : undefined });
       await addDefaultFeeRules(provider.id);
