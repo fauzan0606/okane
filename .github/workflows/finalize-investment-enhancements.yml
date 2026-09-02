@@ -9,6 +9,7 @@ on:
       - 'scripts/apply-final-profit-definition.mjs'
       - 'scripts/apply-compact-rdn-balance.mjs'
       - 'scripts/apply-closed-transaction-columns.mjs'
+      - 'scripts/apply-investment-delete-fix.mjs'
       - '.github/workflows/finalize-investment-enhancements.yml'
   workflow_dispatch:
 
@@ -42,14 +43,17 @@ jobs:
       - name: Apply closed transaction columns
         run: node scripts/apply-closed-transaction-columns.mjs
 
+      - name: Apply investment transaction delete fix
+        run: node scripts/apply-investment-delete-fix.mjs
+
       - name: Commit applied source changes
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add modules/investment/components/InvestmentDashboardV6.tsx
+          git add modules/investment/components/InvestmentDashboardV6.tsx app/api/investments/v2/route.ts scripts/apply-small-final-fix.mjs scripts/apply-final-profit-definition.mjs scripts/apply-compact-rdn-balance.mjs scripts/apply-closed-transaction-columns.mjs scripts/apply-investment-delete-fix.mjs .github/workflows/finalize-investment-enhancements.yml
           if git diff --cached --quiet; then
             echo 'No source changes to commit.'
           else
-            git commit -m 'feat(investments): align closed transaction columns [skip ci]'
+            git commit -m 'fix(investments): make transaction delete robust [skip ci]'
             git push origin HEAD:feat/investment-enhancements-local
           fi
