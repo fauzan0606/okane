@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 
+// Dividend Excel import patcher.
 const servicePath = 'modules/investment/service-v3.ts';
 const apiPath = 'app/api/investments/v2/route.ts';
 const uiPath = 'modules/investment/components/InvestmentDashboardV6.tsx';
