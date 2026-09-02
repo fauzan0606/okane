@@ -188,10 +188,30 @@ export async function refreshInvestmentStockPrices(input?: { accountId?: string;
 
 export async function importInvestmentWorkbook(input: { accountId: string; buffer: Buffer; fileName: string }) {
   const xlsx = await (Function("return import('xlsx')")() as Promise<any>);
-  const workbook = xlsx.read(input.buffer, { type: "buffer", cellDates: true });
+  const workbook = xlsx.read(input.buffer, { type: "buffer", cellDates: false });
   const sheet = workbook.Sheets["stocks dtl"];
   if (!sheet) throw new Error('Sheet "stocks dtl" was not found.');
   const rows = xlsx.utils.sheet_to_json(sheet, { defval: null, raw: true }) as Record<string, unknown>[];
+
+  // Excel stores calendar dates as serials. Convert them to UTC-midnight calendar dates
+  // so the same date survives Prisma/JSON/browser timezone conversions without shifting.
+  const excelCalendarDate = (value: unknown): Date | null => {
+    if (typeof value === "number" && Number.isFinite(value)) {
+      const parsed = xlsx.SSF.parse_date_code(value);
+      if (parsed && parsed.y && parsed.m && parsed.d) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+    }
+    if (value instanceof Date && !Number.isNaN(value.getTime())) {
+      return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
+    }
+    if (typeof value === "string") {
+      const text = value.trim();
+      let match = text.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+      if (match) return new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+      match = text.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})/);
+      if (match) return new Date(Date.UTC(Number(match[3]), Number(match[2]) - 1, Number(match[1])));
+    }
+    return null;
+  };
   const hash = crypto.createHash("sha256").update(input.buffer).digest("hex");
   const existing = await prisma.investmentTransaction.findMany({ where: { accountId: input.accountId, status: "IMPORTED" }, select: { note: true } });
   const keys = new Set(existing.map((r) => { const m = readMeta<{ sourceHash?: string; sourceRow?: number }>(r.note, LOT); return m ? `${m.sourceHash}:${m.sourceRow}` : ""; }));
@@ -200,7 +220,7 @@ export async function importInvestmentWorkbook(input: { accountId: string; buffe
   let imported = 0; let skipped = 0; const warnings: string[] = [];
   await prisma.$transaction(async (tx) => {
     for (let i = 0; i < rows.length; i += 1) {
-      const row = rows[i]; const rowNo = i + 2; const date = row["TGL BELI"]; const symbol = String(row["STOCKS"] ?? "").trim().toUpperCase(); const lots = Number(row["LOT"] ?? 0); const buyPrice = Number(row["BUY"] ?? 0); const gross = Number(row["BUY PRICE"] ?? 0); const fee = Number(row["FEE"] ?? 0); const total = Number(row["TOTAL BUY"] ?? 0); const sell = Number(row["SELL"] ?? 0); const sellDate = row["TGL JUAL"]; const sellFee = Number(row["FEE_1"] ?? 0);
+      const row = rows[i]; const rowNo = i + 2; const date = excelCalendarDate(row["TGL BELI"]); const symbol = String(row["STOCKS"] ?? "").trim().toUpperCase(); const lots = Number(row["LOT"] ?? 0); const buyPrice = Number(row["BUY"] ?? 0); const gross = Number(row["BUY PRICE"] ?? 0); const fee = Number(row["FEE"] ?? 0); const total = Number(row["TOTAL BUY"] ?? 0); const sell = Number(row["SELL"] ?? 0); const sellDate = excelCalendarDate(row["TGL JUAL"]); const sellFee = Number(row["FEE_1"] ?? 0);
       if (!(date instanceof Date) || !symbol || !Number.isFinite(lots) || lots <= 0 || !Number.isFinite(buyPrice) || buyPrice <= 0) { if (symbol || date || lots) warnings.push(`Row ${rowNo} skipped: invalid date/symbol/lot/buy price.`); skipped += 1; continue; }
       const key = `${hash}:${rowNo}`; if (keys.has(key)) { skipped += 1; continue; }
       let asset = await tx.investmentAsset.findFirst({ where: { symbol, currencyId: account.currencyId, isActive: true } });
