@@ -135,6 +135,45 @@ export async function POST(request: Request) {
       return NextResponse.json(serialize(asset));
     }
 
+    if (action === "dividend.create" || action === "dividend.update") {
+      const accountId = String(body.accountId || "");
+      const assetId = String(body.assetId || "");
+      const amount = Number(body.amount || 0);
+      const transactionDate = new Date(body.transactionDate);
+      if (!accountId || !assetId || !Number.isFinite(amount) || amount <= 0 || Number.isNaN(transactionDate.getTime())) return NextResponse.json({ error: "Valid account, asset, amount and date are required." }, { status: 400 });
+      const account = await prisma.investmentAccount.findUnique({ where: { id: accountId }, include: { cashAccount: true } });
+      if (!account) return NextResponse.json({ error: "Investment account not found." }, { status: 404 });
+      const data = { accountId, assetId, transactionType: InvestmentTransactionType.DIVIDEND, transactionDate, quantity: new D(0), unitPrice: new D(0), grossAmount: new D(amount), feeAmount: new D(0), taxAmount: new D(0), otherCharges: new D(0), totalCashAmount: new D(amount), netCashAmount: new D(amount), costBasisAmount: new D(0), currencyId: account.currencyId, fundingCashAccountId: account.cashAccount?.id };
+      if (action === "dividend.update") {
+        const transactionId = String(body.transactionId || "");
+        const existing = await prisma.investmentTransaction.findUnique({ where: { id: transactionId } });
+        if (!existing || existing.transactionType !== InvestmentTransactionType.DIVIDEND) return NextResponse.json({ error: "Dividend transaction not found." }, { status: 404 });
+        const result = await prisma.$transaction(async tx => {
+          const delta = new D(amount).minus(existing.netCashAmount);
+          if (account.cashAccount) await tx.investmentCashAccount.update({ where: { id: account.cashAccount.id }, data: { balance: { increment: delta } } });
+          return tx.investmentTransaction.update({ where: { id: transactionId }, data });
+        });
+        return NextResponse.json(serialize(result));
+      }
+      const result = await prisma.$transaction(async tx => {
+        const transaction = await tx.investmentTransaction.create({ data });
+        if (account.cashAccount) await tx.investmentCashAccount.update({ where: { id: account.cashAccount.id }, data: { balance: { increment: amount } } });
+        return transaction;
+      });
+      return NextResponse.json(serialize(result));
+    }
+
+    if (action === "dividend.delete") {
+      const transactionId = String(body.transactionId || "");
+      const target = await prisma.investmentTransaction.findUnique({ where: { id: transactionId }, include: { account: { include: { cashAccount: true } } } });
+      if (!target || target.transactionType !== InvestmentTransactionType.DIVIDEND) return NextResponse.json({ error: "Dividend transaction not found." }, { status: 404 });
+      await prisma.$transaction(async tx => {
+        if (target.account.cashAccount) await tx.investmentCashAccount.update({ where: { id: target.account.cashAccount.id }, data: { balance: { decrement: target.netCashAmount } } });
+        await tx.investmentTransaction.delete({ where: { id: target.id } });
+      });
+      return NextResponse.json({ ok: true });
+    }
+
     if (action === "transaction.create") {
       const account = await prisma.investmentAccount.findUnique({ where: { id: String(body.accountId) }, include: { cashAccount: true } });
       if (!account || !account.isActive) return NextResponse.json({ error: "Investment account not found or already closed." }, { status: 400 });
