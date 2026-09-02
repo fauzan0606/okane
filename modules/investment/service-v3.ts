@@ -197,8 +197,12 @@ export async function importInvestmentWorkbook(input: { accountId: string; buffe
   // so the same date survives Prisma/JSON/browser timezone conversions without shifting.
   const excelCalendarDate = (value: unknown): Date | null => {
     if (typeof value === "number" && Number.isFinite(value)) {
-      const parsed = xlsx.SSF.parse_date_code(value);
-      if (parsed && parsed.y && parsed.m && parsed.d) return new Date(Date.UTC(parsed.y, parsed.m - 1, parsed.d));
+      // Excel's serial date uses the 1899-12-30 epoch for the calendar date.
+      // Only the integer portion matters here because the importer stores dates,
+      // not times. Using UTC avoids browser/server timezone shifts.
+      const serial = Math.floor(value);
+      const epoch = Date.UTC(1899, 11, 30);
+      return new Date(epoch + serial * 86400000);
     }
     if (value instanceof Date && !Number.isNaN(value.getTime())) {
       return new Date(Date.UTC(value.getFullYear(), value.getMonth(), value.getDate()));
