@@ -16,7 +16,9 @@ type RdnHistoryRow = { id: string; date: string; description: string; debit: str
 type AssetSummary = { asset: Asset; quantity: number; cost: number; avgCost: number; currentPrice: number | null; marketValue: number; sellFee: number; netValue: number; pnl: number; minSell: number; rows: LotRow[] };
 type AccountForm = { providerName: string; websiteUrl: string; rdnBankName: string; rdnAccountNumber: string; buyFeePct: string; sellFeePct: string; currencyId: string };
 type Trade = { type: "BUY" | "SELL"; assetId: string; assetQuery: string; quantity: string; unitPrice: string; tax: string; other: string; date: string; sourceLotId: string; fundingCashAccountId: string };
-type ClosedEdit = { id: string; asset: Asset; quantity: number; date: string; price: number } | null;\ntype DividendRow = { id: string; transactionDate: string; netCashAmount: string | number; asset: Asset };\ntype DividendEdit = { id: string; assetId: string; date: string; amount: string } | null;
+type ClosedEdit = { id: string; asset: Asset; quantity: number; date: string; price: number } | null;
+type DividendRow = { id: string; transactionDate: string; netCashAmount: string | number; asset: Asset };
+type DividendEdit = { id: string; assetId: string; date: string; amount: string } | null;
 
 const input = "w-full rounded-xl border border-white/10 bg-[#080f17] px-3 py-2.5 text-sm text-white outline-none placeholder:text-slate-600";
 const select = `${input} text-slate-300`;
