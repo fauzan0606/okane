@@ -1,0 +1,43 @@
+name: Apply Investment Reset Feature
+
+on:
+  push:
+    branches:
+      - feat/investment-enhancements-local
+    paths:
+      - 'scripts/apply-investment-reset.mjs'
+      - '.github/workflows/apply-investment-reset.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/investment-enhancements-local
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Apply Investment reset feature
+        run: node scripts/apply-investment-reset.mjs
+
+      - name: Commit applied source changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app/api/investments/v2/route.ts modules/investment/components/InvestmentDashboardV6.tsx scripts/apply-investment-reset.mjs .github/workflows/apply-investment-reset.yml
+          if git diff --cached --quiet; then
+            echo 'No source changes to commit.'
+          else
+            git commit -m 'feat(investments): add safe investment reset [skip ci]'
+            git push origin HEAD:feat/investment-enhancements-local
+          fi
