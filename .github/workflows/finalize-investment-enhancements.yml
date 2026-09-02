@@ -7,6 +7,7 @@ on:
     paths:
       - 'scripts/apply-small-final-fix.mjs'
       - 'scripts/apply-final-profit-definition.mjs'
+      - 'scripts/apply-compact-rdn-balance.mjs'
       - '.github/workflows/finalize-investment-enhancements.yml'
   workflow_dispatch:
 
@@ -34,6 +35,9 @@ jobs:
       - name: Apply profit definition
         run: node scripts/apply-final-profit-definition.mjs
 
+      - name: Apply compact RDN balance
+        run: node scripts/apply-compact-rdn-balance.mjs
+
       - name: Commit applied source changes
         run: |
           git config user.name 'github-actions[bot]'
@@ -42,6 +46,6 @@ jobs:
           if git diff --cached --quiet; then
             echo 'No source changes to commit.'
           else
-            git commit -m 'feat(investments): finalize total profit calculation [skip ci]'
+            git commit -m 'feat(investments): compact RDN balance in transactions header [skip ci]'
             git push origin HEAD:feat/investment-enhancements-local
           fi
