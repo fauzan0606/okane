@@ -18,14 +18,8 @@ function sellFeePctFromNote(note: string | null | undefined) {
   }
 }
 
-function positiveNumber(value: unknown, label: string) {
-  const n = Number(value);
-  if (!Number.isFinite(n) || n <= 0) throw new Error(`${label} must be greater than zero.`);
-  return n;
-}
-
 function nonNegativeNumber(value: unknown, label: string) {
-  const n = Number(value ?? 0);
+  const n = Number(value);
   if (!Number.isFinite(n) || n < 0) throw new Error(`${label} cannot be negative.`);
   return n;
 }
@@ -78,7 +72,7 @@ export async function POST(request: Request) {
         return { id: target.id, action: "deleted" as const };
       }
 
-      const price = positiveNumber(body.unitPrice, "Sell price");
+      const price = nonNegativeNumber(body.unitPrice, "Sell price");
       const tax = nonNegativeNumber(body.taxAmount, "Tax");
       const other = nonNegativeNumber(body.otherCharges, "Other charges");
       const feePct = sellFeePctFromNote(target.account.note);
