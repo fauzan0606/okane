@@ -19,7 +19,9 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const accountId = url.searchParams.get("accountId");
     if (!accountId) return NextResponse.json({ error: "accountId is required." }, { status: 400 });
-    await refreshInvestmentStockPrices({ accountId, staleAfterMinutes: 15 });
+    // Market prices are refreshed only by the explicit Refresh Prices action.
+    // GET must remain a read-only ledger endpoint so opening/reloading the page
+    // never triggers external market-data requests or side effects.
     const ledger = await getInvestmentAccountLedger(accountId);
     const sellFeePct = sellFeePctFromNote(ledger.account.note);
     const sellFactor = new D(1).minus(new D(sellFeePct).div(100));
