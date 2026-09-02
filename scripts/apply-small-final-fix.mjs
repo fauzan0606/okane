@@ -31,5 +31,14 @@ if (!s.includes('>Dividend Income</p>')) {
   changed = true;
 }
 
+// Show the selected account's RDN balance directly on Transactions.
+if (!s.includes("Transactions RDN balance")) {
+  const old = '<p className="mt-1 text-xs text-slate-500">RDN {fee.rdnBankName || "—"} · {selected.currency.code}</p></div><div className="flex flex-wrap gap-2">';
+  const next = '<p className="mt-1 text-xs text-slate-500">RDN {fee.rdnBankName || "—"} · {selected.currency.code}</p><div className="mt-3 inline-flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-400/[.04] px-3 py-2"><span className="text-[10px] font-semibold uppercase tracking-widest text-emerald-300">Transactions RDN balance</span><span className="text-sm font-bold text-white">{money(selected.cashAccount?.balance ?? 0, selected.currency.code)}</span></div></div><div className="flex flex-wrap gap-2">';
+  if (!s.includes(old)) throw new Error("Transactions header anchor not found");
+  s = s.replace(old, next);
+  changed = true;
+}
+
 fs.writeFileSync(p, s);
 console.log(changed ? "small-final-fix: changed" : "small-final-fix: already complete");
