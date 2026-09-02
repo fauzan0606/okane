@@ -2,58 +2,55 @@
 
 import { useEffect } from "react";
 
-const DUPLICATE_LABEL = "TRANSACTIONS RDN BALANCE";
+const DUPLICATE_TEXT = "TRANSACTIONS RDN BALANCE";
 
 function removeDuplicateBalance() {
-  const labels = Array.from(document.querySelectorAll<HTMLElement>("*")).filter(
-    (element) => element.children.length === 0 &&
-      element.textContent?.trim().toUpperCase() === DUPLICATE_LABEL
-  );
+  const elements = Array.from(document.querySelectorAll<HTMLElement>("div, section, aside, article"));
 
-  labels.forEach((label) => {
-    let node: HTMLElement | null = label.parentElement;
+  for (const element of elements) {
+    const text = (element.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
+    if (!text.includes(DUPLICATE_TEXT)) continue;
 
-    // The duplicate is the compact balance pill/card below the transaction
-    // header. Remove only a bounded rounded container, never the main header.
+    // Find the smallest visual container that still contains the duplicate
+    // label. This avoids touching the main transaction header/card.
+    let candidate: HTMLElement | null = element;
+    const descendants = Array.from(element.querySelectorAll<HTMLElement>("div, section, aside, article"));
+    for (const child of descendants) {
+      const childText = (child.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
+      if (childText.includes(DUPLICATE_TEXT)) candidate = child;
+    }
+
+    let node: HTMLElement | null = candidate;
     while (node && node !== document.body) {
       const rect = node.getBoundingClientRect();
-      const className = typeof node.className === "string" ? node.className : "";
+      const nodeText = (node.textContent || "").replace(/\s+/g, " ").trim().toUpperCase();
 
       if (
+        nodeText.includes(DUPLICATE_TEXT) &&
         rect.width > 0 &&
         rect.width < 900 &&
         rect.height > 0 &&
-        rect.height < 160 &&
-        /(rounded|border|bg-)/.test(className)
+        rect.height < 180
       ) {
-        node.remove();
-        return;
+        node.style.setProperty("display", "none", "important");
+        node.setAttribute("data-okane-duplicate-rdn-balance", "removed");
+        break;
       }
 
       node = node.parentElement;
     }
-
-    // Safe fallback: hide the immediate duplicate wrapper.
-    label.parentElement?.remove();
-  });
+  }
 }
 
 export default function InvestmentRdnBalanceCleanup() {
   useEffect(() => {
-    let frame = 0;
-    const run = () => {
-      cancelAnimationFrame(frame);
-      frame = requestAnimationFrame(removeDuplicateBalance);
-    };
+    const run = () => window.requestAnimationFrame(removeDuplicateBalance);
 
     run();
     const observer = new MutationObserver(run);
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, characterData: true });
 
-    return () => {
-      cancelAnimationFrame(frame);
-      observer.disconnect();
-    };
+    return () => observer.disconnect();
   }, []);
 
   return null;
