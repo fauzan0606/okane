@@ -184,7 +184,30 @@ export async function POST(request: Request) {
       const transactionId = String(body.transactionId || "");
       if (!transactionId) return NextResponse.json({ error: "transactionId is required." }, { status: 400 });
       const result = await prisma.$transaction(async tx => {
-        const target = await tx.investmentTransaction.findUnique({ where: { id: transactionId }, include: { account: true, asset: true, holding: true, cashMovements: true } });
+        // The UI normally sends the BUY transaction id. Also accept the internal
+        // lot id so imported/manual ledger rows remain deletable even when the
+        // source row was reconstructed from its lot metadata.
+        let target = await tx.investmentTransaction.findUnique({ where: { id: transactionId }, include: { account: true, asset: true, holding: true, cashMovements: true } });
+        if (!target) {
+          const candidates = await tx.investmentTransaction.findMany({
+            where: { transactionType: InvestmentTransactionType.BUY },
+            include: { account: true, asset: true, holding: true, cashMovements: true },
+          });
+          target = candidates.find((candidate) => {
+            const note = candidate.note || "";
+            const marker = "__OKANE_LOT__";
+            const start = note.indexOf(marker);
+            if (start < 0) return false;
+            try {
+              const raw = note.slice(start + marker.length);
+              const end = raw.indexOf("}");
+              const parsed = JSON.parse(end >= 0 ? raw.slice(0, end + 1) : raw) as { lotId?: string };
+              return parsed.lotId === transactionId;
+            } catch {
+              return false;
+            }
+          }) || null;
+        }
         if (!target) throw new Error("Investment transaction not found.");
         if (target.transactionType !== InvestmentTransactionType.BUY) throw new Error("Only BUY lot rows can be deleted from this ledger.");
         const marker = "__OKANE_LOT__";
