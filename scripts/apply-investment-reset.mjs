@@ -61,22 +61,31 @@ if (!ui.includes('OPEN POSITIONS · {selectedOpenRows.length}</span>')) {
 
 const openContentEndAnchor = '<div className="p-8 text-center text-xs text-slate-600">Tidak ada open position.</div>}<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02]';
 const openContentEndReplacement = '<div className="p-8 text-center text-xs text-slate-600">Tidak ada open position.</div>)}<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02]';
-if (ui.includes('OPEN POSITIONS · {selectedOpenRows.length}</span>') && !ui.includes(openContentEndReplacement)) {
-  if (ui.includes(openContentEndAnchor)) ui = ui.replace(openContentEndAnchor, openContentEndReplacement);
+if (ui.includes('OPEN POSITIONS · {selectedOpenRows.length}</span>')) {
+  if (!ui.includes(openContentEndReplacement) && ui.includes(openContentEndAnchor)) ui = ui.replace(openContentEndAnchor, openContentEndReplacement);
 }
 
-if (!ui.includes('>CLOSED TRANSACTIONS · {selectedClosed.length}</span>')) {
-  const closedPrefixRegex = /(<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white\/10 bg-white\/\[\.02\] p-3[^>]*><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · \{selectedClosed\.length\}<\/span>)(<select[^>]*>)/;
-  const closedPrefixMatch = ui.match(closedPrefixRegex);
-  if (!closedPrefixMatch) throw new Error("Closed transactions header anchor not found.");
-  const closedPrefixReplacement = '<button type="button" onClick={()=>setClosedTransactionsOpen(v=>!v)} className="mt-6 flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.02] p-3 text-left text-xs text-slate-400 hover:bg-white/[.03]"><span>CLOSED TRANSACTIONS · {selectedClosed.length}</span><span className="text-slate-500">{closedTransactionsOpen?"Collapse ↑":"Expand ↓"}</span></button>{closedTransactionsOpen && <div className="mt-2 flex justify-end">' + closedPrefixMatch[2];
-  ui = ui.replace(closedPrefixMatch[0], closedPrefixReplacement);
-}
+const closedDesired = '<button type="button" onClick={()=>setClosedTransactionsOpen(v=>!v)} className="mt-6 flex w-full items-center justify-between rounded-xl border border-white/10 bg-white/[.02] p-3 text-left hover:bg-white/[.03]"><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · {selectedClosed.length}</span><span className="text-xs text-slate-500">{closedTransactionsOpen?"Collapse ↑":"Expand ↓"}</span></button>{closedTransactionsOpen && <div className="mt-2 flex justify-end"><select aria-label="Filter closed transactions by asset" className="w-full rounded-lg border border-white/10 bg-[#101923] px-3 py-2 text-xs text-slate-300 outline-none sm:w-auto" value={closedAssetId} onChange={e=>setClosedAssetId(e.target.value)}><option value="">All Assets</option>{closedAssets.map(asset=><option key={asset.id} value={asset.id}>{asset.symbol || asset.name}</option>)}</select></div>}{closedTransactionsOpen && selectedClosed.length>0&&';
 
-const closedContentAnchor = '</select></div>{selectedClosed.length>0&&';
-const closedContentReplacement = '</select></div>}{closedTransactionsOpen && selectedClosed.length>0&&';
-if (ui.includes('>CLOSED TRANSACTIONS · {selectedClosed.length}</span>') && ui.includes(closedContentAnchor) && !ui.includes(closedContentReplacement)) {
-  ui = ui.replace(closedContentAnchor, closedContentReplacement);
+const malformedClosed = '<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02] p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · {selectedClosed.length}</span><select aria-label="Filter closed transactions by asset" className="w-full rounded-lg border border-white/10 bg-[#101923] px-3 py-2 text-xs text-slate-300 outline-none sm:w-auto" value={closedAssetId} onChange={e=>setClosedAssetId(e.target.value)}><option value="">All Assets</option>{closedAssets.map(asset=><option key={asset.id} value={asset.id}>{asset.symbol || asset.name}</option>)}</select></div>}{closedTransactionsOpen && selectedClosed.length>0&&';
+const legacyClosed = '<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02] p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · {selectedClosed.length}</span><select aria-label="Filter closed transactions by asset"';
+
+if (!ui.includes('>CLOSED TRANSACTIONS · {selectedClosed.length}</span></span>') && !ui.includes('closedTransactionsOpen?"Collapse')) {
+  if (ui.includes(malformedClosed)) {
+    ui = ui.replace(malformedClosed, closedDesired);
+  } else {
+    const legacyStart = ui.indexOf(legacyClosed);
+    if (legacyStart >= 0) {
+      const legacyEnd = ui.indexOf('</select></div>', legacyStart);
+      if (legacyEnd >= 0) {
+        const after = legacyEnd + '</select></div>'.length;
+        const suffix = ui.startsWith('}{closedTransactionsOpen && selectedClosed.length>0&&', after) ? '}{closedTransactionsOpen && selectedClosed.length>0&&' : '';
+        ui = ui.slice(0, legacyStart) + closedDesired + ui.slice(after + suffix.length);
+      } else throw new Error("Closed transaction filter end anchor not found.");
+    } else throw new Error("Closed transactions header anchor not found.");
+  }
+} else if (ui.includes(malformedClosed)) {
+  ui = ui.replace(malformedClosed, closedDesired);
 }
 
 fs.writeFileSync(apiPath, api);
