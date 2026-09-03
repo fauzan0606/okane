@@ -254,13 +254,19 @@ export async function importInvestmentDividendWorkbook(input: { accountId: strin
   const rows = xlsx.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: null, raw: true }) as Record<string, unknown>[];
   const normalizeHeader = (value: unknown) => String(value ?? '').trim().toUpperCase().replace(/[^A-Z0-9]+/g, ' ').trim();
   const aliases = {
-    date: ['TANGGAL', 'TGL', 'TGL DIVIDEN', 'TANGGAL DIVIDEN', 'PAY DATE', 'PAYMENT DATE', 'DATE'],
+    date: ['TANGGAL', 'TGL', 'TGL DIVIDEN', 'TANGGAL DIVIDEN', 'TANGGAL DEVIDEN', 'TGL DEVIDEN', 'PAY DATE', 'PAYMENT DATE', 'DATE'],
     symbol: ['STOCKS', 'STOCK', 'SYMBOL', 'TICKER', 'KODE SAHAM', 'KODE'],
-    amount: ['DIVIDEND', 'DIVIDEND AMOUNT', 'DIVIDEND VALUE', 'NET DIVIDEND', 'NET', 'JUMLAH DIVIDEN', 'AMOUNT', 'VALUE']
+    amount: ['DIVIDEND', 'DEVIDEN', 'DIVIDEND AMOUNT', 'DEVIDEN AMOUNT', 'DIVIDEND VALUE', 'DEVIDEN VALUE', 'NET DIVIDEND', 'NET DEVIDEN', 'NET', 'JUMLAH DIVIDEN', 'JUMLAH DEVIDEN', 'AMOUNT', 'VALUE']
   } as const;
   const findValue = (row: Record<string, unknown>, names: readonly string[]) => {
     const wanted = new Set(names.map(normalizeHeader));
-    return Object.entries(row).find(([key]) => wanted.has(normalizeHeader(key)))?.[1];
+    const entries = Object.entries(row);
+    const exact = entries.find(([key]) => wanted.has(normalizeHeader(key)));
+    if (exact) return exact[1];
+    return entries.find(([key]) => {
+      const header = normalizeHeader(key);
+      return [...wanted].some(name => header.replace(/DEVIDEN/g, 'DIVIDEN') === name.replace(/DEVIDEN/g, 'DIVIDEN'));
+    })?.[1];
   };
   const parseDate = (value: unknown): Date | null => {
     if (typeof value === 'number' && Number.isFinite(value)) return new Date(Date.UTC(1899, 11, 30) + Math.floor(value) * 86400000);
