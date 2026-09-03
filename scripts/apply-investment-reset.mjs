@@ -45,18 +45,24 @@ if (!ui.includes('>Reset Investment</button>')) {
   ui = ui.replace(headerAnchor, headerReplacement);
 }
 
-const stateAnchor = '  const [historyOpen, setHistoryOpen] = useState(false);';
-const stateReplacement = '  const [historyOpen, setHistoryOpen] = useState(false); const [openPositionsOpen, setOpenPositionsOpen] = useState(false); const [closedTransactionsOpen, setClosedTransactionsOpen] = useState(false);';
 if (!ui.includes('const [openPositionsOpen, setOpenPositionsOpen]')) {
-  if (!ui.includes(stateAnchor)) throw new Error("Transaction collapse state anchor not found.");
-  ui = ui.replace(stateAnchor, stateReplacement);
+  const historyStateRegex = /const\s+\[historyOpen,\s*setHistoryOpen\]\s*=\s*useState\(false\);/;
+  const historyStateMatch = ui.match(historyStateRegex);
+  if (!historyStateMatch) throw new Error("Transaction collapse state not found.");
+  ui = ui.replace(historyStateMatch[0], historyStateMatch[0] + ' const [openPositionsOpen, setOpenPositionsOpen] = useState(false); const [closedTransactionsOpen, setClosedTransactionsOpen] = useState(false);');
 }
 
 const openHeaderAnchor = '<div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[.02] p-3 text-xs text-slate-500">OPEN POSITIONS · {selectedOpenRows.length}</div>{selectedOpenRows.length?';
-const openHeaderReplacement = '<button type="button" onClick={()=>setOpenPositionsOpen(v=>!v)} className="flex w-full items-center justify-between rounded-xl border border-emerald-400/10 bg-emerald-400/[.02] p-3 text-left text-xs text-slate-400 hover:bg-emerald-400/[.04]"><span>OPEN POSITIONS · {selectedOpenRows.length}</span><span className="text-slate-500">{openPositionsOpen?"Collapse ↑":"Expand ↓"}</span></button>{openPositionsOpen && selectedOpenRows.length?';
+const openHeaderReplacement = '<button type="button" onClick={()=>setOpenPositionsOpen(v=>!v)} className="flex w-full items-center justify-between rounded-xl border border-emerald-400/10 bg-emerald-400/[.02] p-3 text-left text-xs text-slate-400 hover:bg-emerald-400/[.04]"><span>OPEN POSITIONS · {selectedOpenRows.length}</span><span className="text-slate-500">{openPositionsOpen?"Collapse ↑":"Expand ↓"}</span></button>{openPositionsOpen && (selectedOpenRows.length?';
 if (!ui.includes('OPEN POSITIONS · {selectedOpenRows.length}</span>')) {
   if (!ui.includes(openHeaderAnchor)) throw new Error("Open positions header anchor not found.");
   ui = ui.replace(openHeaderAnchor, openHeaderReplacement);
+}
+
+const openContentEndAnchor = '<div className="p-8 text-center text-xs text-slate-600">Tidak ada open position.</div>}<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02]';
+const openContentEndReplacement = '<div className="p-8 text-center text-xs text-slate-600">Tidak ada open position.</div>)}<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02]';
+if (ui.includes('OPEN POSITIONS · {selectedOpenRows.length}</span>')) {
+  if (!ui.includes(openContentEndReplacement) && ui.includes(openContentEndAnchor)) ui = ui.replace(openContentEndAnchor, openContentEndReplacement);
 }
 
 const closedHeaderAnchor = '<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02] p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · {selectedClosed.length}</span><select aria-label="Filter closed transactions by asset"';
