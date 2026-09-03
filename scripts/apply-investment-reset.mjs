@@ -45,6 +45,32 @@ if (!ui.includes('>Reset Investment</button>')) {
   ui = ui.replace(headerAnchor, headerReplacement);
 }
 
+const stateAnchor = '  const [historyOpen, setHistoryOpen] = useState(false);';
+const stateReplacement = '  const [historyOpen, setHistoryOpen] = useState(false); const [openPositionsOpen, setOpenPositionsOpen] = useState(false); const [closedTransactionsOpen, setClosedTransactionsOpen] = useState(false);';
+if (!ui.includes('const [openPositionsOpen, setOpenPositionsOpen]')) {
+  if (!ui.includes(stateAnchor)) throw new Error("Transaction collapse state anchor not found.");
+  ui = ui.replace(stateAnchor, stateReplacement);
+}
+
+const openHeaderAnchor = '<div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[.02] p-3 text-xs text-slate-500">OPEN POSITIONS · {selectedOpenRows.length}</div>{selectedOpenRows.length?';
+const openHeaderReplacement = '<button type="button" onClick={()=>setOpenPositionsOpen(v=>!v)} className="flex w-full items-center justify-between rounded-xl border border-emerald-400/10 bg-emerald-400/[.02] p-3 text-left text-xs text-slate-400 hover:bg-emerald-400/[.04]"><span>OPEN POSITIONS · {selectedOpenRows.length}</span><span className="text-slate-500">{openPositionsOpen?"Collapse ↑":"Expand ↓"}</span></button>{openPositionsOpen && selectedOpenRows.length?';
+if (!ui.includes('OPEN POSITIONS · {selectedOpenRows.length}</span>')) {
+  if (!ui.includes(openHeaderAnchor)) throw new Error("Open positions header anchor not found.");
+  ui = ui.replace(openHeaderAnchor, openHeaderReplacement);
+}
+
+const closedHeaderAnchor = '<div className="mt-6 flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02] p-3 sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · {selectedClosed.length}</span><select aria-label="Filter closed transactions by asset"';
+const closedHeaderReplacement = '<button type="button" onClick={()=>setClosedTransactionsOpen(v=>!v)} className="mt-6 flex w-full flex-col gap-3 rounded-xl border border-white/10 bg-white/[.02] p-3 text-left hover:bg-white/[.03] sm:flex-row sm:items-center sm:justify-between"><span className="text-xs text-slate-500">CLOSED TRANSACTIONS · {selectedClosed.length}</span><span className="text-xs text-slate-500">{closedTransactionsOpen?"Collapse ↑":"Expand ↓"}</span></button>{closedTransactionsOpen && <div className="mt-2 flex justify-end"><select aria-label="Filter closed transactions by asset"';
+if (!ui.includes('const [closedTransactionsOpen, setClosedTransactionsOpen]')) throw new Error("Closed transaction state missing.");
+if (!ui.includes('>CLOSED TRANSACTIONS · {selectedClosed.length}</span>')) {
+  if (!ui.includes(closedHeaderAnchor)) throw new Error("Closed transactions header anchor not found.");
+  ui = ui.replace(closedHeaderAnchor, closedHeaderReplacement);
+  const closedSelectEnd = 'value={closedAssetId} onChange={e=>setClosedAssetId(e.target.value)}><option value="">All Assets</option>{closedAssets.map(asset=><option key={asset.id} value={asset.id}>{asset.symbol || asset.name}</option>)}</select></div>{selectedClosed.length>0&&';
+  const closedSelectEndReplacement = 'value={closedAssetId} onChange={e=>setClosedAssetId(e.target.value)}><option value="">All Assets</option>{closedAssets.map(asset=><option key={asset.id} value={asset.id}>{asset.symbol || asset.name}</option>)}</select></div>}{closedTransactionsOpen && selectedClosed.length>0&&';
+  if (!ui.includes(closedSelectEnd)) throw new Error("Closed transaction filter anchor not found.");
+  ui = ui.replace(closedSelectEnd, closedSelectEndReplacement);
+}
+
 fs.writeFileSync(apiPath, api);
 fs.writeFileSync(uiPath, ui);
-console.log("Applied Investment reset feature.");
+console.log("Applied Investment reset and collapsible transaction sections.");
