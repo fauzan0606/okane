@@ -22,7 +22,7 @@ let summaryBlock = ui.slice(summaryStart, detailStart);
 if (!summaryBlock.startsWith(summaryPrefix)) throw new Error("Closed summary prefix mismatch.");
 summaryBlock = summaryBlock.replace(summaryPrefix, summaryPrefixNew);
 if (!summaryBlock.endsWith('</div>}')) throw new Error("Closed summary end marker not found.");
-summaryBlock = summaryBlock.slice(0, -5) + '</div>')}</div>}';
+summaryBlock = summaryBlock.slice(0, -7) + '</div></div>}';
 ui = ui.slice(0, summaryStart) + summaryBlock + ui.slice(detailStart);
 
 const newDetailStart = ui.indexOf('{closedTransactionsOpen && selectedClosed.length>0&&', summaryStart);
@@ -35,7 +35,7 @@ const detailPrefixNew = '{closedTransactionsOpen && selectedClosed.length>0&&<di
 if (!detailBlock.startsWith(detailPrefix)) throw new Error("Closed detail prefix mismatch.");
 detailBlock = detailBlock.replace(detailPrefix, detailPrefixNew);
 if (!detailBlock.endsWith('</div>}')) throw new Error("Closed detail end marker not found.");
-detailBlock = detailBlock.slice(0, -5) + '</div></div>}';
+detailBlock = detailBlock.slice(0, -7) + '</div></div>}';
 ui = ui.slice(0, newDetailStart) + detailBlock + ui.slice(detailEndExclusive);
 
 fs.writeFileSync(uiPath, ui);
