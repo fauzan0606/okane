@@ -7,6 +7,7 @@ on:
     paths:
       - 'scripts/apply-investment-reset.mjs'
       - 'scripts/apply-dividend-import.mjs'
+      - 'scripts/apply-closed-collapse.mjs'
       - '.github/workflows/apply-investment-reset.yml'
   workflow_dispatch:
 
@@ -31,6 +32,9 @@ jobs:
       - name: Apply existing investment patch
         run: node scripts/apply-investment-reset.mjs
 
+      - name: Apply closed collapse patch
+        run: node scripts/apply-closed-collapse.mjs
+
       - name: Apply dividend Excel feature
         run: node scripts/apply-dividend-import.mjs
 
@@ -38,10 +42,10 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add app/api/investments/v2/route.ts modules/investment/components/InvestmentDashboardV6.tsx modules/investment/service-v3.ts scripts/apply-investment-reset.mjs scripts/apply-dividend-import.mjs .github/workflows/apply-investment-reset.yml
+          git add app/api/investments/v2/route.ts modules/investment/components/InvestmentDashboardV6.tsx modules/investment/service-v3.ts scripts/apply-investment-reset.mjs scripts/apply-closed-collapse.mjs scripts/apply-dividend-import.mjs .github/workflows/apply-investment-reset.yml
           if git diff --cached --quiet; then
             echo 'No source changes to commit.'
           else
-            git commit -m 'feat(investments): add dividend Excel import [skip ci]'
+            git commit -m 'feat(investments): add closed summary and detail collapse [skip ci]'
             git push origin HEAD:feat/investment-enhancements-local
           fi
