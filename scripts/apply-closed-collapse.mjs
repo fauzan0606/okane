@@ -11,9 +11,8 @@ if (!ui.includes("const [closedSummaryOpen, setClosedSummaryOpen]")) {
 }
 
 const startMarker = '<div className={card}><div className="mb-4 flex items-center justify-between"><div><h2 className="text-lg font-semibold text-white">Transaction Detail';
-const endMarker = '<div className={card}><div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold text-white">Dividend Detail';
 const start = ui.indexOf(startMarker);
-const end = ui.indexOf(endMarker, start);
+const end = ui.indexOf('\n      <div className={card}>', start + startMarker.length);
 if (start < 0 || end < 0 || end <= start) throw new Error("Transaction Detail section boundaries not found.");
 
 const clean = `<div className={card}>
