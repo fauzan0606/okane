@@ -159,15 +159,21 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
       return [{ name: item.name, amount: Number(allocation.amount) }];
     });
 
-    const normalItems = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && !/fee/i.test(item.name));
+    const discountItems = participantAllocations.filter((item) => /discount/i.test(item.name));
+    const normalItems = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && !/fee/i.test(item.name) && !/discount/i.test(item.name));
     const taxItem = participantAllocations.find((item) => item.name === "Tax / PPN");
     const serviceItem = participantAllocations.find((item) => item.name === "Service Fee");
-    const otherFees = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && /fee/i.test(item.name));
+    const otherFees = participantAllocations.filter((item) => item.name !== "Tax / PPN" && item.name !== "Service Fee" && !/discount/i.test(item.name) && /fee/i.test(item.name));
 
     if (normalItems.length === 0) lines.push({ text: "No allocated items", size: 8, gap: 12 });
     else for (const item of normalItems) addItem(lines, item.name, item.amount, symbol);
 
-    const subtotal = normalItems.reduce((sum, item) => sum + item.amount, 0);
+    const totalBeforeDiscount = normalItems.reduce((sum, item) => sum + item.amount, 0);
+    const discount = discountItems.reduce((sum, item) => sum + item.amount, 0);
+    const subtotal = totalBeforeDiscount + discount;
+
+    addItem(lines, "Total Before Discount", totalBeforeDiscount, symbol, true);
+    if (discountItems.length > 0) addItem(lines, "Discount", discount, symbol);
     addItem(lines, "Subtotal", subtotal, symbol, true);
     if (taxItem) addItem(lines, "Tax / PPN", taxItem.amount, symbol);
     if (serviceItem) addItem(lines, "Service Fee", serviceItem.amount, symbol);
