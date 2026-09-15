@@ -9,14 +9,14 @@ type AppShellProps = {
 
 export default function AppShell({ sidebar, header, children }: AppShellProps) {
   return (
-    <div className="min-h-screen bg-[#070C12]">
+    <div className="min-h-screen w-full overflow-x-hidden bg-[#070C12]">
       <MobileNavigation />
-      <div className="flex min-h-screen items-start">
+      <div className="flex min-h-screen w-full items-start">
         {sidebar}
 
-        <div className="min-w-0 flex-1 pt-16 pb-20 md:pt-0 md:pb-0">
+        <div className="min-w-0 w-full flex-1 pt-16 pb-20 md:w-auto md:pt-0 md:pb-0">
           {header}
-          <main className="min-h-screen">{children}</main>
+          <main className="min-h-screen w-full">{children}</main>
         </div>
       </div>
     </div>
