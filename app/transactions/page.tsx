@@ -124,14 +124,14 @@ export default async function TransactionsPage({
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
-      <div className="space-y-6">
+      <div className="w-full space-y-6 px-4 py-4 md:px-8 md:py-6">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-3xl font-bold">Transactions</h1>
             <p className="mt-2 text-zinc-500">Record income and expenses.</p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
             {incompleteTransactions.length > 0 && (
               <a href="/transactions?review=1" className="inline-flex items-center rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-4 py-2.5 text-sm font-semibold text-amber-200 hover:bg-amber-400/[0.1]">
                 Review incomplete ({incompleteTransactions.length})
@@ -156,9 +156,9 @@ export default async function TransactionsPage({
           </div>
         )}
 
-        <section className="rounded-[18px] border border-white/10 bg-[#0d141e] p-4">
-          <form method="get" className="grid gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
-            <label className="block">
+        <section className="w-full rounded-[18px] border border-white/10 bg-[#0d141e] p-4">
+          <form method="get" className="grid w-full gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
+            <label className="block min-w-0">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Category</span>
               <select name="category" defaultValue={categoryId} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none">
                 <option value="">All categories</option>
@@ -166,7 +166,7 @@ export default async function TransactionsPage({
               </select>
             </label>
 
-            <label className="block">
+            <label className="block min-w-0">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Wallet</span>
               <select name="wallet" defaultValue={walletId} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none">
                 <option value="">All wallets</option>
@@ -174,12 +174,12 @@ export default async function TransactionsPage({
               </select>
             </label>
 
-            <label className="block">
+            <label className="block min-w-0">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">From date</span>
               <input name="from" type="date" defaultValue={from} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none" />
             </label>
 
-            <label className="block">
+            <label className="block min-w-0">
               <span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">To date</span>
               <input name="to" type="date" defaultValue={to} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none" />
             </label>
