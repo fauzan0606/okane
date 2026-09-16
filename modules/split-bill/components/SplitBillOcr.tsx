@@ -1,8 +1,8 @@
 "use client";
 
 import NextImage from "next/image";
-import { useEffect, useState } from "react";
-import { Camera, Check, LoaderCircle, Upload } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Camera, Check, ImagePlus, LoaderCircle } from "lucide-react";
 
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
 type OcrItem = { name: string; quantity: number; unitPrice: number; amount?: number };
@@ -37,6 +37,8 @@ export default function SplitBillOcr({ onUseResult }: Props) {
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const galleryInputRef = useRef<HTMLInputElement | null>(null);
+  const cameraInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
 
@@ -57,10 +59,14 @@ export default function SplitBillOcr({ onUseResult }: Props) {
     } finally { setLoading(false); }
   }
 
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0];
+    event.target.value = "";
+    if (selected) void scan(selected);
+  }
+
   function useResult() {
     if (!result) return;
-    // INCLUDED tax/service is already embedded in the invoice prices and must not be added again.
-    // UNKNOWN is intentionally not imported as a charge: the user must review the receipt first.
     const safeResult: OcrResult = {
       ...result,
       taxAmount: result.taxMode === "EXCLUDED" ? result.taxAmount : undefined,
@@ -72,8 +78,16 @@ export default function SplitBillOcr({ onUseResult }: Props) {
   }
 
   return <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
-    <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><Camera size={18} /></div><div><h2 className="text-base font-semibold text-white">Scan receipt</h2><p className="mt-1 text-xs text-slate-400">Gemini transcribes the receipt visually. Nothing is added to your Split Bill until you review and use the result.</p></div></div>
-    <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-xl border border-dashed border-[#405A74] bg-[#0B141F] px-4 py-4 text-xs font-semibold text-slate-300 hover:border-emerald-400/40"><input type="file" accept="image/*" capture="environment" className="hidden" disabled={loading} onChange={(event) => { const selected = event.target.files?.[0]; if (selected) void scan(selected); }} /><Camera size={15} /> Take photo / <Upload size={15} /> Upload receipt</label>
+    <input ref={galleryInputRef} type="file" accept="image/*" className="hidden" disabled={loading} onChange={handleFileChange} />
+    <input ref={cameraInputRef} type="file" accept="image/*" capture="environment" className="hidden" disabled={loading} onChange={handleFileChange} />
+
+    <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-400/10 text-violet-300"><Camera size={18} /></div><div><h2 className="text-base font-semibold text-white">Scan receipt</h2><p className="mt-1 text-xs text-slate-400">Upload a receipt from your iPhone gallery or take a new photo. Gemini will extract the receipt data for review.</p></div></div>
+
+    <div className="mt-4 grid gap-2 sm:grid-cols-2">
+      <button type="button" disabled={loading} onClick={() => galleryInputRef.current?.click()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#405A74] bg-[#0B141F] px-4 py-3 text-xs font-semibold text-slate-200 transition hover:border-emerald-400/40 active:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"><ImagePlus size={16} /> Choose from Gallery</button>
+      <button type="button" disabled={loading} onClick={() => cameraInputRef.current?.click()} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-[#405A74] bg-[#0B141F] px-4 py-3 text-xs font-semibold text-slate-200 transition hover:border-emerald-400/40 active:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"><Camera size={16} /> Take Photo</button>
+    </div>
+
     {file && <p className="mt-2 truncate text-[10px] text-slate-500">{file.name}</p>}
     {previewUrl && <NextImage src={previewUrl} alt="Receipt preview" width={1200} height={1600} unoptimized className="mt-3 max-h-72 w-full rounded-xl border border-white/10 bg-white object-contain" />}
     {loading && <div className="mt-3 flex items-center gap-2 text-[10px] text-slate-400"><LoaderCircle size={13} className="animate-spin" />{status}</div>}
