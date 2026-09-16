@@ -64,7 +64,20 @@ export async function createTransactionService(input: CreateTransactionInput) {
     if (!wallet) throw new Error("Wallet not found.");
     await validateCategorySelection(tx, input.categoryId, input.subcategoryId);
     const plan = await buildInstallmentPlan(tx, input.walletId, input);
-    const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: input.type, amount: input.amount, note: input.note ?? null, wallet: { connect: { id: input.walletId } }, ...(input.categoryId && { category: { connect: { id: input.categoryId } }), ...(input.subcategoryId && { subcategory: { connect: { id: input.subcategoryId } }), ...(payee && { payee: { connect: { id: payee.id } } }), ...(plan && { installmentPlan: { create: plan } }) }, include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true } });
+    const transaction = await tx.transaction.create({
+      data: {
+        transactionDate: input.transactionDate,
+        type: input.type,
+        amount: input.amount,
+        note: input.note ?? null,
+        wallet: { connect: { id: input.walletId } },
+        ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
+        ...(input.subcategoryId && { subcategory: { connect: { id: input.subcategoryId } } }),
+        ...(payee && { payee: { connect: { id: payee.id } } }),
+        ...(plan && { installmentPlan: { create: plan } }),
+      },
+      include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true },
+    });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     return transaction;
   });
@@ -101,7 +114,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     }
     if (affectsCurrentBalance(oldTransaction, existing.wallet)) await applyBalanceDelta(tx, existing.wallet.id, balanceDelta(oldTransaction).negated());
     if (affectsCurrentBalance(newTransaction, newWallet)) await applyBalanceDelta(tx, newWallet.id, balanceDelta(newTransaction));
-    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } } }), category: newCategoryId ? { connect: { id: newCategoryId } } : { disconnect: true }, subcategory: newSubcategoryId ? { connect: { id: newSubcategoryId } } : { disconnect: true }, ...(payee ? { payee: { connect: { id: payee.id } } } : { payee: { disconnect: true } }) }, include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true } });
+    return tx.transaction.update({ where: { id }, data: { ...(input.transactionDate && { transactionDate: input.transactionDate }), ...(input.type && { type: input.type }), ...(input.amount !== undefined && { amount: input.amount }), ...(input.note !== undefined && { note: input.note }), ...(input.walletId && { wallet: { connect: { id: input.walletId } }), category: newCategoryId ? { connect: { id: newCategoryId } } : { disconnect: true }, subcategory: newSubcategoryId ? { connect: { id: newSubcategoryId } } : { disconnect: true }, ...(payee ? { payee: { connect: { id: payee.id } } } : { payee: { disconnect: true } }) }, include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true } });
   });
 }
 
