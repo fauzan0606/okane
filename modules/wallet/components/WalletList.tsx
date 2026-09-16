@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Currency } from "@prisma/client";
 
 import type { WalletClientData, WalletHistoryEntry } from "../repository";
@@ -13,10 +13,20 @@ import { CrudEmptyState } from "@/components/crud";
 type WalletListProps = {
   wallets: WalletClientData[];
   currencies: Currency[];
-  histories: Record<string, WalletHistoryEntry[]>;
+  initialHistory: WalletHistoryEntry[];
+  initialWalletId: string;
+  pageSize?: number;
 };
 
-export default function WalletList({ wallets, currencies, histories }: WalletListProps) {
+type WalletHistoryResponse = {
+  entries: WalletHistoryEntry[];
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+};
+
+export default function WalletList({ wallets, currencies, initialHistory, initialWalletId, pageSize = 20 }: WalletListProps) {
   const [walletView, setWalletView] = useState<"cards" | "table">("cards");
 
   useEffect(() => {
@@ -29,13 +39,75 @@ export default function WalletList({ wallets, currencies, histories }: WalletLis
     [wallets],
   );
 
-  const [selectedWalletId, setSelectedWalletId] = useState(sortedWallets[0]?.id ?? "");
+  const [selectedWalletId, setSelectedWalletId] = useState(initialWalletId || sortedWallets[0]?.id || "");
+  const [history, setHistory] = useState<WalletHistoryEntry[]>(initialHistory.slice(0, pageSize));
+  const [historyPage, setHistoryPage] = useState(1);
+  const [historyTotal, setHistoryTotal] = useState(initialHistory.length);
+  const [historyTotalPages, setHistoryTotalPages] = useState(Math.max(Math.ceil(initialHistory.length / pageSize), 1));
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const historyRef = useRef<HTMLElement | null>(null);
+  const hasMountedSelectionEffect = useRef(false);
 
   useEffect(() => {
     if (!sortedWallets.some((wallet) => wallet.id === selectedWalletId)) {
       setSelectedWalletId(sortedWallets[0]?.id ?? "");
     }
   }, [sortedWallets, selectedWalletId]);
+
+  useEffect(() => {
+    if (!hasMountedSelectionEffect.current) {
+      hasMountedSelectionEffect.current = true;
+      return;
+    }
+    if (!selectedWalletId) return;
+
+    let cancelled = false;
+    async function loadHistory() {
+      setHistoryLoading(true);
+      setHistoryPage(1);
+      try {
+        const response = await fetch(`/api/wallet/${encodeURIComponent(selectedWalletId)}/history?page=1&pageSize=${pageSize}`, { cache: "no-store" });
+        if (!response.ok) throw new Error("Failed to load wallet history.");
+        const payload = (await response.json()) as WalletHistoryResponse;
+        if (cancelled) return;
+        setHistory(payload.entries);
+        setHistoryTotal(payload.total);
+        setHistoryTotalPages(payload.totalPages);
+      } catch {
+        if (!cancelled) {
+          setHistory([]);
+          setHistoryTotal(0);
+          setHistoryTotalPages(1);
+        }
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    }
+
+    loadHistory();
+    requestAnimationFrame(() => historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedWalletId, pageSize]);
+
+  async function changeHistoryPage(nextPage: number) {
+    if (nextPage < 1 || nextPage > historyTotalPages || historyLoading || !selectedWalletId) return;
+    setHistoryLoading(true);
+    try {
+      const response = await fetch(`/api/wallet/${encodeURIComponent(selectedWalletId)}/history?page=${nextPage}&pageSize=${pageSize}`, { cache: "no-store" });
+      if (!response.ok) throw new Error("Failed to load wallet history.");
+      const payload = (await response.json()) as WalletHistoryResponse;
+      setHistory(payload.entries);
+      setHistoryPage(payload.page);
+      setHistoryTotal(payload.total);
+      setHistoryTotalPages(payload.totalPages);
+      requestAnimationFrame(() => historyRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
 
   if (sortedWallets.length === 0) {
     return <CrudEmptyState title="No wallet yet" description="Start by creating your first wallet." />;
@@ -51,24 +123,10 @@ export default function WalletList({ wallets, currencies, histories }: WalletLis
           <p className="text-xs text-slate-600">{sortedWallets.length} wallets · sorted A–Z</p>
         </div>
         <div className="flex rounded-lg border border-white/10 bg-white/[.02] p-1">
-          <button
-            type="button"
-            onClick={() => {
-              setWalletView("cards");
-              window.localStorage.setItem("okane.walletView", "cards");
-            }}
-            className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "cards" ? "bg-white/[.08] text-white" : "text-slate-500"}`}
-          >
+          <button type="button" onClick={() => { setWalletView("cards"); window.localStorage.setItem("okane.walletView", "cards"); }} className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "cards" ? "bg-white/[.08] text-white" : "text-slate-500"}`}>
             ▦ Cards
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setWalletView("table");
-              window.localStorage.setItem("okane.walletView", "table");
-            }}
-            className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "table" ? "bg-white/[.08] text-white" : "text-slate-500"}`}
-          >
+          <button type="button" onClick={() => { setWalletView("table"); window.localStorage.setItem("okane.walletView", "table"); }} className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "table" ? "bg-white/[.08] text-white" : "text-slate-500"}`}>
             ☷ Table
           </button>
         </div>
@@ -77,57 +135,28 @@ export default function WalletList({ wallets, currencies, histories }: WalletLis
       {walletView === "cards" ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {sortedWallets.map((wallet) => (
-            <WalletCard
-              key={wallet.id}
-              wallet={wallet}
-              currencies={currencies}
-              selected={wallet.id === selectedWallet.id}
-              onSelect={() => setSelectedWalletId(wallet.id)}
-            />
+            <WalletCard key={wallet.id} wallet={wallet} currencies={currencies} selected={wallet.id === selectedWallet.id} onSelect={() => setSelectedWalletId(wallet.id)} />
           ))}
         </div>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-white/10">
           <table className="w-full min-w-[900px] text-left text-xs">
             <thead className="border-b border-white/5 text-[10px] uppercase tracking-wider text-slate-600">
-              <tr>
-                <th className="px-4 py-3">Wallet</th>
-                <th>Type</th>
-                <th>Currency</th>
-                <th>Balance</th>
-                <th>Bank</th>
-                <th className="text-right">Action</th>
-              </tr>
+              <tr><th className="px-4 py-3">Wallet</th><th>Type</th><th>Currency</th><th>Balance</th><th>Bank</th><th className="text-right">Action</th></tr>
             </thead>
             <tbody className="divide-y divide-white/5">
               {sortedWallets.map((wallet) => {
                 const isCreditCard = wallet.walletType === "CREDIT_CARD" && Boolean(wallet.creditCard);
                 const balance = isCreditCard ? Math.max(-Number(wallet.currentBalance), 0) : Number(wallet.currentBalance);
-                const formatter = new Intl.NumberFormat("id-ID", {
-                  minimumFractionDigits: wallet.currency.decimalPlaces,
-                  maximumFractionDigits: wallet.currency.decimalPlaces,
-                });
-
+                const formatter = new Intl.NumberFormat("id-ID", { minimumFractionDigits: wallet.currency.decimalPlaces, maximumFractionDigits: wallet.currency.decimalPlaces });
                 return (
-                  <tr
-                    key={wallet.id}
-                    onClick={() => setSelectedWalletId(wallet.id)}
-                    className={`cursor-pointer transition ${wallet.id === selectedWallet.id ? "bg-emerald-400/[.04]" : "hover:bg-white/[.02]"}`}
-                  >
-                    <td className="px-4 py-3">
-                      <p className="font-semibold text-white">{wallet.name}</p>
-                      {wallet.bank && <p className="mt-0.5 text-[10px] text-slate-600">{wallet.bank}</p>}
-                    </td>
+                  <tr key={wallet.id} onClick={() => setSelectedWalletId(wallet.id)} className={`cursor-pointer transition ${wallet.id === selectedWallet.id ? "bg-emerald-400/[.04]" : "hover:bg-white/[.02]"}`}>
+                    <td className="px-4 py-3"><p className="font-semibold text-white">{wallet.name}</p>{wallet.bank && <p className="mt-0.5 text-[10px] text-slate-600">{wallet.bank}</p>}</td>
                     <td className="text-slate-400">{formatWalletType(wallet.walletType)}</td>
                     <td className="text-slate-400">{wallet.currency.name} ({wallet.currency.code})</td>
-                    <td className="font-semibold text-white">
-                      {wallet.currency.symbol}{formatter.format(balance)}
-                      {isCreditCard && <span className="ml-1 text-[10px] font-normal text-slate-600">Outstanding</span>}
-                    </td>
+                    <td className="font-semibold text-white">{wallet.currency.symbol}{formatter.format(balance)}{isCreditCard && <span className="ml-1 text-[10px] font-normal text-slate-600">Outstanding</span>}</td>
                     <td className="text-slate-400">{wallet.bank || "—"}</td>
-                    <td className="px-4 text-right" onClick={(event) => event.stopPropagation()}>
-                      <WalletCardActions wallet={wallet} currencies={currencies} />
-                    </td>
+                    <td className="px-4 text-right" onClick={(event) => event.stopPropagation()}><WalletCardActions wallet={wallet} currencies={currencies} /></td>
                   </tr>
                 );
               })}
@@ -137,11 +166,18 @@ export default function WalletList({ wallets, currencies, histories }: WalletLis
       )}
 
       <WalletHistory
-        entries={histories[selectedWallet.id] ?? []}
+        historyRef={historyRef}
+        entries={history}
         symbol={selectedWallet.currency.symbol}
         decimalPlaces={selectedWallet.currency.decimalPlaces}
         walletName={selectedWallet.name}
         walletType={selectedWallet.walletType}
+        page={historyPage}
+        pageSize={pageSize}
+        total={historyTotal}
+        totalPages={historyTotalPages}
+        loading={historyLoading}
+        onPageChange={changeHistoryPage}
       />
     </div>
   );
