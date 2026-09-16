@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import WalletList from "@/modules/wallet/components/WalletList";
 import WalletForm from "@/modules/wallet/components/WalletForm";
 
-import { listWallets, listCurrencies, listWalletHistory } from "@/modules/wallet/service";
+import { listWallets, listCurrencies } from "@/modules/wallet/service";
 import type { WalletClientData } from "@/modules/wallet/repository";
 
 const WALLET_HISTORY_PAGE_SIZE = 20;
@@ -29,8 +29,6 @@ function serializeWallets(wallets: Awaited<ReturnType<typeof listWallets>>): Wal
 export default async function WalletPage() {
   const [wallets, currencies] = await Promise.all([listWallets(), listCurrencies()]);
   const sortedWallets = [...wallets].sort((a, b) => a.name.localeCompare(b.name, "id", { sensitivity: "base" }));
-  const initialWallet = sortedWallets[0] ?? null;
-  const initialHistory = initialWallet ? await listWalletHistory(initialWallet.id) : [];
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
@@ -47,8 +45,8 @@ export default async function WalletPage() {
         <WalletList
           wallets={serializeWallets(sortedWallets)}
           currencies={currencies}
-          initialHistory={initialHistory}
-          initialWalletId={initialWallet?.id ?? ""}
+          initialHistory={[]}
+          initialWalletId=""
           pageSize={WALLET_HISTORY_PAGE_SIZE}
         />
       </div>
