@@ -3,20 +3,97 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BriefcaseBusiness, LayoutDashboard, Menu, Receipt, Settings, Wallet, X } from "lucide-react";
-import { useState } from "react";
+import {
+  ArrowLeftRight,
+  BarChart3,
+  BriefcaseBusiness,
+  CreditCard,
+  FileSearch,
+  HandCoins,
+  LayoutDashboard,
+  Landmark,
+  Menu,
+  PiggyBank,
+  Receipt,
+  ReceiptText,
+  Settings,
+  Tags,
+  Target,
+  Wallet,
+  X,
+  type LucideIcon,
+} from "lucide-react";
+import { useEffect, useState } from "react";
 import { menus } from "./Sidebar";
 
-const primaryItems = [
-  { icon: LayoutDashboard, label: "Home", href: "/" },
-  { icon: Receipt, label: "Transactions", href: "/transactions" },
-  { icon: Wallet, label: "Wallets", href: "/wallet" },
-  { icon: BriefcaseBusiness, label: "Investments", href: "/investments" },
-];
+type QuickItem = {
+  icon: LucideIcon;
+  label: string;
+  href: string;
+};
+
+const HOME_ITEM: QuickItem = { icon: LayoutDashboard, label: "Home", href: "/" };
+const QUICK_MENU_STORAGE_KEY = "okane-mobile-quick-menu";
+const DEFAULT_QUICK_MENU = ["/transactions", "/wallet", "/investments"];
+
+const allQuickItems: QuickItem[] = menus
+  .flatMap((group) => group.items)
+  .filter((item) => item.href !== "/")
+  .map((item) => ({ icon: item.icon, label: item.label, href: item.href }));
+
+function getQuickItems(value: string[]): QuickItem[] {
+  const valid = value.filter((href) => allQuickItems.some((item) => item.href === href));
+  const unique = [...new Set(valid)].slice(0, 3);
+  return unique.map((href) => allQuickItems.find((item) => item.href === href)!).filter(Boolean);
+}
 
 export default function MobileNavigation() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [quickItems, setQuickItems] = useState<QuickItem[]>(getQuickItems(DEFAULT_QUICK_MENU));
+  const [draftQuickMenu, setDraftQuickMenu] = useState<string[]>(DEFAULT_QUICK_MENU);
+
+  useEffect(() => {
+    try {
+      const saved = window.localStorage.getItem(QUICK_MENU_STORAGE_KEY);
+      if (!saved) return;
+      const parsed = JSON.parse(saved);
+      if (!Array.isArray(parsed)) return;
+      const items = getQuickItems(parsed.filter((value): value is string => typeof value === "string"));
+      if (items.length === 3) {
+        setQuickItems(items);
+        setDraftQuickMenu(items.map((item) => item.href));
+      }
+    } catch {
+      // Keep the defaults when localStorage is unavailable or malformed.
+    }
+  }, []);
+
+  function openCustomizer() {
+    setDraftQuickMenu(quickItems.map((item) => item.href));
+    setCustomizeOpen(true);
+  }
+
+  function toggleQuickItem(href: string) {
+    setDraftQuickMenu((current) => {
+      if (current.includes(href)) return current.filter((item) => item !== href);
+      if (current.length >= 3) return current;
+      return [...current, href];
+    });
+  }
+
+  function saveQuickMenu() {
+    if (draftQuickMenu.length !== 3) return;
+    const nextItems = getQuickItems(draftQuickMenu);
+    setQuickItems(nextItems);
+    try {
+      window.localStorage.setItem(QUICK_MENU_STORAGE_KEY, JSON.stringify(nextItems.map((item) => item.href)));
+    } catch {
+      // The UI still works for the current session when storage is unavailable.
+    }
+    setCustomizeOpen(false);
+  }
 
   return (
     <>
@@ -62,15 +139,56 @@ export default function MobileNavigation() {
             </nav>
 
             <div className="border-t border-white/5 p-4" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1rem)" }}>
+              <button type="button" onClick={openCustomizer} className="mb-3 flex w-full items-center justify-between rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-3 text-left active:bg-emerald-500/15">
+                <div>
+                  <p className="text-xs font-bold text-emerald-300">Customize Quick Menu</p>
+                  <p className="mt-0.5 text-[10px] text-slate-500">Choose 3 shortcuts for the bottom bar</p>
+                </div>
+                <span className="text-lg text-emerald-400">›</span>
+              </button>
               <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0d141e] px-3 py-3"><div className="flex h-9 w-9 items-center justify-center rounded-full bg-amber-400/15 text-sm font-bold text-amber-300">F</div><div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-slate-200">Fauzan</p><p className="text-[10px] font-medium text-amber-400">Premium Plan</p></div></div>
             </div>
           </aside>
         </div>
       )}
 
+      {customizeOpen && (
+        <div className="fixed inset-0 z-[70] flex items-end bg-black/70 backdrop-blur-sm md:hidden">
+          <section className="w-full rounded-t-[28px] border-t border-white/10 bg-[#0a1119] px-5 pb-7 pt-5 shadow-2xl" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 1.75rem)" }}>
+            <div className="mx-auto mb-5 flex max-w-md items-center justify-between">
+              <div>
+                <h2 className="text-lg font-bold text-white">Customize bottom menu</h2>
+                <p className="mt-1 text-xs text-slate-500">Home stays fixed. Choose exactly 3 shortcuts.</p>
+              </div>
+              <button type="button" onClick={() => setCustomizeOpen(false)} aria-label="Close customization" className="flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 active:bg-white/10"><X size={20} /></button>
+            </div>
+
+            <div className="mx-auto grid max-h-[58vh] max-w-md grid-cols-2 gap-2.5 overflow-y-auto pb-2">
+              {allQuickItems.map((item) => {
+                const Icon = item.icon;
+                const selected = draftQuickMenu.includes(item.href);
+                const disabled = !selected && draftQuickMenu.length >= 3;
+                return (
+                  <button key={item.href} type="button" onClick={() => toggleQuickItem(item.href)} disabled={disabled} className={`flex min-h-16 items-center gap-3 rounded-2xl border px-3 py-3 text-left transition ${selected ? "border-emerald-400/40 bg-emerald-500/15 text-white" : "border-white/10 bg-white/[0.03] text-slate-400"} ${disabled ? "opacity-40" : "active:scale-[0.98]"}`}>
+                    <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ${selected ? "bg-emerald-400/15 text-emerald-300" : "bg-white/5 text-slate-500"}`}><Icon size={18} /></span>
+                    <span className="min-w-0 flex-1 text-sm font-medium">{item.label}</span>
+                    <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] ${selected ? "border-emerald-300 bg-emerald-400 text-[#07100c]" : "border-white/15 text-transparent"}`}>✓</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            <div className="mx-auto mt-4 flex max-w-md items-center justify-between gap-3">
+              <span className="text-xs font-medium text-slate-500">{draftQuickMenu.length}/3 selected</span>
+              <button type="button" onClick={saveQuickMenu} disabled={draftQuickMenu.length !== 3} className="rounded-xl bg-emerald-400 px-5 py-2.5 text-sm font-bold text-[#07100c] disabled:cursor-not-allowed disabled:opacity-40">Save changes</button>
+            </div>
+          </section>
+        </div>
+      )}
+
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-white/10 bg-[#070c12]/95 px-2 pt-2 shadow-[0_-12px_35px_rgba(0,0,0,0.25)] backdrop-blur-xl md:hidden" style={{ paddingBottom: "env(safe-area-inset-bottom)" }} aria-label="Primary navigation">
         <div className="mx-auto flex h-14 max-w-md items-start justify-around">
-          {primaryItems.map((item) => {
+          {[HOME_ITEM, ...quickItems].map((item) => {
             const Icon = item.icon;
             const active = pathname === item.href || (item.href !== "/" && pathname.startsWith(item.href));
             return <Link key={item.href} href={item.href} className={`flex min-w-[64px] flex-col items-center gap-1 rounded-xl px-2 py-1.5 text-[10px] font-medium ${active ? "text-emerald-400" : "text-slate-500"}`}><span className={`flex h-8 w-10 items-center justify-center rounded-xl ${active ? "bg-emerald-500/15" : ""}`}><Icon size={20} strokeWidth={active ? 2.3 : 1.8} /></span><span>{item.label}</span></Link>;
