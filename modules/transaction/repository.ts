@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { IMPORT_REVIEW_WALLET_NAME } from "./importReview";
 
 export type TransactionWithRelations = {
   id: string;
@@ -104,17 +105,49 @@ function serializeTransaction(transaction: RawTransaction): TransactionWithRelat
   };
 }
 
+const transactionInclude = {
+  wallet: { include: { currency: true } },
+  category: true,
+  subcategory: true,
+  payee: true,
+  installmentPlan: true,
+  splitBill: true,
+} satisfies Prisma.TransactionInclude;
+
+type TransactionListFilters = {
+  categoryId?: string;
+  walletId?: string;
+  from?: string;
+  to?: string;
+  reviewOnly?: boolean;
+};
+
+function buildTransactionWhere(filters: TransactionListFilters): Prisma.TransactionWhereInput {
+  const where: Prisma.TransactionWhereInput = { kind: "STANDARD" };
+  if (filters.categoryId) where.categoryId = filters.categoryId;
+  if (filters.walletId) where.walletId = filters.walletId;
+
+  if (filters.from || filters.to) {
+    where.transactionDate = {};
+    if (filters.from) where.transactionDate.gte = new Date(`${filters.from}T00:00:00.000Z`);
+    if (filters.to) where.transactionDate.lte = new Date(`${filters.to}T23:59:59.999Z`);
+  }
+
+  if (filters.reviewOnly) {
+    where.OR = [
+      { wallet: { name: IMPORT_REVIEW_WALLET_NAME } },
+      { categoryId: null },
+      { subcategoryId: null },
+    ];
+  }
+
+  return where;
+}
+
 export async function getTransactions() {
   const transactions = await prisma.transaction.findMany({
     where: { kind: "STANDARD" },
-    include: {
-      wallet: { include: { currency: true } },
-      category: true,
-      subcategory: true,
-      payee: true,
-      installmentPlan: true,
-      splitBill: true,
-    },
+    include: transactionInclude,
     orderBy: [
       { transactionDate: "desc" },
       { createdAt: "desc" },
@@ -124,17 +157,46 @@ export async function getTransactions() {
   return transactions.map(serializeTransaction);
 }
 
+export async function getTransactionsPage(filters: TransactionListFilters & { page: number; pageSize: number }) {
+  const page = Math.max(1, Math.floor(filters.page));
+  const pageSize = Math.min(100, Math.max(1, Math.floor(filters.pageSize)));
+  const where = buildTransactionWhere(filters);
+
+  const [transactions, total] = await Promise.all([
+    prisma.transaction.findMany({
+      where,
+      include: transactionInclude,
+      orderBy: [
+        { transactionDate: "desc" },
+        { createdAt: "desc" },
+        { id: "desc" },
+      ],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+    }),
+    prisma.transaction.count({ where }),
+  ]);
+
+  return { transactions: transactions.map(serializeTransaction), total, page, pageSize };
+}
+
+export async function getTransactionCountsByPayeeIds(payeeIds: string[]) {
+  const ids = [...new Set(payeeIds.filter(Boolean))];
+  if (ids.length === 0) return {} as Record<string, number>;
+
+  const groups = await prisma.transaction.groupBy({
+    by: ["payeeId"],
+    where: { kind: "STANDARD", payeeId: { in: ids } },
+    _count: { _all: true },
+  });
+
+  return Object.fromEntries(groups.map((group) => [String(group.payeeId), group._count._all]));
+}
+
 export async function getTransactionById(id: string) {
   const transaction = await prisma.transaction.findFirst({
     where: { id, kind: "STANDARD" },
-    include: {
-      wallet: { include: { currency: true } },
-      category: true,
-      subcategory: true,
-      payee: true,
-      installmentPlan: true,
-      splitBill: true,
-    },
+    include: transactionInclude,
   });
   return transaction ? serializeTransaction(transaction) : null;
 }
