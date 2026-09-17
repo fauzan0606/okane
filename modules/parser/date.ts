@@ -22,11 +22,7 @@ function buildDate(day: number, month: number, year?: number): string | undefine
   const resolvedYear = year ?? now.getFullYear();
   const date = new Date(resolvedYear, month, day);
 
-  if (
-    date.getFullYear() !== resolvedYear ||
-    date.getMonth() !== month ||
-    date.getDate() !== day
-  ) {
+  if (date.getFullYear() !== resolvedYear || date.getMonth() !== month || date.getDate() !== day) {
     return undefined;
   }
 
@@ -55,41 +51,30 @@ export function extractTransactionDate(input: string): string {
     return toDateOnly(date);
   }
 
-  if (/\b(hari ini|today)\b/.test(normalized)) {
-    return toDateOnly(today);
+  if (/\b(hari ini|today)\b/.test(normalized)) return toDateOnly(today);
+
+  // "tanggal 17" / "tgl 17" means day 17 of the current month/year.
+  // It is handled before generic numeric parsing so it cannot be mistaken for an amount.
+  const explicitDayOnly = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})\b/);
+  if (explicitDayOnly) {
+    const result = buildDate(Number(explicitDayOnly[1]), today.getMonth(), today.getFullYear());
+    if (result) return result;
   }
 
-  // Explicit Indonesian date phrases such as:
-  // "tanggal 7 aug", "tgl 7 agustus", "tanggal 7 aug 2026".
-  const explicitTextMonth = normalized.match(
-    /\b(?:tanggal|tgl)\s+(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/
-  );
+  const explicitTextMonth = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/);
   if (explicitTextMonth) {
     const [, day, monthName, year] = explicitTextMonth;
     const month = MONTHS[monthName];
-
     if (month !== undefined) {
-      const result = buildDate(
-        Number(day),
-        month,
-        year ? Number(year) : undefined
-      );
-
+      const result = buildDate(Number(day), month, year ? Number(year) : undefined);
       if (result) return result;
     }
   }
 
-  const explicitNumeric = normalized.match(
-    /\b(?:tanggal|tgl)\s+(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/
-  );
+  const explicitNumeric = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/);
   if (explicitNumeric) {
     const [, day, month, year] = explicitNumeric;
-    const result = buildDate(
-      Number(day),
-      Number(month) - 1,
-      year ? Number(year) : undefined
-    );
-
+    const result = buildDate(Number(day), Number(month) - 1, year ? Number(year) : undefined);
     if (result) return result;
   }
 
@@ -100,51 +85,29 @@ export function extractTransactionDate(input: string): string {
     if (result) return result;
   }
 
-  const numeric = normalized.match(
-    /\b(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/
-  );
+  const numeric = normalized.match(/\b(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/);
   if (numeric) {
     const [, day, month, year] = numeric;
-    const result = buildDate(
-      Number(day),
-      Number(month) - 1,
-      year ? Number(year) : undefined
-    );
+    const result = buildDate(Number(day), Number(month) - 1, year ? Number(year) : undefined);
     if (result) return result;
   }
 
-  const textMonth = normalized.match(
-    /\b(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/
-  );
+  const textMonth = normalized.match(/\b(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/);
   if (textMonth) {
     const [, day, monthName, year] = textMonth;
     const month = MONTHS[monthName];
-
     if (month !== undefined) {
-      const result = buildDate(
-        Number(day),
-        month,
-        year ? Number(year) : undefined
-      );
-
+      const result = buildDate(Number(day), month, year ? Number(year) : undefined);
       if (result) return result;
     }
   }
 
-  const monthFirst = normalized.match(
-    /\b([a-z]+)\s+(\d{1,2})(?:\s+(20\d{2}))?\b/
-  );
+  const monthFirst = normalized.match(/\b([a-z]+)\s+(\d{1,2})(?:\s+(20\d{2}))?\b/);
   if (monthFirst) {
     const [, monthName, day, year] = monthFirst;
     const month = MONTHS[monthName];
-
     if (month !== undefined) {
-      const result = buildDate(
-        Number(day),
-        month,
-        year ? Number(year) : undefined
-      );
-
+      const result = buildDate(Number(day), month, year ? Number(year) : undefined);
       if (result) return result;
     }
   }
