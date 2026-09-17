@@ -53,14 +53,8 @@ export function extractTransactionDate(input: string): string {
 
   if (/\b(hari ini|today)\b/.test(normalized)) return toDateOnly(today);
 
-  // "tanggal 17" / "tgl 17" means day 17 of the current month/year.
-  // It is handled before generic numeric parsing so it cannot be mistaken for an amount.
-  const explicitDayOnly = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})\b/);
-  if (explicitDayOnly) {
-    const result = buildDate(Number(explicitDayOnly[1]), today.getMonth(), today.getFullYear());
-    if (result) return result;
-  }
-
+  // Explicit text month is checked before day-only so "tanggal 17 agustus"
+  // is interpreted as August 17, not as the 17th of the current month.
   const explicitTextMonth = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})\s+([a-z]+)(?:\s+(20\d{2}))?\b/);
   if (explicitTextMonth) {
     const [, day, monthName, year] = explicitTextMonth;
@@ -69,6 +63,13 @@ export function extractTransactionDate(input: string): string {
       const result = buildDate(Number(day), month, year ? Number(year) : undefined);
       if (result) return result;
     }
+  }
+
+  // "tanggal 17" / "tgl 17" means day 17 of the current month/year.
+  const explicitDayOnly = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})(?!\s+[a-z])\b/);
+  if (explicitDayOnly) {
+    const result = buildDate(Number(explicitDayOnly[1]), today.getMonth(), today.getFullYear());
+    if (result) return result;
   }
 
   const explicitNumeric = normalized.match(/\b(?:tanggal|tgl)\s+(\d{1,2})[\/.\-](\d{1,2})(?:[\/.\-](20\d{2}))?\b/);
