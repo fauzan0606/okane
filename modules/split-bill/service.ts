@@ -66,12 +66,14 @@ export async function createSplitBill(input: SplitBillInput) {
       if (unitTotal.lte(0)) throw new Error(`Choose at least one person for '${inputItem.name}'.`);
       if (method === SplitBillItemMethod.PRO_RATA && selectedCount > 1 && unitTotal.lte(0)) throw new Error(`Set at least one share unit for '${inputItem.name}'.`);
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name: inputItem.name.trim(), quantity: inputItem.quantity, unitPrice: inputItem.unitPrice, splitMethod: method } });
+      const allocations = [];
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
         if (units[participantIndex].lte(0)) continue;
         const amount = units[participantIndex].div(unitTotal).mul(itemAmount);
         shareTotals[participantIndex] = shareTotals[participantIndex].plus(amount);
-        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: units[participantIndex], amount } });
+        allocations.push({ itemId: item.id, participantId: participants[participantIndex].id, units: units[participantIndex], amount });
       }
+      if (allocations.length > 0) await tx.splitBillItemAllocation.createMany({ data: allocations });
     }
 
     const orderDiscountAmount = capDecimal(chargeAmount(input.orderDiscount, subtotal), subtotal);
@@ -81,13 +83,15 @@ export async function createSplitBill(input: SplitBillInput) {
       if (amount.lte(0)) return;
       if (subtotal.lte(0)) throw new Error("Order discount cannot be added when the bill subtotal is zero.");
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name: "Order Discount", quantity: 1, unitPrice: amount.negated(), splitMethod: SplitBillItemMethod.PRO_RATA } });
+      const allocations = [];
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
         const baseShare = shareTotals[participantIndex];
         if (baseShare.lte(0)) continue;
         const allocation = baseShare.div(subtotal).mul(amount);
         shareTotals[participantIndex] = shareTotals[participantIndex].minus(allocation);
-        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: baseShare, amount: allocation.negated() } });
+        allocations.push({ itemId: item.id, participantId: participants[participantIndex].id, units: baseShare, amount: allocation.negated() });
       }
+      if (allocations.length > 0) await tx.splitBillItemAllocation.createMany({ data: allocations });
     };
 
     await addDiscount(orderDiscountAmount);
@@ -100,13 +104,15 @@ export async function createSplitBill(input: SplitBillInput) {
       if (amount.lte(0)) return;
       if (discountedSubtotal.lte(0)) throw new Error(`${name} cannot be added when the discounted bill subtotal is zero.`);
       const item = await tx.splitBillItem.create({ data: { splitBillId: splitBill.id, name, quantity: 1, unitPrice: amount, splitMethod: SplitBillItemMethod.PRO_RATA } });
+      const allocations = [];
       for (let participantIndex = 0; participantIndex < participants.length; participantIndex += 1) {
         const baseShare = baseShares[participantIndex];
         if (baseShare.lte(0)) continue;
         const allocation = baseShare.div(discountedSubtotal).mul(amount);
-        await tx.splitBillItemAllocation.create({ data: { itemId: item.id, participantId: participants[participantIndex].id, units: baseShare, amount: allocation } });
+        allocations.push({ itemId: item.id, participantId: participants[participantIndex].id, units: baseShare, amount: allocation });
         shareTotals[participantIndex] = shareTotals[participantIndex].plus(allocation);
       }
+      if (allocations.length > 0) await tx.splitBillItemAllocation.createMany({ data: allocations });
     };
 
     const addDeliveryCharge = async (amount: Prisma.Decimal, splitMethod: "EQUAL" | "PRO_RATA") => {
@@ -139,7 +145,7 @@ export async function createSplitBill(input: SplitBillInput) {
     await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
     for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
     return splitBill;
-  });
+  }, { maxWait: 10000, timeout: 15000 });
 }
 
 export async function finalizeSplitBill(splitBillId: string, input: { transactionDate: Date; walletId: string }) {
