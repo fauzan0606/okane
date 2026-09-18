@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Plus, ReceiptText } from "lucide-react";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import SplitBillForm from "./SplitBillForm";
 
 type Props = { currencySymbol?: string };
@@ -12,17 +12,14 @@ export default function NewSplitBillPanel({ currencySymbol = "Rp" }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger
-        render={
-          <button
-            type="button"
-            className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-[#07110b] shadow-[0_10px_24px_rgba(16,185,129,0.12)] hover:bg-emerald-400"
-          />
-        }
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2.5 text-xs font-bold text-[#07110b] shadow-[0_10px_24px_rgba(16,185,129,0.12)] hover:bg-emerald-400"
       >
         <Plus size={15} />
         Split Bill
-      </DialogTrigger>
+      </button>
       <DialogContent
         showCloseButton
         className="!left-0 !top-0 !h-[100dvh] !w-screen !max-w-none !translate-x-0 !translate-y-0 min-w-0 max-h-[100dvh] overflow-x-hidden overflow-y-auto rounded-none border border-[#30465D] bg-[#0E1925] p-0 pb-[env(safe-area-inset-bottom)] text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:!left-1/2 sm:!top-1/2 sm:!h-auto sm:!w-[calc(100vw-3rem)] sm:!max-w-[1100px] sm:!translate-x-1/2 sm:!translate-y-1/2 sm:max-h-[94vh] sm:rounded-[24px] sm:pb-0"
