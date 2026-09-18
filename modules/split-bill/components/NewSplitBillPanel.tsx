@@ -25,19 +25,21 @@ export default function NewSplitBillPanel({ currencySymbol = "Rp" }: Props) {
       </DialogTrigger>
       <DialogContent
         showCloseButton
-        className="!w-[calc(100vw-1.5rem)] !max-w-[1100px] max-h-[94vh] overflow-y-auto rounded-[24px] border border-[#30465D] bg-[#0E1925] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:!w-[calc(100vw-3rem)]"
+        className="!left-0 !top-0 !h-[100dvh] !w-screen !max-w-none !translate-x-0 !translate-y-0 min-w-0 max-h-[100dvh] overflow-x-hidden overflow-y-auto rounded-none border border-[#30465D] bg-[#0E1925] p-0 pb-[env(safe-area-inset-bottom)] text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:!left-1/2 sm:!top-1/2 sm:!h-auto sm:!w-[calc(100vw-3rem)] sm:!max-w-[1100px] sm:!translate-x-1/2 sm:!translate-y-1/2 sm:max-h-[94vh] sm:rounded-[24px] sm:pb-0"
       >
-        <div className="p-4 sm:p-6 md:p-8">
-          <DialogHeader className="mb-5 flex-row items-start gap-3 pr-10 sm:mb-6">
+        <div className="min-w-0 w-full p-4 pt-[calc(1rem+env(safe-area-inset-top))] sm:p-6 md:p-8 md:pt-8">
+          <DialogHeader className="mb-5 min-w-0 flex-row items-start gap-3 pr-10 sm:mb-6">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border border-emerald-400/20 bg-emerald-400/10 text-emerald-400 sm:h-11 sm:w-11">
               <ReceiptText size={20} />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <DialogTitle className="text-xl font-semibold text-white">New Split Bill</DialogTitle>
-              <DialogDescription className="mt-1 text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">Start with the merchant. No transaction or wallet is required at this stage.</DialogDescription>
+              <DialogDescription className="mt-1 break-words text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">Start with the merchant. No transaction or wallet is required at this stage.</DialogDescription>
             </div>
           </DialogHeader>
-          <SplitBillForm currencySymbol={currencySymbol} />
+          <div className="min-w-0 w-full">
+            <SplitBillForm currencySymbol={currencySymbol} />
+          </div>
         </div>
       </DialogContent>
     </Dialog>
