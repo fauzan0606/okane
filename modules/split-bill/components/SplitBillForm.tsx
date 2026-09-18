@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, ReceiptText, Trash2, UsersRound } from "lucide-react";
 import { createSplitBillAction } from "../actions";
 import SplitBillOcr, { type OcrResult } from "./SplitBillOcr";
@@ -38,6 +39,8 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
   const [ocrDiscounts, setOcrDiscounts] = useState<OcrDiscount[]>([]);
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+  const router = useRouter();
 
   const subtotal = useMemo(() => roundedMoney(items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0)), [items]);
   const orderDiscountAmount = useMemo(() => Math.min(roundedMoney(chargeAmount(orderDiscount, subtotal)), subtotal), [orderDiscount, subtotal]);
@@ -140,13 +143,30 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
 
   const participantSummaries = participants.map((participant, index) => ({ ...participant, share: shares[index] ?? 0, percentage: itemTotal > 0 ? (shares[index] ?? 0) / itemTotal * 100 : 0 }));
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (isSaving) return;
+
     if (valid) {
       setSubmitError("");
+      setIsSaving(true);
+      try {
+        const result = await createSplitBillAction(new FormData(event.currentTarget));
+        if (!result.ok) {
+          setSubmitError(result.error);
+          return;
+        }
+        router.push("/split-bill");
+        router.refresh();
+      } catch (error) {
+        console.error(error);
+        setSubmitError(error instanceof Error ? error.message : "Unable to save Split Bill.");
+      } finally {
+        setIsSaving(false);
+      }
       return;
     }
-
-    event.preventDefault();
 
     const errors: string[] = [];
     if (!merchantName.trim()) errors.push("Merchant is required.");
@@ -184,7 +204,7 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
     note,
   });
 
-  return <form action={createSplitBillAction} onSubmit={handleSubmit} className="space-y-5">
+  return <form onSubmit={handleSubmit} className="space-y-5">
     <input type="hidden" name="payload" value={payload} />
     <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
       <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-400"><ReceiptText size={18} /></div><div><h2 className="text-base font-semibold text-white">1. What are we splitting?</h2><p className="mt-1 text-xs text-slate-400">For a new Split Bill, you only need the merchant first. Date and wallet can be added later when you finalize it into your finances.</p></div></div>
@@ -210,6 +230,6 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
 
     <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-white">5. Split summary</h2><p className="mt-1 text-xs text-slate-400">Review each participant&apos;s share before saving the Split Bill.</p></div><div className="rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-right"><p className="text-[9px] uppercase tracking-[0.1em] text-slate-600">Allocated</p><p className="mt-0.5 text-xs font-bold text-white">{money(shares.reduce((sum, value) => sum + value, 0), currencySymbol)}</p></div></div><div className="mt-4 overflow-hidden rounded-xl border border-white/10"><div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#0B141F] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-600"><span>Participant</span><span>Share</span><span>Share %</span></div>{participantSummaries.map((participant, index) => <div key={index} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-white/5 bg-[#101B28] px-3 py-2.5 text-xs"><span className="truncate font-medium text-slate-300">{participant.name || `Person ${index + 1}`}{participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}</span><span className="font-semibold text-white">{money(participant.share, currencySymbol)}</span><span className="w-14 text-right text-[10px] text-slate-500">{participant.percentage.toFixed(1)}%</span></div>)}</div><div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500"><span>Bill total includes discounted subtotal + tax + service + net delivery.</span><span className={Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "text-emerald-300" : "text-amber-300"}>{Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "✓ Fully allocated" : "Allocation pending"}</span></div></section>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="grid gap-4 md:grid-cols-3"><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Bill total</p><p className="mt-1 text-xl font-bold text-white">{money(itemTotal, currencySymbol)}</p><p className="mt-1 text-[10px] text-slate-600">Subtotal {money(subtotal, currencySymbol)} · Discount {money(orderDiscountAmount, currencySymbol)} · Tax {money(taxAmount, currencySymbol)}{tax.treatment === "INCLUDED" ? " included" : ""} · Service {money(serviceFeeAmount, currencySymbol)} · Delivery {money(netDeliveryAmount, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Your share</p><p className="mt-1 text-xl font-bold text-white">{money(personalShare, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">To receive</p><p className="mt-1 text-xl font-bold text-emerald-300">{money(receivable, currencySymbol)}</p></div></div><label className="mt-4 block"><span className="text-xs font-medium text-slate-300">Note <span className="text-slate-600">(optional)</span></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Dinner at Sushi Hiro" className={`${inputClass} mt-2`} /></label><div className="mt-4 border-t border-white/5 pt-4"><p className="text-[10px] text-slate-500">Save this Split Bill first. Date, wallet, transaction and receivables will be created only when you finalize it.</p>{submitError && <p role="alert" className="mt-2 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2 text-[10px] leading-4 text-amber-200">{submitError}</p>}<div className="mt-3 flex justify-end"><button type="submit" className={`inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] transition hover:bg-emerald-400 ${valid ? "" : "opacity-80"}`}>Save Split Bill</button></div></div></section>
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="grid gap-4 md:grid-cols-3"><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Bill total</p><p className="mt-1 text-xl font-bold text-white">{money(itemTotal, currencySymbol)}</p><p className="mt-1 text-[10px] text-slate-600">Subtotal {money(subtotal, currencySymbol)} · Discount {money(orderDiscountAmount, currencySymbol)} · Tax {money(taxAmount, currencySymbol)}{tax.treatment === "INCLUDED" ? " included" : ""} · Service {money(serviceFeeAmount, currencySymbol)} · Delivery {money(netDeliveryAmount, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Your share</p><p className="mt-1 text-xl font-bold text-white">{money(personalShare, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">To receive</p><p className="mt-1 text-xl font-bold text-emerald-300">{money(receivable, currencySymbol)}</p></div></div><label className="mt-4 block"><span className="text-xs font-medium text-slate-300">Note <span className="text-slate-600">(optional)</span></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Dinner at Sushi Hiro" className={`${inputClass} mt-2`} /></label><div className="mt-4 border-t border-white/5 pt-4"><p className="text-[10px] text-slate-500">Save this Split Bill first. Date, wallet, transaction and receivables will be created only when you finalize it.</p>{submitError && <p role="alert" className="mt-2 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2 text-[10px] leading-4 text-amber-200">{submitError}</p>}<div className="mt-3 flex justify-end"><button type="submit" disabled={isSaving} className={`inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 ${valid ? "" : "opacity-80"}`}>{isSaving ? "Saving…" : "Save Split Bill"}</button></div></div></section>
   </form>;
 }
