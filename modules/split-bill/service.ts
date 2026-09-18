@@ -145,7 +145,7 @@ export async function createSplitBill(input: SplitBillInput) {
     await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
     for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
     return splitBill;
-  }, { maxWait: 10000, timeout: 15000 });
+  }, { maxWait: 10000, timeout: 20000 });
 }
 
 export async function finalizeSplitBill(splitBillId: string, input: { transactionDate: Date; walletId: string }) {
