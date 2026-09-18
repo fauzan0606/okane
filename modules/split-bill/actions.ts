@@ -1,7 +1,6 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { createSplitBill, deleteSplitBill, finalizeSplitBill } from "./service";
 import { updateSplitBillItemAllocation } from "./item-edit-service";
 
@@ -31,10 +30,18 @@ function parseCreatePayload(formData: FormData) {
   } catch { throw new Error("Invalid Split Bill data."); }
 }
 
-export async function createSplitBillAction(formData: FormData) {
-  await createSplitBill(parseCreatePayload(formData));
-  refreshAll();
-  redirect("/split-bill");
+export async function createSplitBillAction(formData: FormData): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await createSplitBill(parseCreatePayload(formData));
+    refreshAll();
+    return { ok: true };
+  } catch (error) {
+    console.error("createSplitBillAction failed", error);
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Unable to save Split Bill.",
+    };
+  }
 }
 
 export async function finalizeSplitBillAction(formData: FormData) {
