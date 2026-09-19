@@ -52,6 +52,7 @@ function validateInput(input: SplitBillInput) {
 
 export async function createSplitBill(input: SplitBillInput) {
   validateInput(input);
+  const payerIndex = input.payerParticipantIndex ?? input.participants.findIndex((participant) => participant.isMe);
   return prisma.$transaction(async (tx) => {
     const splitBill = await tx.splitBill.create({ data: { merchantName: input.merchantName.trim(), totalAmount: 0, personalAmount: 0, status: SplitBillStatus.DRAFT, note: input.note?.trim() || null } });
     const participants = await Promise.all(input.participants.map((participant) => tx.splitBillParticipant.create({ data: { splitBillId: splitBill.id, name: participant.isMe ? "You" : participant.name.trim(), isMe: participant.isMe } })));
