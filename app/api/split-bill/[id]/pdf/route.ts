@@ -141,11 +141,13 @@ export async function GET(_request: Request, { params }: { params: Promise<{ id:
   if (!bill) return new Response("Split Bill not found", { status: 404 });
 
   const symbol = bill.transaction?.wallet.currency.symbol ?? "Rp";
+  const payer = bill.participants.find((participant) => participant.id === bill.payerParticipantId) ?? bill.participants.find((participant) => participant.isMe) ?? null;
   const lines: Line[] = [
     { text: "OKANE", size: 18, bold: true, gap: 24 },
     { text: "SPLIT BILL", size: 8, bold: true, gap: 16 },
     ...wrapText(bill.merchantName, 13, CONTENT_WIDTH).map((text, index, all) => ({ text, size: 13, bold: true, gap: index === all.length - 1 ? 10 : 14 })),
-    { text: bill.transaction ? date(bill.transaction.transactionDate) : date(bill.createdAt), size: 8, gap: 16 },
+    { text: bill.transaction ? date(bill.transaction.transactionDate) : date(bill.paymentDate ?? bill.createdAt), size: 8, gap: 10 },
+    ...(payer ? [{ text: `Paid by: ${payer.name}${payer.isMe ? " (You)" : ""}`, size: 8, bold: true, gap: 16 }] : []),
   ];
 
   for (const participant of bill.participants) {

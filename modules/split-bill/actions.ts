@@ -20,6 +20,7 @@ function parseCreatePayload(formData: FormData) {
     return JSON.parse(value) as {
       merchantName: string;
       participants: { name: string; isMe: boolean }[];
+      payerParticipantIndex?: number;
       items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[];
       tax?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
       serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
@@ -49,9 +50,8 @@ export async function finalizeSplitBillAction(formData: FormData) {
   const transactionDate = formData.get("transactionDate");
   const walletId = formData.get("walletId");
   if (typeof splitBillId !== "string" || !splitBillId) throw new Error("Split Bill not found.");
-  if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Transaction date is required.");
-  if (typeof walletId !== "string" || !walletId) throw new Error("Wallet is required.");
-  await finalizeSplitBill(splitBillId, { transactionDate: new Date(transactionDate), walletId });
+  if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Payment date is required.");
+  await finalizeSplitBill(splitBillId, { transactionDate: new Date(transactionDate), walletId: typeof walletId === "string" && walletId ? walletId : undefined });
   refreshAll();
 }
 
