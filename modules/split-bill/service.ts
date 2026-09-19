@@ -7,7 +7,7 @@ type ItemInput = { name: string; quantity: number; unitPrice: number; splitMetho
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
 type ChargeInput = { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: ChargeTreatment };
 type DeliveryFeeInput = ChargeInput & { splitMethod?: "EQUAL" | "PRO_RATA" };
-type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; items: ItemInput[]; orderDiscount?: ChargeInput; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
+type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; payerParticipantIndex?: number; items: ItemInput[]; orderDiscount?: ChargeInput; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
 function capDecimal(value: Prisma.Decimal, maximum: Prisma.Decimal) { return value.lte(maximum) ? value : maximum; }
@@ -31,6 +31,8 @@ function validateInput(input: SplitBillInput) {
   if (!input.merchantName.trim()) throw new Error("Merchant is required.");
   if (input.participants.length < 2) throw new Error("Add at least one friend to split the bill with you.");
   if (input.participants.filter((participant) => participant.isMe).length !== 1) throw new Error("Split Bill must have exactly one 'You' participant.");
+  const payerIndex = input.payerParticipantIndex ?? input.participants.findIndex((participant) => participant.isMe);
+  if (!Number.isInteger(payerIndex) || payerIndex < 0 || payerIndex >= input.participants.length) throw new Error("Select who paid for the Split Bill.");
   if (input.items.length === 0) throw new Error("Add at least one bill item.");
   if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name.");
   validateCharge(input.orderDiscount, "Order discount");
@@ -53,6 +55,9 @@ export async function createSplitBill(input: SplitBillInput) {
   return prisma.$transaction(async (tx) => {
     const splitBill = await tx.splitBill.create({ data: { merchantName: input.merchantName.trim(), totalAmount: 0, personalAmount: 0, status: SplitBillStatus.DRAFT, note: input.note?.trim() || null } });
     const participants = await Promise.all(input.participants.map((participant) => tx.splitBillParticipant.create({ data: { splitBillId: splitBill.id, name: participant.isMe ? "You" : participant.name.trim(), isMe: participant.isMe } })));
+    const payerParticipant = participants[payerIndex];
+    if (!payerParticipant) throw new Error("Select who paid for the Split Bill.");
+    await tx.splitBill.update({ where: { id: splitBill.id }, data: { payerParticipantId: payerParticipant.id } });
     const shareTotals = participants.map(() => new Prisma.Decimal(0));
     let subtotal = new Prisma.Decimal(0);
     for (const inputItem of input.items) {
@@ -148,7 +153,7 @@ export async function createSplitBill(input: SplitBillInput) {
   }, { maxWait: 10000, timeout: 20000 });
 }
 
-export async function finalizeSplitBill(splitBillId: string, input: { transactionDate: Date; walletId: string }) {
+export async function finalizeSplitBill(splitBillId: string, input: { transactionDate: Date; walletId?: string }) {
   const merchant = await prisma.splitBill.findUnique({ where: { id: splitBillId }, select: { merchantName: true } });
   if (!merchant) throw new Error("Split Bill not found.");
   const payee = await findOrCreatePayeeByName(merchant.merchantName);
@@ -157,17 +162,29 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
     if (!splitBill) throw new Error("Split Bill not found.");
     if (splitBill.status !== SplitBillStatus.DRAFT && splitBill.status !== SplitBillStatus.OPEN) throw new Error("This Split Bill has already been finalized or cancelled.");
     if (splitBill.transactionId) throw new Error("This Split Bill is already linked to a transaction.");
+
+    const payer = splitBill.payerParticipantId
+      ? splitBill.participants.find((participant) => participant.id === splitBill.payerParticipantId)
+      : splitBill.participants.find((participant) => participant.isMe);
+    if (!payer) throw new Error("Split Bill payer not found.");
+
+    if (!payer.isMe) {
+      await tx.splitBill.update({ where: { id: splitBill.id }, data: { status: SplitBillStatus.OPEN, paymentDate: input.transactionDate } });
+      return null;
+    }
+
+    if (!input.walletId) throw new Error("Wallet is required when you paid the Split Bill.");
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, currencyId: true, balanceAsOf: true } });
     if (!wallet) throw new Error("Wallet not found.");
     const totalAmount = splitBill.totalAmount;
-    const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: "EXPENSE", kind: "STANDARD", amount: totalAmount, note: splitBill.note || `Split Bill: ${splitBill.merchantName}`, wallet: { connect: { id: wallet.id } }, payee: payee ? { connect: { id: payee.id } } : undefined } });
+    const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: "EXPENSE", kind: "STANDARD", amount: totalAmount, note: splitBill.note || "Split Bill: " + splitBill.merchantName, wallet: { connect: { id: wallet.id } }, payee: payee ? { connect: { id: payee.id } } : undefined } });
     if (!wallet.balanceAsOf || transaction.transactionDate > wallet.balanceAsOf || (transaction.transactionDate.toDateString() === wallet.balanceAsOf.toDateString() && transaction.createdAt > wallet.balanceAsOf)) await applyBalanceDelta(tx, wallet.id, balanceDelta("EXPENSE", totalAmount));
     for (const participant of splitBill.participants) {
       if (participant.isMe || participant.shareAmount.lte(0) || participant.receivable) continue;
       const receivableAmount = participant.shareAmount;
-      await tx.receivable.create({ data: { personName: participant.name, description: `Split Bill: ${splitBill.merchantName}`, amount: receivableAmount, currencyId: wallet.currencyId, sourceWalletId: wallet.id, loanDate: input.transactionDate, sourceTransactionId: transaction.id, splitBillParticipantId: participant.id } });
+      await tx.receivable.create({ data: { personName: participant.name, description: "Split Bill: " + splitBill.merchantName, amount: receivableAmount, currencyId: wallet.currencyId, sourceWalletId: wallet.id, loanDate: input.transactionDate, sourceTransactionId: transaction.id, splitBillParticipantId: participant.id } });
     }
-    await tx.splitBill.update({ where: { id: splitBill.id }, data: { transactionId: transaction.id, status: SplitBillStatus.OPEN } });
+    await tx.splitBill.update({ where: { id: splitBill.id }, data: { transactionId: transaction.id, status: SplitBillStatus.OPEN, paymentDate: input.transactionDate } });
     return transaction;
   });
 }
