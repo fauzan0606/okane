@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { finalizeSplitBillAction } from "../actions";
 
 type Option = { id: string; name: string };
@@ -35,19 +35,12 @@ export default function SplitBillFinalizeForm({
   recommendedSubcategoryId,
   recommendationConfidence,
 }: Props) {
+  const [categoryId, setCategoryId] = useState(recommendedCategoryId ?? "");
+  const [subcategoryId, setSubcategoryId] = useState(recommendedSubcategoryId ?? "");
   const visibleSubcategories = useMemo(
-    () => subcategories.filter((subcategory) => subcategory.categoryId === recommendedCategoryId),
-    [recommendedCategoryId, subcategories],
+    () => subcategories.filter((subcategory) => subcategory.categoryId === categoryId),
+    [categoryId, subcategories],
   );
-
-  const [categoryId, setCategoryId] = (() => {
-    const React = require("react") as typeof import("react");
-    return React.useState(recommendedCategoryId ?? "");
-  })();
-  const [subcategoryId, setSubcategoryId] = (() => {
-    const React = require("react") as typeof import("react");
-    return React.useState(recommendedSubcategoryId ?? "");
-  })();
 
   return (
     <form action={finalizeSplitBillAction} className="mt-4 space-y-3">
