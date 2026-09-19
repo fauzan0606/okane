@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
 import { Plus, ReceiptText, Trash2, UsersRound } from "lucide-react";
 import { createSplitBillAction } from "../actions";
 import SplitBillOcr, { type OcrResult } from "./SplitBillOcr";
@@ -26,7 +25,7 @@ function chargeAmount(charge: Charge, subtotal: number) {
   return charge.mode === "PERCENT" ? subtotal * value / 100 : value;
 }
 
-export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
+export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props) {
   const [merchantName, setMerchantName] = useState("");
   const [participants, setParticipants] = useState<Participant[]>([{ name: "You", isMe: true }, { name: "", isMe: false }]);
   const [items, setItems] = useState<Item[]>([{ name: "", quantity: "1", unitPrice: "", splitMethod: "EQUAL", units: ["", ""] }]);
@@ -40,7 +39,6 @@ export default function SplitBillForm({ currencySymbol = "Rp" }: Props) {
   const [note, setNote] = useState("");
   const [submitError, setSubmitError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const router = useRouter();
 
   const subtotal = useMemo(() => roundedMoney(items.reduce((sum, item) => sum + (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), 0)), [items]);
   const orderDiscountAmount = useMemo(() => Math.min(roundedMoney(chargeAmount(orderDiscount, subtotal)), subtotal), [orderDiscount, subtotal]);
