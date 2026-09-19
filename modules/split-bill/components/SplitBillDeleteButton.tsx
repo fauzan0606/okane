@@ -98,13 +98,13 @@ export default function SplitBillDeleteButton({ splitBillId, finalized = false }
                 <AlertTriangle size={19} />
               </div>
               <div>
-                <h2 id="delete-split-bill-title" className="text-base font-semibold text-white">Hapus Split Bill?</h2>
+                <h2 id="delete-split-bill-title" className="text-base font-semibold text-white">Delete Split Bill?</h2>
                 <p className="mt-1 text-xs leading-5 text-slate-400">
-                  Apakah Anda yakin menghapus Split Bill ini?
+                  Are you sure you want to delete this Split Bill?
                 </p>
                 {finalized && (
                   <p className="mt-2 rounded-lg border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2 text-[10px] leading-4 text-amber-200">
-                    Split Bill ini sudah masuk ke financial records. Penghapusan juga akan melakukan rollback terhadap data keuangan terkait.
+                    This Split Bill has already been added to financial records. Deleting it will also roll back the related financial records.
                   </p>
                 )}
               </div>
@@ -117,7 +117,7 @@ export default function SplitBillDeleteButton({ splitBillId, finalized = false }
                 disabled={isDeleting}
                 className="rounded-xl border border-white/10 bg-[#0B141F] px-4 py-2.5 text-xs font-semibold text-slate-300 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Batal
+                Cancel
               </button>
               <button
                 type="button"
@@ -126,7 +126,7 @@ export default function SplitBillDeleteButton({ splitBillId, finalized = false }
                 className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-xs font-bold text-white hover:bg-red-400 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {isDeleting && <LoaderCircle size={14} className="animate-spin" />}
-                {isDeleting ? "Deleting…" : "Ya, Hapus"}
+                {isDeleting ? "Deleting…" : "Yes, Delete"}
               </button>
             </div>
           </div>
