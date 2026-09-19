@@ -67,7 +67,7 @@ export default function NewSplitBillPanel({ currencySymbol = "Rp" }: Props) {
                     <X size={18} />
                   </button>
                 </div>
-                <SplitBillForm currencySymbol={currencySymbol} />
+                <SplitBillForm currencySymbol={currencySymbol} onSaved={() => setOpen(false)} />
               </div>
             </div>
           </div>
