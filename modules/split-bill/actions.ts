@@ -20,6 +20,7 @@ function parseCreatePayload(formData: FormData) {
     return JSON.parse(value) as {
       merchantName: string;
       participants: { name: string; isMe: boolean }[];
+      payerParticipantIndex?: number;
       items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[];
       tax?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
       serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
