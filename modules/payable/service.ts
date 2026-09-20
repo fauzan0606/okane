@@ -62,6 +62,9 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
   }
 
   const amountTransferred = decimal(input.amountTransferred);
+  const payableOwner = await prisma.payable.findUnique({ where: { id: input.payableId }, select: { personName: true } });
+  if (!payableOwner) throw new Error("Payable not found.");
+  const payee = await findOrCreatePayeeByName(payableOwner.personName);
   return prisma.$transaction(async (tx) => {
     const payable = await tx.payable.findUnique({
       where: { id: input.payableId },
@@ -74,7 +77,7 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
     const remaining = payable.amount.minus(payable.paidAmount);
     if (remaining.lte(0)) throw new Error("This payable is already fully paid.");
 
-    const appliedAmount = Prisma.Decimal.min(amountTransferred, remaining);
+    const appliedAmount = amountTransferred.lte(remaining) ? amountTransferred : remaining;
     const excessAmount = amountTransferred.minus(appliedAmount);
 
     const wallet = await tx.wallet.findUnique({
@@ -94,7 +97,6 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
       if (input.categoryId && subcategory.categoryId !== input.categoryId) throw new Error("Subcategory does not belong to the selected category.");
     }
 
-    const payee = await findOrCreatePayeeByName(payable.personName);
     const transaction = await tx.transaction.create({
       data: {
         transactionDate: input.paymentDate,
