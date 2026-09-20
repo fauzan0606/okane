@@ -1,3 +1,5 @@
+CREATE TYPE "PayableStatus" AS ENUM ('OUTSTANDING', 'PARTIALLY_PAID', 'PAID');
+
 -- CreateTable
 CREATE TABLE "Payable" (
     "id" TEXT NOT NULL,
@@ -33,12 +35,6 @@ CREATE TABLE "PayablePayment" (
     CONSTRAINT "PayablePayment_pkey" PRIMARY KEY ("id")
 );
 
--- AlterTable
-ALTER TABLE "Currency" ADD COLUMN IF NOT EXISTS "dummy" BOOLEAN;
-ALTER TABLE "Wallet" ADD COLUMN IF NOT EXISTS "dummy2" BOOLEAN;
-ALTER TABLE "Transaction" ADD COLUMN IF NOT EXISTS "dummy3" BOOLEAN;
-ALTER TABLE "SplitBillParticipant" ADD COLUMN IF NOT EXISTS "dummy4" BOOLEAN;
-
 -- CreateIndex
 CREATE INDEX "Payable_status_dueDate_idx" ON "Payable"("status", "dueDate");
 CREATE INDEX "Payable_currencyId_status_idx" ON "Payable"("currencyId", "status");
@@ -53,7 +49,3 @@ ALTER TABLE "Payable" ADD CONSTRAINT "Payable_splitBillParticipantId_fkey" FOREI
 ALTER TABLE "PayablePayment" ADD CONSTRAINT "PayablePayment_payableId_fkey" FOREIGN KEY ("payableId") REFERENCES "Payable"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 ALTER TABLE "PayablePayment" ADD CONSTRAINT "PayablePayment_walletId_fkey" FOREIGN KEY ("walletId") REFERENCES "Wallet"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 ALTER TABLE "PayablePayment" ADD CONSTRAINT "PayablePayment_transactionId_fkey" FOREIGN KEY ("transactionId") REFERENCES "Transaction"("id") ON DELETE CASCADE ON UPDATE CASCADE;
-
--- The ADD COLUMN statements above are placeholders to keep this migration idempotent in databases
--- where existing generated migrations have been applied manually. They do not participate in the
--- Payable feature and can be removed if the target migration runner rejects unused columns.
