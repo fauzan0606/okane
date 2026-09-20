@@ -1,6 +1,7 @@
 import { Prisma, SplitBillItemMethod, SplitBillStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
+import { createPayableForSplitBillParticipant } from "@/modules/payable/service";
 
 type ParticipantInput = { name: string; isMe: boolean };
 type ItemInput = { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] };
@@ -159,7 +160,7 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
   if (!merchant) throw new Error("Split Bill not found.");
   const payee = await findOrCreatePayeeByName(merchant.merchantName);
   return prisma.$transaction(async (tx) => {
-    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { participants: { include: { receivable: true } } } });
+    const splitBill = await tx.splitBill.findUnique({ where: { id: splitBillId }, include: { participants: { include: { receivable: true, payable: true } } } });
     if (!splitBill) throw new Error("Split Bill not found.");
     if (splitBill.status !== SplitBillStatus.DRAFT && splitBill.status !== SplitBillStatus.OPEN) throw new Error("This Split Bill has already been finalized or cancelled.");
     if (splitBill.transactionId) throw new Error("This Split Bill is already linked to a transaction.");
@@ -171,6 +172,15 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
 
     if (!payer.isMe) {
       await tx.splitBill.update({ where: { id: splitBill.id }, data: { status: SplitBillStatus.OPEN, paymentDate: input.transactionDate } });
+      const personalParticipant = splitBill.participants.find((participant) => participant.isMe);
+      if (personalParticipant) {
+        await createPayableForSplitBillParticipant(
+          tx,
+          personalParticipant,
+          splitBill.merchantName,
+          input.transactionDate,
+        );
+      }
       return null;
     }
 
@@ -191,7 +201,7 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
 }
 
 export async function getSplitBills() {
-  return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { id: "asc" } } }, orderBy: { createdAt: "desc" } });
+  return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } }, payable: { include: { payments: { select: { amount: true, appliedAmount: true, excessAmount: true, paidAt: true, walletId: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { id: "asc" } } }, orderBy: { createdAt: "desc" } });
 }
 
 function transactionAffectedBalance(transaction: { transactionDate: Date; createdAt: Date }, balanceAsOf: Date | null) { return !balanceAsOf || transaction.transactionDate > balanceAsOf || (transaction.transactionDate.toDateString() === balanceAsOf.toDateString() && transaction.createdAt > balanceAsOf); }
