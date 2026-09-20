@@ -58,7 +58,7 @@ export default function SplitBillFinalizeForm({
         ) : (
           <div className="lg:col-span-3 rounded-xl border border-amber-400/10 bg-amber-400/[0.03] px-3 py-2">
             <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Paid by {payerName}</p>
-            <p className="mt-1 text-[10px] leading-4 text-slate-500">No expense will be created from your wallet. The Split Bill is recorded as an amount you owe {payerName}; the repayment can be recorded separately.</p>
+            <p className="mt-1 text-[10px] leading-4 text-slate-500">No expense will be created from your wallet. The Split Bill is recorded as an amount you owe {payerName}; after finalization, use the repayment form below when you actually transfer money to them.</p>
           </div>
         )}
         {payerIsMe && (
