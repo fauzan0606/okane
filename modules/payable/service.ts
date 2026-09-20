@@ -32,6 +32,7 @@ async function applyExpenseBalanceDelta(tx: Prisma.TransactionClient, walletId: 
 export async function createPayableForSplitBillParticipant(
   tx: Prisma.TransactionClient,
   participant: { id: string; name: string; shareAmount: Prisma.Decimal; payable?: { id: string } | null },
+  merchantName: string,
   paymentDate: Date,
 ) {
   if (participant.isMe || participant.shareAmount.lte(0) || participant.payable) return participant.payable ?? null;
@@ -42,7 +43,7 @@ export async function createPayableForSplitBillParticipant(
   return tx.payable.create({
     data: {
       personName: participant.name,
-      description: "Split Bill: " + participant.splitBill?.merchantName,
+      description: "Split Bill: " + merchantName,
       amount: participant.shareAmount,
       currencyId: currency.id,
       loanDate: paymentDate,
