@@ -88,6 +88,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
   return prisma.$transaction(async (tx) => {
     const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } }, installmentPlan: true, splitBill: { select: { id: true } }, payablePayment: { select: { id: true } } } } });
     if (!existing) throw new Error("Transaction not found.");
+    if (existing.payablePayment) throw new Error("This transaction is linked to a payable repayment. Manage it from the related Split Bill instead.");
     if (existing.splitBill && (input.transactionDate !== undefined || input.type !== undefined || input.amount !== undefined || input.walletId !== undefined || input.installment !== undefined)) throw new Error("This transaction is linked to a Split Bill. Edit the Split Bill first, or remove the Split Bill before changing the transaction amount, date, wallet, type, or installment.");
     const newWalletId = input.walletId ?? existing.walletId;
     const newWallet = newWalletId === existing.wallet.id ? existing.wallet : await tx.wallet.findUnique({ where: { id: newWalletId }, select: { id: true, balanceAsOf: true, walletType: true, note: true } });
@@ -133,12 +134,12 @@ export async function updateTransactionService(id: string, input: UpdateTransact
 
 export async function applyTransactionMappingToMerchantService(id: string, input: { walletId: string; categoryId: string; subcategoryId: string }) {
   return prisma.$transaction(async (tx) => {
-    const source = await tx.transaction.findUnique({ where: { id }, select: { id: true, kind: true, payeeId: true } });
-    if (!source || source.kind !== "STANDARD") throw new Error("Transaction not found.");
+    const source = await tx.transaction.findUnique({ where: { id }, select: { id: true, kind: true, payeeId: true, payablePayment: { select: { id: true } } } });
+    if (!source || source.kind !== "STANDARD" || source.payablePayment) throw new Error("Transaction not found.");
     if (!source.payeeId) throw new Error("This transaction does not have a merchant/payee to match.");
     const [wallet, transactions] = await Promise.all([
       tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } }),
-      tx.transaction.findMany({ where: { kind: "STANDARD", payeeId: source.payeeId }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } } } }),
+      tx.transaction.findMany({ where: { kind: "STANDARD", payeeId: source.payeeId, payablePayment: { is: null } }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } } } }),
     ]);
     if (!wallet) throw new Error("Wallet not found.");
     await validateCategorySelection(tx, input.categoryId, input.subcategoryId);
