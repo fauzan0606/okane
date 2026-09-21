@@ -9,6 +9,7 @@ type SubcategoryOption = Option & { categoryId: string };
 type Props = {
   splitBillId: string;
   today: string;
+  payerName: string;
   payerIsMe: boolean;
   personalAmount: number;
   symbol: string;
@@ -83,7 +84,7 @@ export default function SplitBillFinalizeForm({
             <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
             <div className="lg:col-span-4">
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Note</label>
-              <input name="note" placeholder={`Repayment to ${payerName} · ${merchantNameUnavailable}`} className={inputClass()} />
+              <input name="note" placeholder={`Repayment to ${payerName}`} className={inputClass()} />
             </div>
           </>
         )}
@@ -94,7 +95,6 @@ export default function SplitBillFinalizeForm({
           </>
         )}
       </div>
-      {payerIsMe && recommendationConfidence !== "NONE" && Boolean(recommendedCategoryId) && <p className="text-[10px] text-emerald-300/80">Category suggestion is based on your Smart Transaction learning for this merchant. You can change it before saving.</p>}
       {payerIsMe && recommendationConfidence !== "NONE" && Boolean(recommendedCategoryId) && <p className="text-[10px] text-emerald-300/80">Category suggestion is based on your Smart Transaction learning for this merchant. You can change it before saving.</p>}
       <button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-[#07110b]">{payerIsMe ? "Finalize & Add to Finance" : "Finalize & Record Payment"}</button>
     </form>
