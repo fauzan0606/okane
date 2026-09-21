@@ -212,7 +212,26 @@ export async function finalizeSplitBill(splitBillId: string, input: {
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, currencyId: true, balanceAsOf: true } });
     if (!wallet) throw new Error("Wallet not found.");
     const totalAmount = splitBill.totalAmount;
-    const transaction = await tx.transaction.create({ data: { transactionDate: input.transactionDate, type: "EXPENSE", kind: "STANDARD", amount: totalAmount, note: splitBill.note || "Split Bill: " + splitBill.merchantName, wallet: { connect: { id: wallet.id } }, payee: payee ? { connect: { id: payee.id } } : undefined } });
+    if (!input.categoryId) throw new Error("Expense category is required when finalizing the Split Bill.");
+    const category = await tx.category.findUnique({ where: { id: input.categoryId }, select: { id: true, type: true } });
+    if (!category || category.type !== "EXPENSE") throw new Error("Expense category is required when finalizing the Split Bill.");
+    if (input.subcategoryId) {
+      const subcategory = await tx.subcategory.findUnique({ where: { id: input.subcategoryId }, select: { id: true, categoryId: true } });
+      if (!subcategory || subcategory.categoryId !== input.categoryId) throw new Error("Subcategory does not belong to the selected category.");
+    }
+    const transaction = await tx.transaction.create({
+      data: {
+        transactionDate: input.transactionDate,
+        type: "EXPENSE",
+        kind: "STANDARD",
+        amount: totalAmount,
+        note: splitBill.note || "Split Bill: " + splitBill.merchantName,
+        wallet: { connect: { id: wallet.id } },
+        category: { connect: { id: input.categoryId } },
+        subcategory: input.subcategoryId ? { connect: { id: input.subcategoryId } } : undefined,
+        payee: payee ? { connect: { id: payee.id } } : undefined,
+      },
+    });
     if (!wallet.balanceAsOf || transaction.transactionDate > wallet.balanceAsOf || (transaction.transactionDate.toDateString() === wallet.balanceAsOf.toDateString() && transaction.createdAt > wallet.balanceAsOf)) await applyBalanceDelta(tx, wallet.id, balanceDelta("EXPENSE", totalAmount));
     for (const participant of splitBill.participants) {
       if (participant.isMe || participant.shareAmount.lte(0) || participant.receivable) continue;
