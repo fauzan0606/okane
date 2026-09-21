@@ -33,19 +33,17 @@ export async function createPayableForSplitBillParticipant(
   tx: Prisma.TransactionClient,
   participant: { id: string; name: string; shareAmount: Prisma.Decimal; payable?: { id: string } | null },
   merchantName: string,
+  currencyId: string,
   paymentDate: Date,
 ) {
   if (participant.isMe || participant.shareAmount.lte(0) || participant.payable) return participant.payable ?? null;
-
-  const currency = await tx.currency.findUnique({ where: { code: "IDR" }, select: { id: true } });
-  if (!currency) throw new Error("IDR currency is not configured.");
 
   return tx.payable.create({
     data: {
       personName: participant.name,
       description: "Split Bill: " + merchantName,
       amount: participant.shareAmount,
-      currencyId: currency.id,
+      currencyId,
       loanDate: paymentDate,
       status: PayableStatus.OUTSTANDING,
       splitBillParticipantId: participant.id,
@@ -69,7 +67,7 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
     const payable = await tx.payable.findUnique({
       where: { id: input.payableId },
       include: {
-        splitBillParticipant: { include: { splitBill: { select: { merchantName: true } } } },
+        splitBillParticipant: { include: { splitBill: { select: { id: true, merchantName: true } } } },
       },
     });
     if (!payable) throw new Error("Payable not found.");
@@ -85,6 +83,7 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
       select: { id: true, currencyId: true, balanceAsOf: true },
     });
     if (!wallet) throw new Error("Wallet not found.");
+    if (wallet.currencyId !== payable.currencyId) throw new Error("Payment wallet currency does not match the payable currency.");
 
     if (input.categoryId) {
       const category = await tx.category.findUnique({ where: { id: input.categoryId }, select: { id: true, type: true } });
@@ -139,6 +138,13 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
       where: { id: payable.id },
       data: { paidAmount, status },
     });
+
+    if (payable.splitBillParticipant?.splitBill?.id) {
+      await tx.splitBill.update({
+        where: { id: payable.splitBillParticipant.splitBill.id },
+        data: { status: status === PayableStatus.PAID ? "SETTLED" : "OPEN" },
+      });
+    }
 
     return { payment, transaction, appliedAmount, excessAmount, remainingAmount: payable.amount.minus(paidAmount), status };
   });
