@@ -155,7 +155,12 @@ export async function createSplitBill(input: SplitBillInput) {
   }, { maxWait: 10000, timeout: 20000 });
 }
 
-export async function finalizeSplitBill(splitBillId: string, input: { transactionDate: Date; walletId?: string }) {
+export async function finalizeSplitBill(splitBillId: string, input: {
+  transactionDate: Date;
+  walletId?: string;
+  categoryId?: string;
+  subcategoryId?: string;
+}) {
   const merchant = await prisma.splitBill.findUnique({ where: { id: splitBillId }, select: { merchantName: true } });
   if (!merchant) throw new Error("Split Bill not found.");
   const payee = await findOrCreatePayeeByName(merchant.merchantName);
@@ -171,17 +176,36 @@ export async function finalizeSplitBill(splitBillId: string, input: { transactio
     if (!payer) throw new Error("Split Bill payer not found.");
 
     if (!payer.isMe) {
-      await tx.splitBill.update({ where: { id: splitBill.id }, data: { status: SplitBillStatus.OPEN, paymentDate: input.transactionDate } });
       const personalParticipant = splitBill.participants.find((participant) => participant.isMe);
-      if (personalParticipant) {
-        await createPayableForSplitBillParticipant(
-          tx,
-          personalParticipant,
-          splitBill.merchantName,
-          input.transactionDate,
-        );
+      if (!personalParticipant) throw new Error("Your Split Bill participant was not found.");
+      if (!input.walletId) throw new Error("Payment wallet is required when someone else paid the Split Bill.");
+
+      const wallet = await tx.wallet.findUnique({
+        where: { id: input.walletId },
+        select: { id: true, currencyId: true },
+      });
+      if (!wallet) throw new Error("Wallet not found.");
+
+      await tx.splitBill.update({ where: { id: splitBill.id }, data: { status: SplitBillStatus.OPEN, paymentDate: input.transactionDate } });
+      const payable = await createPayableForSplitBillParticipant(
+        tx,
+        personalParticipant,
+        splitBill.merchantName,
+        wallet.currencyId,
+        input.transactionDate,
+      );
+
+      if (!payable) throw new Error("Unable to create payable for the Split Bill.");
+      if (!input.categoryId) throw new Error("Expense category is required when recording repayment.");
+
+      const category = await tx.category.findUnique({ where: { id: input.categoryId }, select: { id: true, type: true } });
+      if (!category || category.type !== "EXPENSE") throw new Error("Repayment category must be an expense category.");
+      if (input.subcategoryId) {
+        const subcategory = await tx.subcategory.findUnique({ where: { id: input.subcategoryId }, select: { id: true, categoryId: true } });
+        if (!subcategory || subcategory.categoryId !== input.categoryId) throw new Error("Subcategory does not belong to the selected category.");
       }
-      return null;
+
+      return { payableId: payable.id, walletId: wallet.id };
     }
 
     if (!input.walletId) throw new Error("Wallet is required when you paid the Split Bill.");
