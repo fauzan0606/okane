@@ -57,6 +57,12 @@ export async function finalizeSplitBillAction(formData: FormData) {
 
   if (typeof splitBillId !== "string" || !splitBillId) throw new Error("Split Bill not found.");
   if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Payment date is required.");
+  if (typeof walletId !== "string" || !walletId) throw new Error("Payment wallet is required.");
+  if (typeof categoryId !== "string" || !categoryId) throw new Error("Expense category is required.");
+  const parsedAmountTransferred = typeof amountTransferred === "string" && amountTransferred ? Number(amountTransferred) : undefined;
+  if (parsedAmountTransferred !== undefined && (!Number.isFinite(parsedAmountTransferred) || parsedAmountTransferred <= 0)) {
+    throw new Error("Transferred amount must be greater than zero.");
+  }
 
   const result = await finalizeSplitBill(splitBillId, {
     transactionDate: new Date(transactionDate),
@@ -66,13 +72,11 @@ export async function finalizeSplitBillAction(formData: FormData) {
   });
 
   if ("payableId" in result) {
-    if (typeof amountTransferred !== "string" || !amountTransferred) throw new Error("Transferred amount is required when recording repayment.");
-    if (typeof walletId !== "string" || !walletId) throw new Error("Payment wallet is required when recording repayment.");
-    if (typeof categoryId !== "string" || !categoryId) throw new Error("Expense category is required when recording repayment.");
+    if (parsedAmountTransferred === undefined) throw new Error("Transferred amount is required when recording repayment.");
 
     await recordPayablePayment({
       payableId: result.payableId,
-      amountTransferred: Number(amountTransferred),
+      amountTransferred: parsedAmountTransferred,
       paymentDate: new Date(transactionDate),
       walletId,
       categoryId,
