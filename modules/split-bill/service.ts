@@ -1,4 +1,4 @@
-import { Prisma, SplitBillItemMethod, SplitBillStatus } from "@prisma/client";
+import { Prisma, SplitBillItemMethod, SplitBillMode, SplitBillStatus } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
 import { createPayableForSplitBillParticipant } from "@/modules/payable/service";
@@ -8,7 +8,7 @@ type ItemInput = { name: string; quantity: number; unitPrice: number; splitMetho
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
 type ChargeInput = { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: ChargeTreatment };
 type DeliveryFeeInput = ChargeInput & { splitMethod?: "EQUAL" | "PRO_RATA" };
-type SplitBillInput = { merchantName: string; participants: ParticipantInput[]; payerParticipantIndex?: number; items: ItemInput[]; orderDiscount?: ChargeInput; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
+type SplitBillInput = { merchantName: string; mode?: SplitBillMode; participants: ParticipantInput[]; payerParticipantIndex?: number; items: ItemInput[]; orderDiscount?: ChargeInput; tax?: ChargeInput; serviceFee?: ChargeInput; deliveryFee?: DeliveryFeeInput; deliveryDiscount?: ChargeInput; note?: string };
 
 function decimal(value: number) { return new Prisma.Decimal(value); }
 function capDecimal(value: Prisma.Decimal, maximum: Prisma.Decimal) { return value.lte(maximum) ? value : maximum; }
@@ -30,12 +30,22 @@ function validateCharge(charge?: ChargeInput, label = "Charge") {
 }
 function validateInput(input: SplitBillInput) {
   if (!input.merchantName.trim()) throw new Error("Merchant is required.");
-  if (input.participants.length < 2) throw new Error("Add at least one friend to split the bill with you.");
-  if (input.participants.filter((participant) => participant.isMe).length !== 1) throw new Error("Split Bill must have exactly one 'You' participant.");
+  const mode = input.mode ?? SplitBillMode.PERSONAL;
+  if (input.participants.length < 2) throw new Error(mode === SplitBillMode.OTHERS_ONLY ? "Add at least two people to the Split Bill." : "Add at least one friend to split the bill with you.");
+  if (mode === SplitBillMode.PERSONAL) {
+    if (input.participants.filter((participant) => participant.isMe).length !== 1) throw new Error("Split Bill must have exactly one 'You' participant.");
+  } else if (input.participants.some((participant) => participant.isMe)) {
+    throw new Error("Recording-only Split Bills cannot include 'You' as a participant.");
+  }
   const payerIndex = input.payerParticipantIndex ?? input.participants.findIndex((participant) => participant.isMe);
   if (!Number.isInteger(payerIndex) || payerIndex < 0 || payerIndex >= input.participants.length) throw new Error("Select who paid for the Split Bill.");
+  if (!input.participants[payerIndex]?.name.trim()) throw new Error("The payer must have a name.");
   if (input.items.length === 0) throw new Error("Add at least one bill item.");
-  if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name.");
+  if (mode === SplitBillMode.PERSONAL) {
+    if (input.participants.some((participant) => !participant.isMe && !participant.name.trim())) throw new Error("Every friend needs a name.");
+  } else {
+    if (input.participants.some((participant) => !participant.name.trim())) throw new Error("Every participant needs a name.");
+  }
   validateCharge(input.orderDiscount, "Order discount");
   validateCharge(input.tax, "Tax");
   validateCharge(input.serviceFee, "Service fee");
@@ -55,7 +65,7 @@ export async function createSplitBill(input: SplitBillInput) {
   validateInput(input);
   const payerIndex = input.payerParticipantIndex ?? input.participants.findIndex((participant) => participant.isMe);
   return prisma.$transaction(async (tx) => {
-    const splitBill = await tx.splitBill.create({ data: { merchantName: input.merchantName.trim(), totalAmount: 0, personalAmount: 0, status: SplitBillStatus.DRAFT, note: input.note?.trim() || null } });
+    const splitBill = await tx.splitBill.create({ data: { merchantName: input.merchantName.trim(), totalAmount: 0, personalAmount: 0, status: input.mode === SplitBillMode.OTHERS_ONLY ? SplitBillStatus.OPEN : SplitBillStatus.DRAFT, mode: input.mode ?? SplitBillMode.PERSONAL, note: input.note?.trim() || null } });
     const participants = await Promise.all(input.participants.map((participant) => tx.splitBillParticipant.create({ data: { splitBillId: splitBill.id, name: participant.isMe ? "You" : participant.name.trim(), isMe: participant.isMe } })));
     const payerParticipant = participants[payerIndex];
     if (!payerParticipant) throw new Error("Select who paid for the Split Bill.");
@@ -149,7 +159,7 @@ export async function createSplitBill(input: SplitBillInput) {
 
     const totalAmount = discountedSubtotal.plus(taxAmount).plus(serviceFeeAmount).plus(netDeliveryAmount);
     const personalIndex = input.participants.findIndex((participant) => participant.isMe);
-    await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: shareTotals[personalIndex] } });
+    await tx.splitBill.update({ where: { id: splitBill.id }, data: { totalAmount, personalAmount: personalIndex >= 0 ? shareTotals[personalIndex] : new Prisma.Decimal(0) } });
     for (let index = 0; index < participants.length; index += 1) await tx.splitBillParticipant.update({ where: { id: participants[index].id }, data: { shareAmount: shareTotals[index] } });
     return splitBill;
   }, { maxWait: 10000, timeout: 20000 });
@@ -169,6 +179,7 @@ export async function finalizeSplitBill(splitBillId: string, input: {
     if (!splitBill) throw new Error("Split Bill not found.");
     if (splitBill.status !== SplitBillStatus.DRAFT && splitBill.status !== SplitBillStatus.OPEN) throw new Error("This Split Bill has already been finalized or cancelled.");
     if (splitBill.transactionId) throw new Error("This Split Bill is already linked to a transaction.");
+    if (splitBill.mode === SplitBillMode.OTHERS_ONLY) throw new Error("Recording-only Split Bills do not create financial transactions.");
 
     const payer = splitBill.payerParticipantId
       ? splitBill.participants.find((participant) => participant.id === splitBill.payerParticipantId)
