@@ -171,7 +171,66 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     setDeliverySplitMethod("EQUAL");
   }
 
-  const participantSummaries = participants.map((participant, index) => ({ ...participant, share: shares[index] ?? 0, percentage: itemTotal > 0 ? (shares[index] ?? 0) / itemTotal * 100 : 0 }));
+  const participantPdfSummaries = useMemo(() => participants.map((participant, participantIndex) => {
+    const normalItems = items.map((item) => {
+      const amount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+      const selectedUnits = item.units.map((unit) => Number(unit) || 0);
+      const units = item.splitMethod === "EQUAL"
+        ? selectedUnits.map((unit) => (unit > 0 ? 1 : 0))
+        : selectedUnits;
+      const unitTotal = units.reduce((sum, unit) => sum + unit, 0);
+      if (!unitTotal || units[participantIndex] <= 0) return null;
+      return {
+        name: item.name.trim(),
+        amount: roundedMoney(amount * units[participantIndex] / unitTotal),
+      };
+    }).filter((item): item is { name: string; amount: number } => Boolean(item));
+
+    const totalBeforeDiscount = roundedMoney(
+      normalItems.reduce((sum, item) => sum + item.amount, 0),
+    );
+    const participantDiscount = roundedMoney(
+      Math.max(totalBeforeDiscount - (discountedItemShares[participantIndex] ?? totalBeforeDiscount), 0),
+    );
+    const subtotalShare = roundedMoney(
+      discountedItemShares[participantIndex] ?? totalBeforeDiscount,
+    );
+    const taxShare = roundedMoney(
+      discountedSubtotal > 0
+        ? subtotalShare / discountedSubtotal * taxAmount
+        : 0,
+    );
+    const serviceShare = roundedMoney(
+      discountedSubtotal > 0
+        ? subtotalShare / discountedSubtotal * serviceFeeAmount
+        : 0,
+    );
+    const eligible = discountedItemShares.map((value) => value > 0);
+    const eligibleCount = eligible.filter(Boolean).length;
+    const baseTotal = discountedItemShares.reduce((sum, value) => sum + value, 0);
+    const deliveryShare = roundedMoney(
+      netDeliveryAmount > 0 && eligible[participantIndex]
+        ? deliverySplitMethod === "EQUAL"
+          ? netDeliveryAmount / eligibleCount
+          : baseTotal > 0
+            ? netDeliveryAmount * subtotalShare / baseTotal
+            : 0
+        : 0,
+    );
+
+    return {
+      name: participant.name || (participant.isMe ? "You" : `Person ${participantIndex + 1}`),
+      isMe: participant.isMe,
+      normalItems,
+      totalBeforeDiscount,
+      participantDiscount,
+      subtotalShare,
+      taxShare,
+      serviceShare,
+      deliveryShare,
+      total: roundedMoney(shares[participantIndex] ?? 0),
+    };
+  }), [participants, items, discountedItemShares, discountedSubtotal, taxAmount, serviceFeeAmount, netDeliveryAmount, deliverySplitMethod, shares]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -245,23 +304,34 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     <input type="hidden" name="payload" value={payload} />
     <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
       <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-400"><ReceiptText size={18} /></div><div><h2 className="text-base font-semibold text-white">1. What are we splitting?</h2><p className="mt-1 text-xs text-slate-400">For a new Split Bill, you only need the merchant first. Date and wallet can be added later when you finalize it into your finances.</p></div></div>
-      <input value={merchantName} onChange={(event) => setMerchantName(event.target.value)} placeholder="Merchant / restaurant name" className={`${inputClass} mt-4`} />
-      <div className="mt-3 flex items-center justify-between gap-4 rounded-xl border border-white/10 bg-[#0B141F] px-3.5 py-3">
-        <div className="min-w-0">
-          <p className="text-xs font-semibold text-white">I&apos;m part of this bill</p>
-          <p className="mt-0.5 text-[10px] leading-4 text-slate-500">{mode === "PERSONAL" ? "ON · This bill affects your finances." : "OFF · Record a bill for other people only."}</p>
-        </div>
+      <div className="mt-4 flex items-center gap-2">
+        <input
+          value={merchantName}
+          onChange={(event) => setMerchantName(event.target.value)}
+          placeholder="Merchant / restaurant name"
+          className={`${inputClass} min-w-0 flex-1`}
+        />
         <button
           type="button"
           role="switch"
           aria-checked={mode === "PERSONAL"}
           aria-label="I&apos;m part of this bill"
-          onClick={() => switchMode(mode === "PERSONAL" ? "OTHERS_ONLY" : "PERSONAL")}
-          className={`relative inline-flex h-7 w-12 shrink-0 items-center rounded-full border p-0.5 transition ${mode === "PERSONAL" ? "border-emerald-400/40 bg-emerald-500/80" : "border-white/10 bg-slate-700"}`}
+          onClick={() =>
+            switchMode(mode === "PERSONAL" ? "OTHERS_ONLY" : "PERSONAL")
+          }
+          className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${mode === "PERSONAL" ? "border-emerald-400/40 bg-emerald-500/80" : "border-white/10 bg-slate-700"}`}
+          title={mode === "PERSONAL" ? "I'm part of this bill" : "Record for other people only"}
         >
-          <span className={`h-5 w-5 rounded-full bg-white shadow-sm transition-transform ${mode === "PERSONAL" ? "translate-x-5" : "translate-x-0"}`} />
+          <span
+            className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${mode === "PERSONAL" ? "translate-x-4" : "translate-x-0"}`}
+          />
         </button>
       </div>
+      <p className="mt-1 text-[9px] text-slate-500">
+        {mode === "PERSONAL"
+          ? "I'm part of this bill"
+          : "Recording only for other people"}
+      </p>
       <div className="mt-4 border-t border-white/5 pt-4"><SplitBillOcr onUseResult={useOcrResult} /></div>
     </section>
 
@@ -283,8 +353,76 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       <div className="rounded-xl border border-emerald-400/10 bg-emerald-400/[0.03] p-3 md:col-span-2"><div className="flex flex-wrap items-center justify-between gap-2"><div><span className="text-xs font-semibold text-slate-200">Delivery Fee</span><p className="mt-1 text-[10px] text-slate-500">Shared charge. Default allocation is Equal among people with items.</p></div><span className="text-xs font-semibold text-slate-200">{money(netDeliveryAmount, currencySymbol)}</span></div><div className="mt-3 grid gap-2 md:grid-cols-[1fr_1fr_auto]"><div className="flex gap-2"><select value={deliveryFee.mode} onChange={(event) => setDeliveryFee((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="AMOUNT">Amount</option><option value="PERCENT">%</option></select><input value={deliveryFee.value} onChange={(event) => setDeliveryFee((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder="e.g. 14000" className={inputClass} /></div><div className="flex gap-2"><span className="flex items-center text-[10px] text-slate-500">Discount</span><input value={deliveryDiscount.value} onChange={(event) => setDeliveryDiscount((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder="e.g. 12000" className={inputClass} /></div><div className="flex rounded-lg border border-white/10 bg-[#0B141F] p-0.5"><button type="button" onClick={() => setDeliverySplitMethod("EQUAL")} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold ${deliverySplitMethod === "EQUAL" ? "bg-emerald-400/10 text-emerald-300" : "text-slate-500"}`}>Equal</button><button type="button" onClick={() => setDeliverySplitMethod("PRO_RATA")} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold ${deliverySplitMethod === "PRO_RATA" ? "bg-emerald-400/10 text-emerald-300" : "text-slate-500"}`}>Pro-rata</button></div></div><p className="mt-2 text-[10px] text-slate-600">Delivery {money(deliveryFeeAmount, currencySymbol)} · Discount {money(deliveryDiscountAmount, currencySymbol)} · Net {money(netDeliveryAmount, currencySymbol)} · {deliverySplitMethod === "EQUAL" ? "equal across eligible participants" : "pro-rata by item share"}</p></div>
     </div></section>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-white">5. Split summary</h2><p className="mt-1 text-xs text-slate-400">Review each participant&apos;s share before saving the Split Bill.</p></div><div className="rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-right"><p className="text-[9px] uppercase tracking-[0.1em] text-slate-600">Allocated</p><p className="mt-0.5 text-xs font-bold text-white">{money(shares.reduce((sum, value) => sum + value, 0), currencySymbol)}</p></div></div><div className="mt-4 overflow-hidden rounded-xl border border-white/10"><div className="grid grid-cols-[1fr_auto_auto] gap-3 bg-[#0B141F] px-3 py-2 text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-600"><span>Participant</span><span>Share</span><span>Share %</span></div>{participantSummaries.map((participant, index) => <div key={index} className="grid grid-cols-[1fr_auto_auto] items-center gap-3 border-t border-white/5 bg-[#101B28] px-3 py-2.5 text-xs"><span className="truncate font-medium text-slate-300">{participant.name || `Person ${index + 1}`}{participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}</span><span className="font-semibold text-white">{money(participant.share, currencySymbol)}</span><span className="w-14 text-right text-[10px] text-slate-500">{participant.percentage.toFixed(1)}%</span></div>)}</div><div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500"><span>Bill total includes discounted subtotal + tax + service + net delivery.</span><span className={Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "text-emerald-300" : "text-amber-300"}>{Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "✓ Fully allocated" : "Allocation pending"}</span></div></section>
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-white">5. Split summary</h2>
+          <p className="mt-1 text-xs text-slate-400">Review the same per-person breakdown shown in the downloaded PDF.</p>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-right">
+          <p className="text-[9px] uppercase tracking-[0.1em] text-slate-600">Bill total</p>
+          <p className="mt-0.5 text-xs font-bold text-white">{money(itemTotal, currencySymbol)}</p>
+        </div>
+      </div>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="grid gap-4 md:grid-cols-3"><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Bill total</p><p className="mt-1 text-xl font-bold text-white">{money(itemTotal, currencySymbol)}</p><p className="mt-1 text-[10px] text-slate-600">Subtotal {money(subtotal, currencySymbol)} · Discount {money(orderDiscountAmount, currencySymbol)} · Tax {money(taxAmount, currencySymbol)}{tax.treatment === "INCLUDED" ? " included" : ""} · Service {money(serviceFeeAmount, currencySymbol)} · Delivery {money(netDeliveryAmount, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Your share</p><p className="mt-1 text-xl font-bold text-white">{money(personalShare, currencySymbol)}</p></div><div><p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">To receive</p><p className="mt-1 text-xl font-bold text-emerald-300">{money(receivable, currencySymbol)}</p></div></div><label className="mt-4 block"><span className="text-xs font-medium text-slate-300">Note <span className="text-slate-600">(optional)</span></span><input value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Dinner at Sushi Hiro" className={`${inputClass} mt-2`} /></label><div className="mt-4 border-t border-white/5 pt-4"><p className="text-[10px] text-slate-500">Save this Split Bill first. Date, wallet, transaction and receivables will be created only when you finalize it.</p>{submitError && <p role="alert" className="mt-2 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2 text-[10px] leading-4 text-amber-200">{submitError}</p>}{isSaving && <div className="mt-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.05] px-3 py-2.5 text-xs text-emerald-200"><span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-emerald-300/30 border-t-emerald-300 align-[-2px] mr-2" />Saving Split Bill… Please wait.</div>}<div className="mt-3 flex justify-end"><button type="submit" disabled={isSaving} className={`inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 ${valid ? "" : "opacity-80"}`}>{isSaving ? "Saving…" : "Save Split Bill"}</button></div></div></section>
+      <div className="mt-4 space-y-3">
+        {participantPdfSummaries.map((participant, participantIndex) => (
+          <div key={participantIndex} className="rounded-2xl border border-white/10 bg-[#0B141F] p-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-bold text-white">
+                  {participant.name}
+                  {participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}
+                </p>
+                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-600">Items</p>
+              </div>
+              <p className="text-base font-bold text-white">{money(participant.total, currencySymbol)}</p>
+            </div>
+
+            <div className="mt-3 space-y-1.5 text-xs">
+              {participant.normalItems.length === 0 ? (
+                <p className="text-[10px] text-slate-600">No allocated items</p>
+              ) : (
+                participant.normalItems.map((item, itemIndex) => (
+                  <div key={itemIndex} className="flex items-start justify-between gap-3">
+                    <span className="min-w-0 break-words text-slate-300">{item.name}</span>
+  
+    {mode === "PERSONAL" && (
+      <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Bill total</p>
+            <p className="mt-1 text-xl font-bold text-white">{money(itemTotal, currencySymbol)}</p>
+            <p className="mt-1 text-[10px] text-slate-600">Subtotal {money(subtotal, currencySymbol)} · Discount {money(orderDiscountAmount, currencySymbol)} · Tax {money(taxAmount, currencySymbol)}{tax.treatment === "INCLUDED" ? " included" : ""} · Service {money(serviceFeeAmount, currencySymbol)} · Delivery {money(netDeliveryAmount, currencySymbol)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">Your share</p>
+            <p className="mt-1 text-xl font-bold text-white">{money(personalShare, currencySymbol)}</p>
+          </div>
+          <div>
+            <p className="text-[10px] uppercase tracking-[0.12em] text-slate-500">To receive</p>
+            <p className="mt-1 text-xl font-bold text-emerald-300">{money(receivable, currencySymbol)}</p>
+          </div>
+        </div>
+      </section>
+    )}
+
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
+      <label className="block">
+        <span className="text-xs font-medium text-slate-300">Note <span className="text-slate-600">(optional)</span></span>
+        <input value={note} onChange={(event) => setNote(event.target.value)} placeholder="e.g. Dinner at Sushi Hiro" className={`${inputClass} mt-2`} />
+      </label>
+
+      <div className="mt-4 border-t border-white/5 pt-4">
+        <p className="text-[10px] text-slate-500">Save this Split Bill first. Date, wallet, transaction and receivables will be created only when you finalize it.</p>
+        {submitError && <p role="alert" className="mt-2 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2 text-[10px] leading-4 text-amber-200">{submitError}</p>}
+        {isSaving && <div className="mt-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.05] px-3 py-2.5 text-xs text-emerald-200"><span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-emerald-300/30 border-t-emerald-300 align-[-2px]" />Saving Split Bill… Please wait.</div>}
+        <div className="mt-3 flex justify-end">
+          <button type="submit" disabled={isSaving} className={`inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 ${valid ? "" : "opacity-80"}`}>
+            {isSaving ? "Saving…" : "Save Split Bill"}
+          </button>
+        </div>
+      </div>
+    </section>
   </form>;
 }
