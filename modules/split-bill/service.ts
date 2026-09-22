@@ -190,6 +190,7 @@ export async function finalizeSplitBill(splitBillId: string, input: {
       const payable = await createPayableForSplitBillParticipant(
         tx,
         personalParticipant,
+        payer.name,
         splitBill.merchantName,
         wallet.currencyId,
         input.transactionDate,
