@@ -217,6 +217,7 @@ model SplitBill {
   payerParticipantId String?
   paymentDate DateTime?
   status SplitBillStatus @default(DRAFT)
+  mode SplitBillMode @default(PERSONAL)
   note String?
   transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
   payerParticipant SplitBillParticipant? @relation("SplitBillPayer", fields: [payerParticipantId], references: [id], onDelete: SetNull)
@@ -610,6 +611,11 @@ enum InstallmentPlanStatus {
   ACTIVE
   COMPLETED
   CANCELLED
+}
+
+enum SplitBillMode {
+  PERSONAL
+  OTHERS_ONLY
 }
 
 enum SplitBillStatus {
