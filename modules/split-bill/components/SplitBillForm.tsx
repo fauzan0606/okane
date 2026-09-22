@@ -173,20 +173,24 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
 
   const participantSummaries = participants.map((participant, index) => ({ ...participant, share: shares[index] ?? 0, percentage: itemTotal > 0 ? (shares[index] ?? 0) / itemTotal * 100 : 0 }));
 
-  function participantBreakdown(participantIndex: number) {
+  function getParticipantBreakdown(participantIndex: number) {
     const normalItems: { name: string; amount: number }[] = [];
 
     for (const item of items) {
       const amount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
       const units = item.units.map((unit) => Number(unit) || 0);
       const splitUnits = item.splitMethod === "EQUAL"
-        ? units.map((unit) => unit > 0 ? 1 : 0)
+        ? units.map((unit) => (unit > 0 ? 1 : 0))
         : units;
       const unitTotal = splitUnits.reduce((sum, unit) => sum + unit, 0);
-      if (!unitTotal || splitUnits[participantIndex] <= 0 || !item.name.trim()) continue;
+
+      if (!item.name.trim() || unitTotal <= 0 || splitUnits[participantIndex] <= 0) continue;
+
       normalItems.push({
         name: item.name.trim(),
-        amount: roundedMoney(amount * splitUnits[participantIndex] / unitTotal),
+        amount: roundedMoney(
+          amount * splitUnits[participantIndex] / unitTotal,
+        ),
       });
     }
 
@@ -196,15 +200,20 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     const subtotalShare = roundedMoney(
       discountedItemShares[participantIndex] ?? totalBeforeDiscount,
     );
-    const participantDiscount = roundedMoney(
+    const discount = roundedMoney(
       Math.max(totalBeforeDiscount - subtotalShare, 0),
     );
     const taxShare = roundedMoney(
-      discountedSubtotal > 0 ? subtotalShare / discountedSubtotal * taxAmount : 0,
+      discountedSubtotal > 0
+        ? subtotalShare / discountedSubtotal * taxAmount
+        : 0,
     );
     const serviceShare = roundedMoney(
-      discountedSubtotal > 0 ? subtotalShare / discountedSubtotal * serviceFeeAmount : 0,
+      discountedSubtotal > 0
+        ? subtotalShare / discountedSubtotal * serviceFeeAmount
+        : 0,
     );
+
     const eligible = discountedItemShares.map((value) => value > 0);
     const eligibleCount = eligible.filter(Boolean).length;
     const baseTotal = discountedItemShares.reduce((sum, value) => sum + value, 0);
@@ -219,11 +228,14 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     );
 
     return {
-      name: participants[participantIndex]?.name || (participants[participantIndex]?.isMe ? "You" : `Person ${participantIndex + 1}`),
+      name: participants[participantIndex]?.name ||
+        (participants[participantIndex]?.isMe
+          ? "You"
+          : `Person ${participantIndex + 1}`),
       isMe: participants[participantIndex]?.isMe ?? false,
       normalItems,
       totalBeforeDiscount,
-      participantDiscount,
+      discount,
       subtotalShare,
       taxShare,
       serviceShare,
@@ -310,7 +322,6 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
           <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${mode === "PERSONAL" ? "translate-x-4" : "translate-x-0"}`} />
         </button>
       </div>
-      <p className="mt-1 text-[9px] text-slate-500">{mode === "PERSONAL" ? "I'm part of this bill" : "Recording only for other people"}</p>
       <div className="mt-4 border-t border-white/5 pt-4"><SplitBillOcr onUseResult={useOcrResult} /></div>
     </section>
 
@@ -344,18 +355,27 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
 
       <div className="mt-4 space-y-3">
         {participants.map((_, participantIndex) => {
-          const participant = participantBreakdown(participantIndex);
+          const participant = getParticipantBreakdown(participantIndex);
+
           return (
             <div key={participantIndex} className="rounded-2xl border border-white/10 bg-[#0B141F] p-4">
               <div className="flex items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-bold text-white">
                     {participant.name}
-                    {participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}
+                    {participant.isMe && (
+                      <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">
+                        You
+                      </span>
+                    )}
                   </p>
-                  <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-600">ITEMS</p>
+                  <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-600">
+                    ITEMS
+                  </p>
                 </div>
-                <p className="text-base font-bold text-white">{money(participant.total, currencySymbol)}</p>
+                <p className="text-base font-bold text-white">
+                  {money(participant.total, currencySymbol)}
+                </p>
               </div>
 
               <div className="mt-3 space-y-1.5 text-xs">
@@ -364,8 +384,12 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
                 ) : (
                   participant.normalItems.map((item, itemIndex) => (
                     <div key={itemIndex} className="flex items-start justify-between gap-3">
-                      <span className="min-w-0 break-words text-slate-300">{item.name}</span>
-                      <span className="shrink-0 text-slate-400">{money(item.amount, currencySymbol)}</span>
+                      <span className="min-w-0 break-words text-slate-300">
+                        {item.name}
+                      </span>
+                      <span className="shrink-0 text-slate-400">
+                        {money(item.amount, currencySymbol)}
+                      </span>
                     </div>
                   ))
                 )}
@@ -374,46 +398,60 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
 
                 <div className="flex items-center justify-between gap-3 font-semibold">
                   <span className="text-slate-300">Total Before Discount</span>
-                  <span className="text-white">{money(participant.totalBeforeDiscount, currencySymbol)}</span>
+                  <span className="text-white">
+                    {money(participant.totalBeforeDiscount, currencySymbol)}
+                  </span>
                 </div>
 
-                {participant.participantDiscount > 0 && (
+                {participant.discount > 0 && (
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-slate-500">Discount</span>
-                    <span className="text-amber-300">-{money(participant.participantDiscount, currencySymbol)}</span>
+                    <span className="text-amber-300">
+                      -{money(participant.discount, currencySymbol)}
+                    </span>
                   </div>
                 )}
 
                 <div className="flex items-center justify-between gap-3 font-semibold">
                   <span className="text-slate-300">Subtotal</span>
-                  <span className="text-white">{money(participant.subtotalShare, currencySymbol)}</span>
+                  <span className="text-white">
+                    {money(participant.subtotalShare, currencySymbol)}
+                  </span>
                 </div>
 
                 {participant.taxShare > 0 && (
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-slate-500">Tax / PPN</span>
-                    <span className="text-slate-400">{money(participant.taxShare, currencySymbol)}</span>
+                    <span className="text-slate-400">
+                      {money(participant.taxShare, currencySymbol)}
+                    </span>
                   </div>
                 )}
 
                 {participant.serviceShare > 0 && (
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-slate-500">Service Fee</span>
-                    <span className="text-slate-400">{money(participant.serviceShare, currencySymbol)}</span>
+                    <span className="text-slate-400">
+                      {money(participant.serviceShare, currencySymbol)}
+                    </span>
                   </div>
                 )}
 
                 {participant.deliveryShare > 0 && (
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-slate-500">Delivery Fee</span>
-                    <span className="text-slate-400">{money(participant.deliveryShare, currencySymbol)}</span>
+                    <span className="text-slate-400">
+                      {money(participant.deliveryShare, currencySymbol)}
+                    </span>
                   </div>
                 )}
 
                 <div className="border-t border-white/10 pt-2">
                   <div className="flex items-center justify-between gap-3 text-sm font-bold">
                     <span className="text-white">TOTAL</span>
-                    <span className="text-white">{money(participant.total, currencySymbol)}</span>
+                    <span className="text-white">
+                      {money(participant.total, currencySymbol)}
+                    </span>
                   </div>
                 </div>
               </div>
@@ -425,7 +463,9 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       <div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500">
         <span>Bill total includes discounted subtotal + tax + service + net delivery.</span>
         <span className={Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "text-emerald-300" : "text-amber-300"}>
-          {Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01 ? "✓ Fully allocated" : "Allocation pending"}
+          {Math.abs(shares.reduce((sum, value) => sum + value, 0) - itemTotal) < 0.01
+            ? "✓ Fully allocated"
+            : "Allocation pending"}
         </span>
       </div>
     </section>
