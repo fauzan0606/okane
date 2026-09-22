@@ -171,21 +171,40 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     setDeliverySplitMethod("EQUAL");
   }
 
-  const participantPdfSummaries = useMemo(() => participants.map((participant, participantIndex) => {
-    const normalItems = items.map((item) => {
-      const amount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
-      const selectedUnits = item.units.map((unit) => Number(unit) || 0);
-      const units = item.splitMethod === "EQUAL" ? selectedUnits.map((unit) => unit > 0 ? 1 : 0) : selectedUnits;
-      const unitTotal = units.reduce((sum, unit) => sum + unit, 0);
-      if (!unitTotal || units[participantIndex] <= 0) return null;
-      return { name: item.name.trim(), amount: roundedMoney(amount * units[participantIndex] / unitTotal) };
-    }).filter((item): item is { name: string; amount: number } => Boolean(item));
+  const participantSummaries = participants.map((participant, index) => ({ ...participant, share: shares[index] ?? 0, percentage: itemTotal > 0 ? (shares[index] ?? 0) / itemTotal * 100 : 0 }));
 
-    const totalBeforeDiscount = roundedMoney(normalItems.reduce((sum, item) => sum + item.amount, 0));
-    const participantDiscount = roundedMoney(Math.max(totalBeforeDiscount - (discountedItemShares[participantIndex] ?? totalBeforeDiscount), 0));
-    const subtotalShare = roundedMoney(discountedItemShares[participantIndex] ?? totalBeforeDiscount);
-    const taxShare = roundedMoney(discountedSubtotal > 0 ? subtotalShare / discountedSubtotal * taxAmount : 0);
-    const serviceShare = roundedMoney(discountedSubtotal > 0 ? subtotalShare / discountedSubtotal * serviceFeeAmount : 0);
+  function participantBreakdown(participantIndex: number) {
+    const normalItems: { name: string; amount: number }[] = [];
+
+    for (const item of items) {
+      const amount = (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0);
+      const units = item.units.map((unit) => Number(unit) || 0);
+      const splitUnits = item.splitMethod === "EQUAL"
+        ? units.map((unit) => unit > 0 ? 1 : 0)
+        : units;
+      const unitTotal = splitUnits.reduce((sum, unit) => sum + unit, 0);
+      if (!unitTotal || splitUnits[participantIndex] <= 0 || !item.name.trim()) continue;
+      normalItems.push({
+        name: item.name.trim(),
+        amount: roundedMoney(amount * splitUnits[participantIndex] / unitTotal),
+      });
+    }
+
+    const totalBeforeDiscount = roundedMoney(
+      normalItems.reduce((sum, item) => sum + item.amount, 0),
+    );
+    const subtotalShare = roundedMoney(
+      discountedItemShares[participantIndex] ?? totalBeforeDiscount,
+    );
+    const participantDiscount = roundedMoney(
+      Math.max(totalBeforeDiscount - subtotalShare, 0),
+    );
+    const taxShare = roundedMoney(
+      discountedSubtotal > 0 ? subtotalShare / discountedSubtotal * taxAmount : 0,
+    );
+    const serviceShare = roundedMoney(
+      discountedSubtotal > 0 ? subtotalShare / discountedSubtotal * serviceFeeAmount : 0,
+    );
     const eligible = discountedItemShares.map((value) => value > 0);
     const eligibleCount = eligible.filter(Boolean).length;
     const baseTotal = discountedItemShares.reduce((sum, value) => sum + value, 0);
@@ -200,8 +219,8 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     );
 
     return {
-      name: participant.name || (participant.isMe ? "You" : `Person ${participantIndex + 1}`),
-      isMe: participant.isMe,
+      name: participants[participantIndex]?.name || (participants[participantIndex]?.isMe ? "You" : `Person ${participantIndex + 1}`),
+      isMe: participants[participantIndex]?.isMe ?? false,
       normalItems,
       totalBeforeDiscount,
       participantDiscount,
@@ -211,7 +230,7 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       deliveryShare,
       total: roundedMoney(shares[participantIndex] ?? 0),
     };
-  }), [participants, items, discountedItemShares, discountedSubtotal, taxAmount, serviceFeeAmount, netDeliveryAmount, deliverySplitMethod, shares]);
+  }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -287,15 +306,7 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-400"><ReceiptText size={18} /></div><div><h2 className="text-base font-semibold text-white">1. What are we splitting?</h2><p className="mt-1 text-xs text-slate-400">For a new Split Bill, you only need the merchant first. Date and wallet can be added later when you finalize it into your finances.</p></div></div>
       <div className="mt-4 flex items-center gap-2">
         <input value={merchantName} onChange={(event) => setMerchantName(event.target.value)} placeholder="Merchant / restaurant name" className={`${inputClass} min-w-0 flex-1`} />
-        <button
-          type="button"
-          role="switch"
-          aria-checked={mode === "PERSONAL"}
-          aria-label="I&apos;m part of this bill"
-          onClick={() => switchMode(mode === "PERSONAL" ? "OTHERS_ONLY" : "PERSONAL")}
-          className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${mode === "PERSONAL" ? "border-emerald-400/40 bg-emerald-500/80" : "border-white/10 bg-slate-700"}`}
-          title={mode === "PERSONAL" ? "I'm part of this bill" : "Record for other people only"}
-        >
+        <button type="button" role="switch" aria-checked={mode === "PERSONAL"} aria-label="I&apos;m part of this bill" onClick={() => switchMode(mode === "PERSONAL" ? "OTHERS_ONLY" : "PERSONAL")} className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${mode === "PERSONAL" ? "border-emerald-400/40 bg-emerald-500/80" : "border-white/10 bg-slate-700"}`} title={mode === "PERSONAL" ? "I'm part of this bill" : "Record for other people only"}>
           <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${mode === "PERSONAL" ? "translate-x-4" : "translate-x-0"}`} />
         </button>
       </div>
@@ -332,80 +343,83 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       </div>
 
       <div className="mt-4 space-y-3">
-        {participantPdfSummaries.map((participant, participantIndex) => (
-          <div key={participantIndex} className="rounded-2xl border border-white/10 bg-[#0B141F] p-4">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-bold text-white">
-                  {participant.name}
-                  {participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}
-                </p>
-                <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-600">ITEMS</p>
+        {participants.map((_, participantIndex) => {
+          const participant = participantBreakdown(participantIndex);
+          return (
+            <div key={participantIndex} className="rounded-2xl border border-white/10 bg-[#0B141F] p-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-white">
+                    {participant.name}
+                    {participant.isMe && <span className="ml-1.5 rounded-full bg-emerald-400/10 px-1.5 py-0.5 text-[8px] font-semibold text-emerald-300">You</span>}
+                  </p>
+                  <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-slate-600">ITEMS</p>
+                </div>
+                <p className="text-base font-bold text-white">{money(participant.total, currencySymbol)}</p>
               </div>
-              <p className="text-base font-bold text-white">{money(participant.total, currencySymbol)}</p>
-            </div>
 
-            <div className="mt-3 space-y-1.5 text-xs">
-              {participant.normalItems.length === 0 ? (
-                <p className="text-[10px] text-slate-600">No allocated items</p>
-              ) : (
-                participant.normalItems.map((item, itemIndex) => (
-                  <div key={itemIndex} className="flex items-start justify-between gap-3">
-                    <span className="min-w-0 break-words text-slate-300">{item.name}</span>
-                    <span className="shrink-0 text-slate-400">{money(item.amount, currencySymbol)}</span>
+              <div className="mt-3 space-y-1.5 text-xs">
+                {participant.normalItems.length === 0 ? (
+                  <p className="text-[10px] text-slate-600">No allocated items</p>
+                ) : (
+                  participant.normalItems.map((item, itemIndex) => (
+                    <div key={itemIndex} className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 break-words text-slate-300">{item.name}</span>
+                      <span className="shrink-0 text-slate-400">{money(item.amount, currencySymbol)}</span>
+                    </div>
+                  ))
+                )}
+
+                <div className="border-t border-white/5 pt-2" />
+
+                <div className="flex items-center justify-between gap-3 font-semibold">
+                  <span className="text-slate-300">Total Before Discount</span>
+                  <span className="text-white">{money(participant.totalBeforeDiscount, currencySymbol)}</span>
+                </div>
+
+                {participant.participantDiscount > 0 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Discount</span>
+                    <span className="text-amber-300">-{money(participant.participantDiscount, currencySymbol)}</span>
                   </div>
-                ))
-              )}
+                )}
 
-              <div className="border-t border-white/5 pt-2" />
-
-              <div className="flex items-center justify-between gap-3 font-semibold">
-                <span className="text-slate-300">Total Before Discount</span>
-                <span className="text-white">{money(participant.totalBeforeDiscount, currencySymbol)}</span>
-              </div>
-
-              {participant.participantDiscount > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Discount</span>
-                  <span className="text-amber-300">-{money(participant.participantDiscount, currencySymbol)}</span>
+                <div className="flex items-center justify-between gap-3 font-semibold">
+                  <span className="text-slate-300">Subtotal</span>
+                  <span className="text-white">{money(participant.subtotalShare, currencySymbol)}</span>
                 </div>
-              )}
 
-              <div className="flex items-center justify-between gap-3 font-semibold">
-                <span className="text-slate-300">Subtotal</span>
-                <span className="text-white">{money(participant.subtotalShare, currencySymbol)}</span>
-              </div>
+                {participant.taxShare > 0 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Tax / PPN</span>
+                    <span className="text-slate-400">{money(participant.taxShare, currencySymbol)}</span>
+                  </div>
+                )}
 
-              {participant.taxShare > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Tax / PPN</span>
-                  <span className="text-slate-400">{money(participant.taxShare, currencySymbol)}</span>
-                </div>
-              )}
+                {participant.serviceShare > 0 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Service Fee</span>
+                    <span className="text-slate-400">{money(participant.serviceShare, currencySymbol)}</span>
+                  </div>
+                )}
 
-              {participant.serviceShare > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Service Fee</span>
-                  <span className="text-slate-400">{money(participant.serviceShare, currencySymbol)}</span>
-                </div>
-              )}
+                {participant.deliveryShare > 0 && (
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-slate-500">Delivery Fee</span>
+                    <span className="text-slate-400">{money(participant.deliveryShare, currencySymbol)}</span>
+                  </div>
+                )}
 
-              {participant.deliveryShare > 0 && (
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-slate-500">Delivery Fee</span>
-                  <span className="text-slate-400">{money(participant.deliveryShare, currencySymbol)}</span>
-                </div>
-              )}
-
-              <div className="border-t border-white/10 pt-2">
-                <div className="flex items-center justify-between gap-3 text-sm font-bold">
-                  <span className="text-white">TOTAL</span>
-                  <span className="text-white">{money(participant.total, currencySymbol)}</span>
+                <div className="border-t border-white/10 pt-2">
+                  <div className="flex items-center justify-between gap-3 text-sm font-bold">
+                    <span className="text-white">TOTAL</span>
+                    <span className="text-white">{money(participant.total, currencySymbol)}</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px] text-slate-500">
