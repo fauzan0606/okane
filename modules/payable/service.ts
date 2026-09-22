@@ -31,16 +31,17 @@ async function applyExpenseBalanceDelta(tx: Prisma.TransactionClient, walletId: 
 
 export async function createPayableForSplitBillParticipant(
   tx: Prisma.TransactionClient,
-  participant: { id: string; name: string; shareAmount: Prisma.Decimal; payable?: { id: string } | null },
+  participant: { id: string; name: string; isMe: boolean; shareAmount: Prisma.Decimal; payable?: { id: string } | null },
+  personName: string,
   merchantName: string,
   currencyId: string,
   paymentDate: Date,
 ) {
-  if (participant.isMe || participant.shareAmount.lte(0) || participant.payable) return participant.payable ?? null;
+  if (participant.shareAmount.lte(0) || participant.payable) return participant.payable ?? null;
 
   return tx.payable.create({
     data: {
-      personName: participant.name,
+      personName,
       description: "Split Bill: " + merchantName,
       amount: participant.shareAmount,
       currencyId,
@@ -60,17 +61,35 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
   }
 
   const amountTransferred = decimal(input.amountTransferred);
-  const payableOwner = await prisma.payable.findUnique({ where: { id: input.payableId }, select: { personName: true } });
-  if (!payableOwner) throw new Error("Payable not found.");
-  const payee = await findOrCreatePayeeByName(payableOwner.personName);
-  return prisma.$transaction(async (tx) => {
+  return prisma.$transaction(
+    async (tx) => {
     const payable = await tx.payable.findUnique({
       where: { id: input.payableId },
       include: {
-        splitBillParticipant: { include: { splitBill: { select: { id: true, merchantName: true } } } },
+        splitBillParticipant: {
+          include: {
+            splitBill: {
+              select: {
+                id: true,
+                merchantName: true,
+                payerParticipant: { select: { name: true } },
+              },
+            },
+          },
+        },
       },
     });
     if (!payable) throw new Error("Payable not found.");
+
+    const merchantName =
+      payable.splitBillParticipant?.splitBill?.merchantName?.trim() ||
+      payable.personName;
+
+    const payerName =
+      payable.splitBillParticipant?.splitBill?.payerParticipant?.name?.trim() ||
+      payable.personName;
+
+    const payee = await findOrCreatePayeeByName(merchantName);
 
     const remaining = payable.amount.minus(payable.paidAmount);
     if (remaining.lte(0)) throw new Error("This payable is already fully paid.");
@@ -102,7 +121,7 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
         type: "EXPENSE",
         kind: "STANDARD",
         amount: amountTransferred,
-        note: input.note?.trim() || "Repayment to " + payable.personName + (payable.splitBillParticipant?.splitBill?.merchantName ? " · " + payable.splitBillParticipant.splitBill.merchantName : ""),
+        note: input.note?.trim() || "Repayment to " + payerName + " · " + merchantName,
         wallet: { connect: { id: wallet.id } },
         category: input.categoryId ? { connect: { id: input.categoryId } } : undefined,
         subcategory: input.subcategoryId ? { connect: { id: input.subcategoryId } } : undefined,
@@ -147,5 +166,10 @@ export async function recordPayablePayment(input: RecordPayablePaymentInput) {
     }
 
     return { payment, transaction, appliedAmount, excessAmount, remainingAmount: payable.amount.minus(paidAmount), status };
-  });
+    },
+    {
+      maxWait: 10000,
+      timeout: 20000,
+    },
+  );
 }

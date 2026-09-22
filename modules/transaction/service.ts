@@ -86,7 +86,15 @@ export async function createTransactionService(input: CreateTransactionInput) {
 export async function updateTransactionService(id: string, input: UpdateTransactionInput) {
   const payee = await findOrCreatePayeeByName(input.merchant);
   return prisma.$transaction(async (tx) => {
-    const existing = await tx.transaction.findUnique({ where: { id }, include: { wallet: { select: { id: true, balanceAsOf: true, note: true } }, installmentPlan: true, splitBill: { select: { id: true } }, payablePayment: { select: { id: true } } } } });
+    const existing = await tx.transaction.findUnique({
+      where: { id },
+      include: {
+        wallet: { select: { id: true, balanceAsOf: true, note: true } },
+        installmentPlan: true,
+        splitBill: { select: { id: true } },
+        payablePayment: { select: { id: true } },
+      },
+    });
     if (!existing) throw new Error("Transaction not found.");
     if (existing.payablePayment) throw new Error("This transaction is linked to a payable repayment. Manage it from the related Split Bill instead.");
     if (existing.splitBill && (input.transactionDate !== undefined || input.type !== undefined || input.amount !== undefined || input.walletId !== undefined || input.installment !== undefined)) throw new Error("This transaction is linked to a Split Bill. Edit the Split Bill first, or remove the Split Bill before changing the transaction amount, date, wallet, type, or installment.");
