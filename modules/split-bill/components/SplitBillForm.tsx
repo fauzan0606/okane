@@ -190,7 +190,11 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       normalItems.reduce((sum, item) => sum + item.amount, 0),
     );
     const participantDiscount = roundedMoney(
-      Math.max(totalBeforeDiscount - (discountedItemShares[participantIndex] ?? totalBeforeDiscount), 0),
+      Math.max(
+        totalBeforeDiscount -
+          (discountedItemShares[participantIndex] ?? totalBeforeDiscount),
+        0,
+      ),
     );
     const subtotalShare = roundedMoney(
       discountedItemShares[participantIndex] ?? totalBeforeDiscount,
@@ -219,7 +223,9 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     );
 
     return {
-      name: participant.name || (participant.isMe ? "You" : `Person ${participantIndex + 1}`),
+      name:
+        participant.name ||
+        (participant.isMe ? "You" : `Person ${participantIndex + 1}`),
       isMe: participant.isMe,
       normalItems,
       totalBeforeDiscount,
@@ -230,7 +236,17 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       deliveryShare,
       total: roundedMoney(shares[participantIndex] ?? 0),
     };
-  }), [participants, items, discountedItemShares, discountedSubtotal, taxAmount, serviceFeeAmount, netDeliveryAmount, deliverySplitMethod, shares]);
+  }), [
+    participants,
+    items,
+    discountedItemShares,
+    discountedSubtotal,
+    taxAmount,
+    serviceFeeAmount,
+    netDeliveryAmount,
+    deliverySplitMethod,
+    shares,
+  ]);
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -316,21 +332,15 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
           role="switch"
           aria-checked={mode === "PERSONAL"}
           aria-label="I&apos;m part of this bill"
-          onClick={() =>
-            switchMode(mode === "PERSONAL" ? "OTHERS_ONLY" : "PERSONAL")
-          }
+          onClick={() => switchMode(mode === "PERSONAL" ? "OTHERS_ONLY" : "PERSONAL")}
           className={`relative inline-flex h-6 w-10 shrink-0 items-center rounded-full border p-0.5 transition ${mode === "PERSONAL" ? "border-emerald-400/40 bg-emerald-500/80" : "border-white/10 bg-slate-700"}`}
           title={mode === "PERSONAL" ? "I'm part of this bill" : "Record for other people only"}
         >
-          <span
-            className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${mode === "PERSONAL" ? "translate-x-4" : "translate-x-0"}`}
-          />
+          <span className={`h-4 w-4 rounded-full bg-white shadow-sm transition-transform ${mode === "PERSONAL" ? "translate-x-4" : "translate-x-0"}`} />
         </button>
       </div>
       <p className="mt-1 text-[9px] text-slate-500">
-        {mode === "PERSONAL"
-          ? "I'm part of this bill"
-          : "Recording only for other people"}
+        {mode === "PERSONAL" ? "I&apos;m part of this bill" : "Recording only for other people"}
       </p>
       <div className="mt-4 border-t border-white/5 pt-4"><SplitBillOcr onUseResult={useOcrResult} /></div>
     </section>
@@ -342,9 +352,7 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
       <div className="mt-3"><p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">Who had this?</p><div className="flex flex-wrap gap-2">{participants.map((participant, participantIndex) => { const selected = item.units[participantIndex] !== ""; return <button key={participantIndex} type="button" onClick={() => toggleParticipant(itemIndex, participantIndex)} className={`rounded-full border px-3 py-1.5 text-[10px] font-semibold transition ${selected ? "border-emerald-400/40 bg-emerald-400/10 text-emerald-300" : "border-white/10 bg-white/[0.02] text-slate-400 hover:border-white/20 hover:text-slate-200"}`}>{selected ? "✓ " : ""}{participant.name || (participant.isMe ? "You" : `Person ${participantIndex + 1}`)}</button>; })}</div></div>
       {selectedCount > 1 && <div className="mt-3 rounded-xl border border-emerald-400/10 bg-emerald-400/[0.03] p-3"><div className="flex flex-wrap items-center justify-between gap-2"><p className="text-[10px] font-semibold uppercase tracking-[0.12em] text-emerald-400">How should this item be split?</p><div className="flex rounded-lg border border-white/10 bg-[#0B141F] p-0.5"><button type="button" onClick={() => updateItem(itemIndex, { splitMethod: "EQUAL" })} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold ${item.splitMethod === "EQUAL" ? "bg-emerald-400/10 text-emerald-300" : "text-slate-500"}`}>Equal</button><button type="button" onClick={() => updateItem(itemIndex, { splitMethod: "PRO_RATA" })} className={`rounded-md px-3 py-1.5 text-[10px] font-semibold ${item.splitMethod === "PRO_RATA" ? "bg-emerald-400/10 text-emerald-300" : "text-slate-500"}`}>Pro-rata</button></div></div>{item.splitMethod === "PRO_RATA" && <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">{participants.map((participant, participantIndex) => { const selected = item.units[participantIndex] !== ""; return selected ? <label key={participantIndex} className="text-[10px] text-slate-400"><span className="mb-1 block">{participant.name || `Person ${participantIndex + 1}`}</span><input value={item.units[participantIndex] ?? ""} onChange={(event) => updateUnit(itemIndex, participantIndex, event.target.value)} inputMode="decimal" min="0" className={inputClass} /></label> : null; })}</div>}</div>}
       <div className="mt-3 flex flex-wrap justify-between gap-2 text-[10px]"><span className="text-slate-500">Item total: <span className="font-semibold text-slate-300">{money((Number(item.quantity) || 0) * (Number(item.unitPrice) || 0), currencySymbol)}</span></span><span className={selectedCount === 0 ? "text-amber-300" : "text-slate-500"}>{selectedCount === 0 ? "Select at least one person" : selectedCount === 1 ? "One person" : item.splitMethod === "EQUAL" ? `Equal across ${selectedCount} people` : "Pro-rata by units"}</span></div>
-    </div>; })}</div>      </section>
-
-
+    </div>; })}</div>      
 
     <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div><h2 className="text-base font-semibold text-white">4. Charges</h2><p className="mt-1 text-xs text-slate-400">Order discounts reduce the item subtotal first. Tax and service are allocated proportionally. Delivery defaults to Equal, but you can switch it to Pro-rata.</p></div><div className="mt-4 grid gap-3 md:grid-cols-2">
       <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.03] p-3 md:col-span-2"><div className="flex items-center justify-between gap-2"><span className="text-xs font-semibold text-slate-300">Order Discount</span><span className="text-[10px] text-slate-600">-{money(orderDiscountAmount, currencySymbol)}</span></div><div className="mt-2 flex gap-2"><select value={orderDiscount.mode} onChange={(event) => setOrderDiscount((current) => ({ ...current, mode: event.target.value as Charge["mode"] }))} className={`${inputClass} w-28`}><option value="AMOUNT">Amount</option><option value="PERCENT">%</option></select><input value={orderDiscount.value} onChange={(event) => setOrderDiscount((current) => ({ ...current, value: event.target.value }))} inputMode="decimal" placeholder="e.g. 15500" className={inputClass} /></div>{ocrDiscounts.filter((discount) => discount.scope === "ORDER").length > 0 && <p className="mt-2 text-[10px] text-slate-500">{ocrDiscounts.filter((discount) => discount.scope === "ORDER").map((discount) => discount.name).join(" · ")}</p>}</div>
@@ -386,7 +394,7 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
                 participant.normalItems.map((item, itemIndex) => (
                   <div key={itemIndex} className="flex items-start justify-between gap-3">
                     <span className="min-w-0 break-words text-slate-300">{item.name}</span>
-  
+ 
     {mode === "PERSONAL" && (
       <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
         <div className="grid gap-4 md:grid-cols-3">
