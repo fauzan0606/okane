@@ -165,10 +165,8 @@ export default function SplitBillHistorySummary({
           ))}
         </div>
 
-        <div className="mt-3 flex justify-end text-[10px]">
-          <span className="text-emerald-300">
-            ✓ Summary matches allocated bill total
-          </span>
+        <div className="mt-3 text-[10px] text-slate-600">
+          Calculated from the saved item allocations.
         </div>
       </div>
     </details>
