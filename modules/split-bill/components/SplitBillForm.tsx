@@ -8,6 +8,7 @@ import SplitBillOcr, { type OcrResult } from "./SplitBillOcr";
 
 type Props = { currencySymbol?: string; onSaved?: () => void };
 type Participant = { name: string; isMe: boolean };
+type SplitBillMode = "PERSONAL" | "OTHERS_ONLY";
 type Item = { name: string; quantity: string; unitPrice: string; splitMethod: "EQUAL" | "PRO_RATA"; units: string[] };
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
 type Charge = { mode: "AMOUNT" | "PERCENT"; value: string; treatment?: ChargeTreatment };
@@ -28,6 +29,7 @@ function chargeAmount(charge: Charge, subtotal: number) {
 
 export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props) {
   const [merchantName, setMerchantName] = useState("");
+  const [mode, setMode] = useState<SplitBillMode>("PERSONAL");
   const [participants, setParticipants] = useState<Participant[]>([{ name: "You", isMe: true }, { name: "", isMe: false }]);
   const [payerIndex, setPayerIndex] = useState(0);
   const [items, setItems] = useState<Item[]>([{ name: "", quantity: "1", unitPrice: "", splitMethod: "EQUAL", units: ["", ""] }]);
@@ -93,15 +95,42 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
 
   const personalIndex = participants.findIndex((participant) => participant.isMe);
   const personalShare = personalIndex >= 0 ? shares[personalIndex] : 0;
-  const receivable = shares.reduce((sum, value, index) => sum + (index === personalIndex ? 0 : value), 0);
+  const receivable = mode === "PERSONAL" && personalIndex >= 0 ? shares.reduce((sum, value, index) => sum + (index === personalIndex ? 0 : value), 0) : 0;
   const validCharge = (charge: Charge) => {
     const value = Number(charge.value);
     return !charge.value || (Number.isFinite(value) && value >= 0 && (charge.mode === "AMOUNT" || value <= 100));
   };
-  const valid = merchantName.trim().length > 0 && participants.filter((participant) => !participant.isMe && participant.name.trim()).length >= 1 && items.length > 0 && validCharge(orderDiscount) && validCharge(tax) && validCharge(serviceFee) && validCharge(deliveryFee) && validCharge(deliveryDiscount) && !(tax.value && tax.treatment === "UNKNOWN") && !(serviceFee.value && serviceFee.treatment === "UNKNOWN") && items.every((item) => {
+  const hasValidParticipants = mode === "PERSONAL"
+    ? participants.filter((participant) => !participant.isMe && participant.name.trim()).length >= 1 && participants.filter((participant) => participant.isMe).length === 1
+    : participants.length >= 2 && participants.every((participant) => !participant.isMe && participant.name.trim().length > 0);
+  const hasValidPayer = payerIndex >= 0 && payerIndex < participants.length && Boolean(participants[payerIndex]?.name.trim());
+  const valid = merchantName.trim().length > 0 && hasValidParticipants && hasValidPayer && items.length > 0 && validCharge(orderDiscount) && validCharge(tax) && validCharge(serviceFee) && validCharge(deliveryFee) && validCharge(deliveryDiscount) && !(tax.value && tax.treatment === "UNKNOWN") && !(serviceFee.value && serviceFee.treatment === "UNKNOWN") && items.every((item) => {
     const selected = item.units.map((unit) => Number(unit) || 0).filter((unit) => unit > 0);
     return item.name.trim() && Number(item.quantity) > 0 && Number(item.unitPrice) >= 0 && selected.length > 0 && (selected.length <= 1 || item.splitMethod === "EQUAL" || selected.every((unit) => unit > 0));
   });
+
+  function switchMode(nextMode: SplitBillMode) {
+    if (nextMode === mode) return;
+    if (nextMode === "OTHERS_ONLY") {
+      const meIndex = participants.findIndex((participant) => participant.isMe);
+      const remaining = participants.filter((participant) => !participant.isMe);
+      const nextParticipants = remaining.length >= 2 ? remaining : [...remaining, { name: "", isMe: false }];
+      setParticipants(nextParticipants);
+      setItems((current) => current.map((item) => {
+        const nextUnits = meIndex >= 0 ? item.units.filter((_, index) => index !== meIndex) : [...item.units];
+        while (nextUnits.length < nextParticipants.length) nextUnits.push("");
+        return { ...item, units: nextUnits.slice(0, nextParticipants.length) };
+      }));
+      setPayerIndex(0);
+      setMode(nextMode);
+      return;
+    }
+    const nextParticipants = [{ name: "You", isMe: true }, ...participants.filter((participant) => !participant.isMe)];
+    setParticipants(nextParticipants);
+    setItems((current) => current.map((item) => ({ ...item, units: ["", ...item.units] })));
+    setPayerIndex(0);
+    setMode(nextMode);
+  }
 
   function addParticipant() { setParticipants((current) => [...current, { name: "", isMe: false }]); setItems((current) => current.map((item) => ({ ...item, units: [...item.units, ""] }))); }
   function removeParticipant(index: number) { if (participants.length <= 2 || participants[index]?.isMe) return; setParticipants((current) => current.filter((_, participantIndex) => participantIndex !== index)); setItems((current) => current.map((item) => ({ ...item, units: item.units.filter((_, participantIndex) => participantIndex !== index) }))); setPayerIndex((current) => current === index ? 0 : current > index ? current - 1 : current); }
@@ -171,7 +200,12 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
 
     const errors: string[] = [];
     if (!merchantName.trim()) errors.push("Merchant is required.");
-    if (participants.filter((participant) => !participant.isMe && participant.name.trim()).length < 1) errors.push("Add at least one friend and enter their name.");
+    if (mode === "PERSONAL") {
+      if (participants.filter((participant) => !participant.isMe && participant.name.trim()).length < 1) errors.push("Add at least one friend and enter their name.");
+    } else if (participants.length < 2 || participants.some((participant) => !participant.name.trim())) {
+      errors.push("Add at least two people and enter each participant name.");
+    }
+    if (payerIndex < 0 || payerIndex >= participants.length || !participants[payerIndex]?.name.trim()) errors.push("Choose who paid the bill.");
     if (items.length === 0) errors.push("Add at least one item.");
 
     items.forEach((item, index) => {
@@ -195,6 +229,7 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
   }
   const payload = JSON.stringify({
     merchantName,
+    mode,
     participants: participants.map((participant) => ({ name: participant.name, isMe: participant.isMe })),
     payerParticipantIndex: payerIndex,
     items: items.map((item) => ({ name: item.name, quantity: Number(item.quantity), unitPrice: Number(item.unitPrice), splitMethod: item.splitMethod, units: item.units.map((unit) => Number(unit) || 0) })),
@@ -210,11 +245,20 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
     <input type="hidden" name="payload" value={payload} />
     <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]">
       <div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-400/10 text-emerald-400"><ReceiptText size={18} /></div><div><h2 className="text-base font-semibold text-white">1. What are we splitting?</h2><p className="mt-1 text-xs text-slate-400">For a new Split Bill, you only need the merchant first. Date and wallet can be added later when you finalize it into your finances.</p></div></div>
-      <input value={merchantName} onChange={(event) => setMerchantName(event.target.value)} placeholder="Merchant / restaurant name" className={`${inputClass} mt-4`} />
+      <input value={merchantName} onChange={(event) => setMerchantName(event.target.value)} placeholder="Merchant / restaurant name" className={`${inputClass} mt-4`} /><div className="mt-4 grid gap-2 sm:grid-cols-2">
+        <button type="button" onClick={() => switchMode("PERSONAL")} className={`rounded-2xl border p-4 text-left transition ${mode === "PERSONAL" ? "border-emerald-400/35 bg-emerald-400/[0.06]" : "border-white/10 bg-[#0B141F] hover:border-white/20"}`}>
+          <p className={`text-xs font-bold ${mode === "PERSONAL" ? "text-emerald-300" : "text-white"}`}>{mode === "PERSONAL" ? "● " : "○ "}I&apos;m part of this bill</p>
+          <p className="mt-1 text-[10px] leading-4 text-slate-500">The bill affects your finances. You can record the wallet payment and amounts owed to or from others.</p>
+        </button>
+        <button type="button" onClick={() => switchMode("OTHERS_ONLY")} className={`rounded-2xl border p-4 text-left transition ${mode === "OTHERS_ONLY" ? "border-emerald-400/35 bg-emerald-400/[0.06]" : "border-white/10 bg-[#0B141F] hover:border-white/20"}`}>
+          <p className={`text-xs font-bold ${mode === "OTHERS_ONLY" ? "text-emerald-300" : "text-white"}`}>{mode === "OTHERS_ONLY" ? "● " : "○ "}Only recording for other people</p>
+          <p className="mt-1 text-[10px] leading-4 text-slate-500">This bill is for other people only. Saving it does not create a wallet transaction, receivable, or payable for you.</p>
+        </button>
+      </div>
       <div className="mt-4 border-t border-white/5 pt-4"><SplitBillOcr onUseResult={useOcrResult} /></div>
     </section>
 
-    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-400/10 text-blue-400"><UsersRound size={18} /></div><div><h2 className="text-base font-semibold text-white">2. Who is sharing?</h2><p className="mt-1 text-xs text-slate-400">You are always included. Add everyone who shared the bill.</p></div></div><button type="button" onClick={addParticipant} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-xs font-semibold text-slate-200 hover:border-emerald-400/30"><Plus size={13} /> Add person</button></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{participants.map((participant, index) => <div key={index} className="flex items-center gap-2"><input value={participant.name} onChange={(event) => updateParticipant(index, event.target.value)} disabled={participant.isMe} placeholder={participant.isMe ? "You" : "Friend name"} className={`${inputClass} ${participant.isMe ? "text-emerald-300" : ""}`} />{!participant.isMe && <button type="button" onClick={() => removeParticipant(index)} className="rounded-lg border border-red-400/10 bg-red-400/[0.04] p-2 text-red-300" title="Remove person"><Trash2 size={14} /></button>}</div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[0.03] px-3 py-3"><label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Who paid?</label><p className="mb-2 text-[10px] leading-4 text-slate-500">Select the person who actually paid the whole bill. This is used when you finalize the Split Bill.</p><select value={payerIndex} onChange={(event) => setPayerIndex(Number(event.target.value))} className={inputClass} aria-label="Who paid?">{participants.map((participant, index) => <option key={index} value={index}>{participant.isMe ? "You" : (participant.name.trim() || `Person ${index + 1}`)}{index === payerIndex ? " · payer" : ""}</option>)}</select></div></section>
+    <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div className="flex items-start gap-3"><div className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-400/10 text-blue-400"><UsersRound size={18} /></div><div><h2 className="text-base font-semibold text-white">2. Who is sharing?</h2><p className="mt-1 text-xs text-slate-400">{mode === "PERSONAL" ? "You are included. Add the friends who owe you money." : "You are not included. Add the people who actually shared the bill."}</p></div></div><button type="button" onClick={addParticipant} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-xs font-semibold text-slate-200 hover:border-emerald-400/30"><Plus size={13} /> Add person</button></div><div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">{participants.map((participant, index) => <div key={index} className="flex items-center gap-2"><input value={participant.name} onChange={(event) => updateParticipant(index, event.target.value)} disabled={participant.isMe} placeholder={participant.isMe ? "You" : mode === "PERSONAL" ? "Friend name" : "Participant name"} className={`${inputClass} ${participant.isMe ? "text-emerald-300" : ""}`} />{!participant.isMe && <button type="button" onClick={() => removeParticipant(index)} className="rounded-lg border border-red-400/10 bg-red-400/[0.04] p-2 text-red-300" title="Remove person"><Trash2 size={14} /></button>}</div>)}</div><div className="mt-4 rounded-xl border border-amber-400/10 bg-amber-400/[0.03] px-3 py-3"><label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Who paid?</label><p className="mb-2 text-[10px] leading-4 text-slate-500">Select the person who actually paid the whole bill. This is used when you finalize the Split Bill.</p><select value={payerIndex} onChange={(event) => setPayerIndex(Number(event.target.value))} className={inputClass} aria-label="Who paid?">{participants.map((participant, index) => <option key={index} value={index}>{participant.isMe ? "You" : (participant.name.trim() || `Person ${index + 1}`)}{index === payerIndex ? " · payer" : ""}</option>)}</select></div></section>
 
     <section className="rounded-[22px] border border-[#30465D] bg-[#172A3D] p-5 shadow-[0_14px_36px_rgba(0,0,0,0.22)]"><div className="flex items-center justify-between gap-3"><div><h2 className="text-base font-semibold text-white">3. Who had what?</h2><p className="mt-1 text-xs text-slate-400">Choose who had each item. Nothing is pre-selected. If more than one person had it, choose Equal or Pro-rata.</p></div><button type="button" onClick={addItem} className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-[#0B141F] px-3 py-2 text-xs font-semibold text-slate-200 hover:border-emerald-400/30"><Plus size={13} /> Add item</button></div><div className="mt-4 space-y-3">{items.map((item, itemIndex) => { const selectedCount = item.units.filter((unit) => unit !== "").length; return <div key={itemIndex} className="rounded-2xl border border-white/10 bg-[#0B141F] p-4">
       <div className="grid gap-2 md:grid-cols-[1fr_90px_130px_auto]"><input value={item.name} onChange={(event) => updateItem(itemIndex, { name: event.target.value })} placeholder="Item / dish" className={inputClass} /><input value={item.quantity} onChange={(event) => updateItem(itemIndex, { quantity: event.target.value })} inputMode="decimal" placeholder="Qty" className={inputClass} /><input value={item.unitPrice} onChange={(event) => updateItem(itemIndex, { unitPrice: event.target.value })} inputMode="decimal" placeholder="Unit price" className={inputClass} /><button type="button" onClick={() => removeItem(itemIndex)} className="rounded-xl border border-red-400/10 bg-red-400/[0.04] p-2.5 text-red-300" title="Remove item"><Trash2 size={15} /></button></div>
