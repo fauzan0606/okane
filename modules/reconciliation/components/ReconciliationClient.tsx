@@ -805,16 +805,8 @@ function ReviewDrawer({
   const [localError, setLocalError] = useState("");
   const [saving, startSaveTransition] = useTransition();
 
-  const selectedCategory = categories.find((category) => category.id === categoryId);
   const availableCategories = categories.filter((category) => category.type === type);
   const availableSubcategories = subcategories.filter((subcategory) => !categoryId || subcategory.categoryId === categoryId);
-
-  useMemo(() => {
-    if (categoryId && selectedCategory && selectedCategory.type !== type) {
-      setCategoryId("");
-      setSubcategoryId("");
-    }
-  }, [categoryId, selectedCategory, type]);
 
   function saveEditedTransaction() {
     if (!transactionDate || !amount || !walletId || !merchant.trim()) {
