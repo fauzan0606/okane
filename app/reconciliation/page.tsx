@@ -14,7 +14,11 @@ function serializeSession(session: Awaited<ReturnType<typeof getReconciliationSe
     sourceType: session.sourceType,
     status: session.status,
     extractedCount: session.extractedCount,
-    wallet: { name: session.wallet.name, walletType: session.wallet.walletType, currency: { symbol: session.wallet.currency.symbol } },
+    wallet: {
+      name: session.wallet.name,
+      walletType: session.wallet.walletType,
+      currency: { symbol: session.wallet.currency.symbol },
+    },
     rows: session.rows.map((row) => ({
       id: row.id,
       sourceSide: row.sourceSide,
@@ -41,14 +45,9 @@ export default async function ReconciliationPage({ searchParams }: { searchParam
     params.session ? getReconciliationSession(params.session) : Promise.resolve(null),
   ]);
 
-  return <AppShell sidebar={<Sidebar />} header={<Header />}>
-    <div className="space-y-6">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Statement control</p>
-        <h1 className="mt-1 text-3xl font-bold text-white">Reconciliation</h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-500">Compare a PDF bank or credit-card statement against OKANE without changing transactions until you explicitly confirm each difference.</p>
-      </div>
+  return (
+    <AppShell sidebar={<Sidebar />} header={<Header />}>
       <ReconciliationClient wallets={wallets} session={serializeSession(session)} />
-    </div>
-  </AppShell>;
+    </AppShell>
+  );
 }
