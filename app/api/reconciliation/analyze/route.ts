@@ -800,17 +800,18 @@ export async function POST(
 Statement type: ${sourceType}.
 
 Rules:
-- Extract every actual transaction row from the statement, not headers, balances, totals, rewards summaries, statement metadata, or page footers.
-- Preserve the transaction date printed for the transaction. Do not substitute statement date or posting date.
+- Read the transaction tables page-by-page and extract every actual transaction row. Do not stop after the first page or after the first group of rows.
+- Ignore headers, balances, subtotals, totals, rewards summaries, statement metadata, informational pages, and page footers.
+- Preserve the transaction date printed for each transaction. When the statement prints a date without a year (for example 03-SEP), determine the year from the statement's account/statement date or statement period and return the full ISO date (YYYY-MM-DD). Never invent a different year such as 2001.
 - Preserve the description as printed, including merchant/reference text.
 - Amount must be the absolute numeric transaction amount without currency symbols or separators.
 - direction DEBIT means money/spending charged from the selected wallet; CREDIT means money/refund/credit posted to it; UNKNOWN when the statement does not make the direction reliable.
 - entryType should be one concise classification such as PURCHASE, REFUND, PAYMENT, FEE, INTEREST, TRANSFER, CASH_ADVANCE, REWARD, or UNKNOWN.
 - For credit-card statements, payment lines are PAYMENT and must not be treated as purchases or expenses.
-- Return pageNumber when visible or inferable from the document page. sourceRowNumber should be the visible transaction sequence/row number if present; otherwise use a best-effort sequential row number across transaction rows.
-- Do not invent transactions.
-- Extract the statement period when visible, but only return a period value that is a valid ISO 8601 date (YYYY-MM-DD). If the period cannot be expressed as a valid date, omit it.
+- Return pageNumber for every extracted row when it is visible or inferable from the document page. sourceRowNumber should be the visible transaction sequence/row number if present; otherwise use a best-effort sequential row number across all extracted transaction rows.
 - Keep duplicate-looking rows when they are separate statement rows.
+- Before returning JSON, cross-check that all pages containing a transaction table were covered and that transactions are not silently omitted. Page 4 of a typical BCA statement may contain only informational content; do not invent rows from it.
+- Extract the statement period when visible, using valid ISO 8601 dates (YYYY-MM-DD). If the period cannot be expressed as a valid date, omit it.
 - Return only JSON matching the supplied schema.`;
 
   let uploadedFile: {
