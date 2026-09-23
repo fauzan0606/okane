@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { createSplitBill, deleteSplitBill, finalizeSplitBill } from "./service";
 import { updateSplitBillItemAllocation } from "./item-edit-service";
+import { recordPayablePayment } from "@/modules/payable/service";
 
 function refreshAll() {
   revalidatePath("/split-bill");
@@ -19,7 +20,9 @@ function parseCreatePayload(formData: FormData) {
   try {
     return JSON.parse(value) as {
       merchantName: string;
+      mode?: "PERSONAL" | "OTHERS_ONLY";
       participants: { name: string; isMe: boolean }[];
+      payerParticipantIndex?: number;
       items: { name: string; quantity: number; unitPrice: number; splitMethod: "EQUAL" | "PRO_RATA"; units: number[] }[];
       tax?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
       serviceFee?: { mode: "AMOUNT" | "PERCENT"; value: number; treatment?: "INCLUDED" | "EXCLUDED" | "UNKNOWN" };
@@ -48,10 +51,41 @@ export async function finalizeSplitBillAction(formData: FormData) {
   const splitBillId = formData.get("splitBillId");
   const transactionDate = formData.get("transactionDate");
   const walletId = formData.get("walletId");
+  const amountTransferred = formData.get("amountTransferred");
+  const categoryId = formData.get("categoryId");
+  const subcategoryId = formData.get("subcategoryId");
+  const note = formData.get("note");
+
   if (typeof splitBillId !== "string" || !splitBillId) throw new Error("Split Bill not found.");
-  if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Transaction date is required.");
-  if (typeof walletId !== "string" || !walletId) throw new Error("Wallet is required.");
-  await finalizeSplitBill(splitBillId, { transactionDate: new Date(transactionDate), walletId });
+  if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Payment date is required.");
+  if (typeof walletId !== "string" || !walletId) throw new Error("Payment wallet is required.");
+  if (typeof categoryId !== "string" || !categoryId) throw new Error("Expense category is required.");
+  const parsedAmountTransferred = typeof amountTransferred === "string" && amountTransferred ? Number(amountTransferred) : undefined;
+  if (parsedAmountTransferred !== undefined && (!Number.isFinite(parsedAmountTransferred) || parsedAmountTransferred <= 0)) {
+    throw new Error("Transferred amount must be greater than zero.");
+  }
+
+  const result = await finalizeSplitBill(splitBillId, {
+    transactionDate: new Date(transactionDate),
+    walletId: typeof walletId === "string" && walletId ? walletId : undefined,
+    categoryId: typeof categoryId === "string" && categoryId ? categoryId : undefined,
+    subcategoryId: typeof subcategoryId === "string" && subcategoryId ? subcategoryId : undefined,
+  });
+
+  if ("payableId" in result) {
+    if (parsedAmountTransferred === undefined) throw new Error("Transferred amount is required when recording repayment.");
+
+    await recordPayablePayment({
+      payableId: result.payableId,
+      amountTransferred: parsedAmountTransferred,
+      paymentDate: new Date(transactionDate),
+      walletId,
+      categoryId,
+      subcategoryId: typeof subcategoryId === "string" && subcategoryId ? subcategoryId : undefined,
+      note: typeof note === "string" ? note : undefined,
+    });
+  }
+
   refreshAll();
 }
 

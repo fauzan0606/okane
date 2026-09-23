@@ -17,6 +17,7 @@ model Currency {
   updatedAt DateTime @updatedAt
   wallets Wallet[]
   receivables Receivable[]
+  payables Payable[]
   budgets Budget[]
   investmentAssets InvestmentAsset[]
   investmentTransactions InvestmentTransaction[]
@@ -42,6 +43,7 @@ model Wallet {
   currency Currency @relation(fields: [currencyId], references: [id])
   transactions Transaction[]
   receivablePayments ReceivablePayment[]
+  payablePayments PayablePayment[]
   sourceReceivables Receivable[] @relation("ReceivableSourceWallet")
   transfersFrom Transfer[] @relation("TransferFromWallet")
   transfersTo Transfer[] @relation("TransferToWallet")
@@ -163,6 +165,7 @@ model Transaction {
   payee Payee? @relation(fields: [payeeId], references: [id])
   installmentPlan InstallmentPlan?
   receivablePayment ReceivablePayment?
+  payablePayment PayablePayment?
   splitBill SplitBill?
   transferFee Transfer? @relation("TransferFee")
   createdAt DateTime @default(now())
@@ -211,10 +214,14 @@ model SplitBill {
   transactionId String? @unique
   totalAmount Decimal
   personalAmount Decimal
+  payerParticipantId String?
+  paymentDate DateTime?
   status SplitBillStatus @default(DRAFT)
+  mode SplitBillMode @default(PERSONAL)
   note String?
   transaction Transaction? @relation(fields: [transactionId], references: [id], onDelete: SetNull)
-  participants SplitBillParticipant[]
+  payerParticipant SplitBillParticipant? @relation("SplitBillPayer", fields: [payerParticipantId], references: [id], onDelete: SetNull)
+  participants SplitBillParticipant[] @relation("SplitBillParticipants")
   items SplitBillItem[]
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -227,9 +234,11 @@ model SplitBillParticipant {
   name String
   isMe Boolean @default(false)
   shareAmount Decimal @default(0)
-  splitBill SplitBill @relation(fields: [splitBillId], references: [id], onDelete: Cascade)
+  splitBill SplitBill @relation("SplitBillParticipants", fields: [splitBillId], references: [id], onDelete: Cascade)
   allocations SplitBillItemAllocation[]
   receivable Receivable?
+  payable Payable?
+  paidSplitBills SplitBill[] @relation("SplitBillPayer")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   @@index([splitBillId, isMe])
@@ -295,6 +304,45 @@ model ReceivablePayment {
   wallet Wallet @relation(fields: [walletId], references: [id])
   transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
   @@index([receivableId, receivedAt])
+}
+
+model Payable {
+  id String @id @default(uuid())
+  personName String
+  description String
+  amount Decimal
+  paidAmount Decimal @default(0)
+  currencyId String
+  loanDate DateTime @default(now())
+  dueDate DateTime?
+  status PayableStatus @default(OUTSTANDING)
+  splitBillParticipantId String? @unique
+  currency Currency @relation(fields: [currencyId], references: [id])
+  splitBillParticipant SplitBillParticipant? @relation(fields: [splitBillParticipantId], references: [id], onDelete: SetNull)
+  payments PayablePayment[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([status, dueDate])
+  @@index([currencyId, status])
+}
+
+model PayablePayment {
+  id String @id @default(uuid())
+  payableId String
+  amount Decimal
+  appliedAmount Decimal
+  excessAmount Decimal @default(0)
+  paidAt DateTime
+  walletId String
+  transactionId String @unique
+  note String?
+  payable Payable @relation(fields: [payableId], references: [id], onDelete: Cascade)
+  wallet Wallet @relation(fields: [walletId], references: [id])
+  transaction Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@index([payableId, paidAt])
+  @@index([walletId, paidAt])
 }
 
 model Budget {
@@ -565,6 +613,11 @@ enum InstallmentPlanStatus {
   CANCELLED
 }
 
+enum SplitBillMode {
+  PERSONAL
+  OTHERS_ONLY
+}
+
 enum SplitBillStatus {
   DRAFT
   OPEN
@@ -575,6 +628,12 @@ enum SplitBillStatus {
 enum SplitBillItemMethod {
   EQUAL
   PRO_RATA
+}
+
+enum PayableStatus {
+  OUTSTANDING
+  PARTIALLY_PAID
+  PAID
 }
 
 enum ReceivableStatus {
