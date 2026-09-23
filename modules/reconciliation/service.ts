@@ -1,4 +1,4 @@
-import { Prisma, ReconciliationDirection, ReconciliationMatchStatus, ReconciliationResolution, ReconciliationSourceSide, ReconciliationSourceType } from "@prisma/client";
+import { Prisma, TransactionType, ReconciliationDirection, ReconciliationMatchStatus, ReconciliationResolution, ReconciliationSourceSide, ReconciliationSourceType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createTransactionService, deleteTransactionService } from "@/modules/transaction/service";
 
@@ -122,6 +122,23 @@ export async function getReconciliationWallets() {
   return prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true, currency: { select: { code: true, symbol: true } } }, orderBy: { name: "asc" } });
 }
 
+export async function getReconciliationFormData() {
+  const [wallets, categories, subcategories] = await Promise.all([
+    getReconciliationWallets(),
+    prisma.category.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, type: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    prisma.subcategory.findMany({
+      where: { isActive: true },
+      select: { id: true, name: true, categoryId: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+  ]);
+  return { wallets, categories, subcategories };
+}
+
 export async function createReconciliationSession(input: { walletId: string; sourceType: ReconciliationSourceType; fileName: string; rows: ExtractedRow[]; periodStart?: string; periodEnd?: string }) {
   const wallet = await prisma.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, walletType: true } });
   if (!wallet) throw new Error("Wallet not found.");
@@ -233,6 +250,61 @@ export async function resolveReconciliationRow(input: { rowId: string; resolutio
     const created = await createTransactionService({ transactionDate: row.transactionDate, type, amount: Number(row.amount), merchant: row.description, walletId: row.session.walletId, note: `Reconciliation import: ${row.session.fileName}` });
     await prisma.reconciliationRow.update({ where: { id: row.id }, data: { resolution: ReconciliationResolution.ADD_INCOMPLETE, createdTransactionId: created.id } });
   }
+}
+
+export async function addReconciliationTransaction(input: {
+  rowId: string;
+  transactionDate: Date;
+  amount: number;
+  walletId: string;
+  type: TransactionType;
+  merchant: string;
+  categoryId?: string;
+  subcategoryId?: string;
+  note?: string;
+}) {
+  const row = await prisma.reconciliationRow.findUnique({
+    where: { id: input.rowId },
+    include: { session: true },
+  });
+  if (!row) throw new Error("Reconciliation row not found.");
+  if (row.sourceSide !== ReconciliationSourceSide.STATEMENT) throw new Error("Only statement rows can be added to OKANE.");
+  if (row.resolution !== ReconciliationResolution.PENDING && row.resolution !== ReconciliationResolution.IGNORE) {
+    throw new Error("This reconciliation row has already been resolved.");
+  }
+  if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Amount must be greater than zero.");
+  if (!input.merchant.trim()) throw new Error("Merchant / Payee is required.");
+
+  const wallet = await prisma.wallet.findUnique({
+    where: { id: input.walletId },
+    select: { id: true, currencyId: true },
+  });
+  if (!wallet) throw new Error("Wallet not found.");
+
+  if (row.session.sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT && row.direction === ReconciliationDirection.CREDIT && input.type === TransactionType.INCOME) {
+    throw new Error("Credit-card statement credits are not imported as income automatically. Review or ignore this entry instead.");
+  }
+
+  const created = await createTransactionService({
+    transactionDate: input.transactionDate,
+    type: input.type,
+    amount: input.amount,
+    merchant: input.merchant.trim(),
+    walletId: input.walletId,
+    categoryId: input.categoryId || undefined,
+    subcategoryId: input.subcategoryId || undefined,
+    note: input.note?.trim() || undefined,
+  });
+
+  await prisma.reconciliationRow.update({
+    where: { id: row.id },
+    data: {
+      resolution: ReconciliationResolution.ADD_INCOMPLETE,
+      createdTransactionId: created.id,
+    },
+  });
+
+  return created;
 }
 
 export async function completeReconciliation(id: string) {
