@@ -149,8 +149,9 @@ export async function createReconciliationSession(input: { walletId: string; sou
   const dates = input.rows.map((row) => parseValidDate(row.transactionDate, referenceYear)).filter((date): date is Date => Boolean(date));
   const periodStart = getValidPeriod(input.periodStart, dates, "start", referenceYear);
   const periodEnd = getValidPeriod(input.periodEnd, dates, "end", referenceYear);
-  const windowStart = periodStart ? new Date(periodStart.getTime() - 3 * 86400000) : undefined;
-  const windowEnd = periodEnd ? new Date(periodEnd.getTime() + 3 * 86400000) : undefined;
+  const MATCH_WINDOW_DAYS = 4;
+  const windowStart = periodStart ? new Date(periodStart.getTime() - MATCH_WINDOW_DAYS * 86400000) : undefined;
+  const windowEnd = periodEnd ? new Date(periodEnd.getTime() + MATCH_WINDOW_DAYS * 86400000) : undefined;
 
   const [transactions, transfers] = await Promise.all([
     prisma.transaction.findMany({ where: { walletId: input.walletId, ...(windowStart && windowEnd ? { transactionDate: { gte: windowStart, lte: windowEnd } } : {}) }, select: { id: true, transactionDate: true, amount: true, type: true, payee: { select: { name: true } }, category: { select: { name: true } }, note: true } }),
@@ -169,18 +170,19 @@ export async function createReconciliationSession(input: { walletId: string; sou
     const candidates = transactions
       .filter((tx) => !usedTransactionIds.has(tx.id) && tx.amount.eq(amount) && directionMatches(input.sourceType, raw.direction as ReconciliationDirection, tx.type))
       .map((tx) => ({ tx, distance: dayDistance(date, tx.transactionDate), similarity: tokenSimilarity(raw.description, tx.payee?.name || tx.category?.name || tx.note || "") }))
-      .filter((candidate) => candidate.distance <= 3)
+      .filter((candidate) => candidate.distance <= MATCH_WINDOW_DAYS)
       .sort((a, b) => (b.similarity - a.similarity) || (a.distance - b.distance));
 
     const transferCandidates = transfers
       .filter((transfer) => !usedTransferIds.has(transfer.id) && transfer.amount.eq(amount))
       .map((transfer) => ({ transfer, distance: dayDistance(date, transfer.transferDate) }))
-      .filter((candidate) => candidate.distance <= 2)
+      .filter((candidate) => candidate.distance <= MATCH_WINDOW_DAYS)
       .sort((a, b) => a.distance - b.distance);
 
     const exact = candidates.find((candidate) => candidate.distance === 0 && candidate.similarity >= 0.85);
-    const strong = candidates.find((candidate) => candidate.distance === 0 && candidate.similarity >= 0.45);
-    const possible = candidates.find((candidate) => candidate.distance <= 2 && candidate.similarity >= 0.3);
+    const strong = candidates.find((candidate) => candidate.distance <= 1 && candidate.similarity >= 0.45);
+    const possible = candidates.find((candidate) => candidate.distance <= MATCH_WINDOW_DAYS && candidate.similarity >= 0.15);
+    const amountDateCandidate = candidates.find((candidate) => candidate.distance <= MATCH_WINDOW_DAYS);
     const likelyPaymentTransfer = transferCandidates.find((candidate) => /(payment|bayar|credit card|cc payment)/i.test(raw.entryType || raw.description));
     const dateAmountConflict = transactions.some((tx) => !usedTransactionIds.has(tx.id) && dayDistance(date, tx.transactionDate) === 0 && !tx.amount.eq(amount) && tokenSimilarity(raw.description, tx.payee?.name || tx.category?.name || tx.note || "") >= 0.6);
 
@@ -189,12 +191,14 @@ export async function createReconciliationSession(input: { walletId: string; sou
     let matchedTransactionId: string | null = null;
     let matchedTransferId: string | null = null;
     let reason = "No matching OKANE transaction was found.";
-    const match = exact || strong || possible;
+    const match = exact || strong || possible || amountDateCandidate;
     if (match) {
       matchStatus = exact ? ReconciliationMatchStatus.MATCHED : ReconciliationMatchStatus.POSSIBLE_MATCH;
-      confidence = exact ? 99 : strong ? 90 : 70;
+      confidence = exact ? 99 : strong ? 90 : possible ? 70 : 55;
       matchedTransactionId = match.tx.id;
-      reason = `${Math.round(match.similarity * 100)}% merchant similarity, ${match.distance} day date difference, exact amount.`;
+      reason = match.similarity > 0
+        ? `${Math.round(match.similarity * 100)}% merchant similarity, ${match.distance} day date difference, exact amount.`
+        : `Exact amount, ${match.distance} day date difference; merchant name could not be matched confidently.`;
       usedTransactionIds.add(match.tx.id);
     } else if (likelyPaymentTransfer) {
       matchStatus = likelyPaymentTransfer.distance === 0 ? ReconciliationMatchStatus.MATCHED : ReconciliationMatchStatus.POSSIBLE_MATCH;
