@@ -12,7 +12,23 @@ export type ExtractedRow = {
   entryType?: string;
 };
 
+const MONTHS: Record<string, number> = {
+  jan: 0, january: 0, januari: 0,
+  feb: 1, february: 1, februari: 1,
+  mar: 2, march: 2, maret: 2,
+  apr: 3, april: 3,
+  may: 4, mei: 4,
+  jun: 5, june: 5, juni: 5,
+  jul: 6, july: 6, juli: 6,
+  aug: 7, august: 7, agustus: 7, agu: 7, agt: 7,
+  sep: 8, september: 8,
+  oct: 9, october: 9, oktober: 9, okt: 9,
+  nov: 10, november: 10,
+  dec: 11, december: 11, desember: 11, des: 11,
+};
+
 function normalize(value: string) { return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").replace(/\s+/g, " ").trim(); }
+
 function tokenSimilarity(a: string, b: string) {
   const aa = new Set(normalize(a).split(" ").filter(Boolean));
   const bb = new Set(normalize(b).split(" ").filter(Boolean));
@@ -20,21 +36,81 @@ function tokenSimilarity(a: string, b: string) {
   const intersection = [...aa].filter((token) => bb.has(token)).length;
   return intersection / Math.max(aa.size, bb.size);
 }
+
 function dayDistance(a: Date, b: Date) {
   return Math.abs(Date.UTC(a.getUTCFullYear(), a.getUTCMonth(), a.getUTCDate()) - Date.UTC(b.getUTCFullYear(), b.getUTCMonth(), b.getUTCDate())) / 86400000;
 }
-function parseValidDate(value?: string | Date | null) {
-  if (!value) return null;
-  const date = value instanceof Date ? new Date(value.getTime()) : new Date(value);
-  return Number.isNaN(date.getTime()) ? null : date;
+
+function buildDate(day: number, month: number, year: number) {
+  const date = new Date(Date.UTC(year, month, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) return null;
+  return date;
 }
-function getValidPeriod(inputPeriod: string | undefined, dates: Date[], mode: "start" | "end") {
-  const explicit = parseValidDate(inputPeriod);
+
+function parseExplicitYear(value?: string | Date | null) {
+  if (!value || value instanceof Date) return value instanceof Date ? value.getUTCFullYear() : undefined;
+  const match = String(value).match(/\b(20\d{2})\b/);
+  return match ? Number(match[1]) : undefined;
+}
+
+/**
+ * Statement parsers/models sometimes emit dates such as "01-SEP" or "03-SEP"
+ * without a year. Node's native Date parser interprets these strings as year 2001.
+ * For reconciliation that is wrong: resolve year from statement period, file name,
+ * or explicit row dates before falling back to the current year.
+ */
+function parseValidDate(value?: string | Date | null, referenceYear?: number) {
+  if (!value) return null;
+  if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : new Date(value.getTime());
+
+  const raw = String(value).trim();
+  const normalized = raw.toLowerCase().replace(/[,]/g, " ").replace(/\s+/g, " ");
+
+  const iso = normalized.match(/^(20\d{2})-(\d{1,2})-(\d{1,2})/);
+  if (iso) return buildDate(Number(iso[3]), Number(iso[2]) - 1, Number(iso[1]));
+
+  const textDate = normalized.match(/^(\d{1,2})[\s\-\/.]+([a-z]+)(?:[\s\-\/.]+(20\d{2}))?$/);
+  if (textDate) {
+    const month = MONTHS[textDate[2]];
+    if (month !== undefined) {
+      const year = textDate[3] ? Number(textDate[3]) : referenceYear ?? new Date().getFullYear();
+      return buildDate(Number(textDate[1]), month, year);
+    }
+  }
+
+  const numeric = normalized.match(/^(\d{1,2})[\/\.\-](\d{1,2})(?:[\/\.\-](20\d{2}))?$/);
+  if (numeric) {
+    const year = numeric[3] ? Number(numeric[3]) : referenceYear ?? new Date().getFullYear();
+    return buildDate(Number(numeric[1]), Number(numeric[2]) - 1, year);
+  }
+
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function inferReferenceYear(input: { fileName: string; periodStart?: string; periodEnd?: string; rows: ExtractedRow[] }) {
+  const explicitPeriodYear = parseExplicitYear(input.periodStart) ?? parseExplicitYear(input.periodEnd);
+  if (explicitPeriodYear) return explicitPeriodYear;
+
+  const explicitRowYear = input.rows
+    .map((row) => parseExplicitYear(row.transactionDate))
+    .find((year): year is number => Boolean(year));
+  if (explicitRowYear) return explicitRowYear;
+
+  const fileNameYear = input.fileName.match(/(?:^|[^0-9])(20\d{2})(?:[^0-9]|$)/)?.[1];
+  if (fileNameYear) return Number(fileNameYear);
+
+  return new Date().getFullYear();
+}
+
+function getValidPeriod(inputPeriod: string | undefined, dates: Date[], mode: "start" | "end", referenceYear: number) {
+  const explicit = parseValidDate(inputPeriod, referenceYear);
   if (explicit) return explicit;
   if (!dates.length) return null;
   const times = dates.map((date) => date.getTime());
   return new Date(mode === "start" ? Math.min(...times) : Math.max(...times));
 }
+
 function directionMatches(sourceType: ReconciliationSourceType, direction: ReconciliationDirection, transactionType: string) {
   if (sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT) return direction === ReconciliationDirection.DEBIT && transactionType === "EXPENSE";
   if (direction === ReconciliationDirection.DEBIT) return transactionType === "EXPENSE";
@@ -52,9 +128,10 @@ export async function createReconciliationSession(input: { walletId: string; sou
   if (input.sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT && wallet.walletType !== "CREDIT_CARD") throw new Error("Credit Card Statement reconciliation requires a credit card wallet.");
   if (!input.rows.length) throw new Error("No transaction rows were extracted from the statement.");
 
-  const dates = input.rows.map((row) => parseValidDate(row.transactionDate)).filter((date): date is Date => Boolean(date));
-  const periodStart = getValidPeriod(input.periodStart, dates, "start");
-  const periodEnd = getValidPeriod(input.periodEnd, dates, "end");
+  const referenceYear = inferReferenceYear(input);
+  const dates = input.rows.map((row) => parseValidDate(row.transactionDate, referenceYear)).filter((date): date is Date => Boolean(date));
+  const periodStart = getValidPeriod(input.periodStart, dates, "start", referenceYear);
+  const periodEnd = getValidPeriod(input.periodEnd, dates, "end", referenceYear);
   const windowStart = periodStart ? new Date(periodStart.getTime() - 3 * 86400000) : undefined;
   const windowEnd = periodEnd ? new Date(periodEnd.getTime() + 3 * 86400000) : undefined;
 
@@ -68,7 +145,7 @@ export async function createReconciliationSession(input: { walletId: string; sou
   const rowsToCreate: Prisma.ReconciliationRowCreateWithoutSessionInput[] = [];
 
   for (const raw of input.rows) {
-    const date = parseValidDate(raw.transactionDate);
+    const date = parseValidDate(raw.transactionDate, referenceYear);
     const amount = new Prisma.Decimal(Math.abs(Number(raw.amount) || 0));
     if (!date || amount.lte(0) || !raw.description.trim()) continue;
 
