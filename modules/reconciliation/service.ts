@@ -275,12 +275,6 @@ export async function addReconciliationTransaction(input: {
   if (!Number.isFinite(input.amount) || input.amount <= 0) throw new Error("Amount must be greater than zero.");
   if (!input.merchant.trim()) throw new Error("Merchant / Payee is required.");
 
-  const wallet = await prisma.wallet.findUnique({
-    where: { id: input.walletId },
-    select: { id: true, currencyId: true },
-  });
-  if (!wallet) throw new Error("Wallet not found.");
-
   if (row.session.sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT && row.direction === ReconciliationDirection.CREDIT && input.type === TransactionType.INCOME) {
     throw new Error("Credit-card statement credits are not imported as income automatically. Review or ignore this entry instead.");
   }
