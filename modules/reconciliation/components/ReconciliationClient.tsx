@@ -803,6 +803,7 @@ function ReviewDrawer({
   const [subcategoryId, setSubcategoryId] = useState("");
   const [note, setNote] = useState(() => "Reconciliation import: " + session.fileName);
   const [localError, setLocalError] = useState("");
+  const [saving, startSaveTransition] = useTransition();
 
   const selectedCategory = categories.find((category) => category.id === categoryId);
   const availableCategories = categories.filter((category) => category.type === type);
@@ -833,7 +834,7 @@ function ReviewDrawer({
     form.set("note", note);
 
     setLocalError("");
-    startTransition(async () => {
+    startSaveTransition(async () => {
       try {
         await addReconciliationTransactionAction(form);
         onImported();
