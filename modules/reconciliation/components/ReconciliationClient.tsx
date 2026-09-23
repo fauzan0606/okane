@@ -18,7 +18,7 @@ import {
   Upload,
   XCircle,
 } from "lucide-react";
-import { completeReconciliationAction, resolveReconciliationRowAction } from "../actions";
+import { addReconciliationTransactionAction, completeReconciliationAction, resolveReconciliationRowAction } from "../actions";
 
 type Wallet = {
   id: string;
@@ -54,7 +54,9 @@ type Session = {
   rows: Row[];
 };
 
-type Props = { wallets: Wallet[]; session: Session | null };
+type Category = { id: string; name: string; type: "INCOME" | "EXPENSE" };
+type Subcategory = { id: string; name: string; categoryId: string };
+type Props = { wallets: Wallet[]; categories: Category[]; subcategories: Subcategory[]; session: Session | null };
 type FilterStatus = "ALL" | "MATCHED" | "NEED_REVIEW" | "NOT_FOUND" | "IGNORED" | "ADDED";
 type DrawerMode = "MATCH" | "ADD" | "OKANE";
 
@@ -103,7 +105,7 @@ function resolveFilter(row: Row, filter: FilterStatus) {
   return row.resolution === "ADD_INCOMPLETE";
 }
 
-export default function ReconciliationClient({ wallets, session }: Props) {
+export default function ReconciliationClient({ wallets, categories, subcategories, session }: Props) {
   const router = useRouter();
   const [walletId, setWalletId] = useState(wallets[0]?.id ?? "");
   const [sourceType, setSourceType] = useState<"BANK_STATEMENT" | "CREDIT_CARD_STATEMENT">(
@@ -668,11 +670,18 @@ export default function ReconciliationClient({ wallets, session }: Props) {
         <ReviewDrawer
           row={selectedRow}
           session={session}
+          wallets={wallets}
+          categories={categories}
+          subcategories={subcategories}
           mode={drawerMode}
           pending={isPending}
           canAdd={canAddSelected}
           onClose={() => setSelectedRowId(null)}
           onResolve={resolve}
+          onImported={() => {
+            setSelectedRowId(null);
+            router.refresh();
+          }}
           onModeChange={setDrawerMode}
         />
       )}
@@ -751,31 +760,95 @@ function ErrorBox({ message }: { message: string }) {
 function ReviewDrawer({
   row,
   session,
+  wallets,
+  categories,
+  subcategories,
   mode,
   pending,
   canAdd,
   onClose,
   onResolve,
+  onImported,
   onModeChange,
 }: {
   row: Row;
   session: Session;
+  wallets: Wallet[];
+  categories: Category[];
+  subcategories: Subcategory[];
   mode: DrawerMode;
   pending: boolean;
   canAdd: boolean;
   onClose: () => void;
   onResolve: (rowId: string, resolution: string, closeDrawer?: boolean) => void;
+  onImported: () => void;
   onModeChange: (mode: DrawerMode) => void;
 }) {
   const isOkaneOnly = row.sourceSide === "OKANE";
   const hasMatch = Boolean(row.matchedTransactionId || row.matchStatus === "MATCHED");
   const matchColor = row.matchConfidence >= 90 ? "text-emerald-300" : row.matchConfidence >= 70 ? "text-amber-300" : "text-slate-300";
-  const defaultNote = "Reconciliation import: " + session.fileName;
+
+  const [transactionDate, setTransactionDate] = useState(() => row.transactionDate.slice(0, 10));
+  const [amount, setAmount] = useState(() => String(Number(row.amount)));
+  const [walletId, setWalletId] = useState(() => {
+    const defaultWallet = wallets.find((wallet) => wallet.name === session.wallet.name);
+    return defaultWallet?.id ?? wallets[0]?.id ?? "";
+  });
+  const [type, setType] = useState<"EXPENSE" | "INCOME">(() => {
+    if (session.sourceType === "CREDIT_CARD_STATEMENT") return "EXPENSE";
+    return row.direction === "CREDIT" ? "INCOME" : "EXPENSE";
+  });
+  const [merchant, setMerchant] = useState(() => row.description);
+  const [categoryId, setCategoryId] = useState("");
+  const [subcategoryId, setSubcategoryId] = useState("");
+  const [note, setNote] = useState(() => "Reconciliation import: " + session.fileName);
+  const [localError, setLocalError] = useState("");
+
+  const selectedCategory = categories.find((category) => category.id === categoryId);
+  const availableCategories = categories.filter((category) => category.type === type);
+  const availableSubcategories = subcategories.filter((subcategory) => !categoryId || subcategory.categoryId === categoryId);
+
+  useMemo(() => {
+    if (categoryId && selectedCategory && selectedCategory.type !== type) {
+      setCategoryId("");
+      setSubcategoryId("");
+    }
+  }, [categoryId, selectedCategory, type]);
+
+  function saveEditedTransaction() {
+    if (!transactionDate || !amount || !walletId || !merchant.trim()) {
+      setLocalError("Date, amount, wallet, and merchant/payee are required.");
+      return;
+    }
+
+    const form = new FormData();
+    form.set("rowId", row.id);
+    form.set("transactionDate", transactionDate);
+    form.set("amount", amount.replace(/[^0-9.-]/g, ""));
+    form.set("walletId", walletId);
+    form.set("type", type);
+    form.set("merchant", merchant);
+    form.set("categoryId", categoryId);
+    form.set("subcategoryId", subcategoryId);
+    form.set("note", note);
+
+    setLocalError("");
+    startTransition(async () => {
+      try {
+        await addReconciliationTransactionAction(form);
+        onImported();
+      } catch (saveError) {
+        setLocalError(saveError instanceof Error ? saveError.message : "Could not save transaction.");
+      }
+    });
+  }
+
+  const selectedWallet = wallets.find((wallet) => wallet.id === walletId);
 
   return (
     <div className="fixed inset-0 z-[70] flex justify-end bg-black/50 backdrop-blur-[1px]">
       <button type="button" aria-label="Close review drawer" onClick={onClose} className="absolute inset-0 cursor-default" />
-      <aside className="relative z-10 flex h-full w-full max-w-[500px] flex-col border-l border-white/10 bg-[#08111A] shadow-2xl">
+      <aside className="relative z-10 flex h-full w-full max-w-[520px] flex-col border-l border-white/10 bg-[#08111A] shadow-2xl">
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-400">Reconciliation</p>
@@ -839,7 +912,7 @@ function ReviewDrawer({
                     </div>
                     <div className="min-w-0">
                       <p className="text-xs font-semibold text-white">{hasMatch ? "Candidate transaction in OKANE" : "No matching transaction found"}</p>
-                      <p className="mt-1 text-[10px] text-slate-500">{row.matchedTransactionId ? "Transaction ID " + row.matchedTransactionId.slice(0, 10) + "…" : "Choose none of these matches if this entry should not be linked."}</p>
+                      <p className="mt-1 text-[10px] text-slate-500">{row.matchedTransactionId ? "Transaction ID " + row.matchedTransactionId.slice(0, 10) + "…" : "No candidate transaction was linked to this row."}</p>
                       {row.matchReason && <p className="mt-2 text-[10px] leading-4 text-slate-400">{row.matchReason}</p>}
                     </div>
                   </div>
@@ -851,7 +924,7 @@ function ReviewDrawer({
                   disabled={pending}
                   className={buttonBase("mt-3 w-full border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/[0.04] disabled:opacity-40")}
                 >
-                  <XCircle size={13} />None of these match / Ignore
+                  <XCircle size={13} />Ignore this statement transaction
                 </button>
               </div>
 
@@ -864,80 +937,143 @@ function ReviewDrawer({
           ) : (
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/10 bg-[#0D1823] p-4">
-                <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">Create transaction from statement</p>
-                <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                  <ReadOnlyField label="Date" value={date(row.transactionDate)} />
-                  <ReadOnlyField label="Amount" value={money(row.amount, session.wallet.currency.symbol)} />
-                  <ReadOnlyField label="Wallet" value={session.wallet.name} />
-                  <ReadOnlyField label="Type" value={row.direction === "CREDIT" ? "Income" : "Expense"} />
-                  <ReadOnlyField label="Merchant / Payee" value={row.description} />
-                  <ReadOnlyField label="Category" value="Not assigned" />
-                  <div className="sm:col-span-2">
-                    <ReadOnlyField label="Note" value={defaultNote} />
-                  </div>
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">Create transaction from statement</p>
+                  {selectedWallet && <span className="text-[9px] text-slate-600">{selectedWallet.currency.code}</span>}
                 </div>
-                <p className="mt-3 text-[9px] leading-4 text-slate-600">This UI version uses the statement values above. Category and other enrichment can be refined from Transactions after the import.</p>
-              </div>
 
-              {!canAdd && (
-                <div className="rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2.5 text-[10px] leading-4 text-amber-200">
-                  This row cannot be imported automatically because its direction is unknown or it is a credit-card statement credit.
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <label className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Date</span>
+                    <input type="date" value={transactionDate} onChange={(event) => setTransactionDate(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none" />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Amount</span>
+                    <input inputMode="decimal" value={amount} onChange={(event) => setAmount(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none" />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Wallet</span>
+                    <select value={walletId} onChange={(event) => setWalletId(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none">
+                      {wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</option>)}
+                    </select>
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Type</span>
+                    <select value={type} onChange={(event) => { setType(event.target.value as "EXPENSE" | "INCOME"); setCategoryId(""); setSubcategoryId(""); }} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none">
+                      <option value="EXPENSE">Expense</option>
+                      <option value="INCOME">Income</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-1.5 sm:col-span-2">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Merchant / Payee</span>
+                    <input value={merchant} onChange={(event) => setMerchant(event.target.value)} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none" />
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Category</span>
+                    <select value={categoryId} onChange={(event) => { setCategoryId(event.target.value); setSubcategoryId(""); }} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none">
+                      <option value="">No category</option>
+                      {availableCategories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}
+                    </select>
+                  </label>
+
+                  <label className="space-y-1.5">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Subcategory</span>
+                    <select value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none disabled:cursor-not-allowed disabled:opacity-45">
+                      <option value="">{categoryId ? "No subcategory" : "Select category first"}</option>
+                      {availableSubcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}</option>)}
+                    </select>
+                  </label>
+
+                  <label className="space-y-1.5 sm:col-span-2">
+                    <span className="text-[9px] font-bold uppercase tracking-[0.1em] text-slate-600">Note</span>
+                    <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={3} className="w-full resize-none rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-xs text-white outline-none" />
+                  </label>
                 </div>
-              )}
+
+                {selectedWallet && selectedWallet.id !== wallets.find((wallet) => wallet.name === session.wallet.name)?.id && (
+                  <p className="mt-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2.5 text-[10px] leading-4 text-amber-200">
+                    You selected a different wallet from the reconciled statement wallet. Check the wallet and amount before saving.
+                  </p>
+                )}
+
+                {!canAdd && (
+                  <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-2.5 text-[10px] leading-4 text-amber-200">
+                    This row cannot be imported automatically because its direction is unknown or it is a credit-card statement credit.
+                  </div>
+                )}
+
+                {localError && <ErrorBox message={localError} />}
+              </div>
             </div>
           )}
         </div>
 
         <div className="border-t border-white/5 bg-[#0A131D] px-5 py-4">
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <button
               type="button"
-              onClick={onClose}
-              className={buttonBase("border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.05]")}
+              onClick={() => onResolve(row.id, "IGNORE")}
+              disabled={pending}
+              className={buttonBase("border-red-400/15 bg-red-400/[0.04] text-red-300 hover:bg-red-400/[0.08] disabled:opacity-40")}
             >
-              Cancel
+              <XCircle size={13} />Ignore
             </button>
 
-            {isOkaneOnly ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => onResolve(row.id, "KEEP")}
-                  disabled={pending}
-                  className={buttonBase("bg-emerald-500 border-emerald-500 text-[#06110B] hover:bg-emerald-400 disabled:opacity-40")}
-                >
-                  <Check size={13} />Keep transaction
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (window.confirm("Delete this transaction from OKANE?")) onResolve(row.id, "DELETE");
-                  }}
-                  disabled={pending}
-                  className={buttonBase("border-red-400/20 bg-red-400/[0.05] text-red-300 hover:bg-red-400/[0.1] disabled:opacity-40")}
-                >
-                  <Trash2 size={13} />Delete
-                </button>
-              </>
-            ) : mode === "MATCH" ? (
+            <div className="flex items-center justify-end gap-2">
               <button
                 type="button"
-                onClick={() => onResolve(row.id, "ACCEPT_MATCH")}
-                disabled={pending || !row.matchedTransactionId}
-                className={buttonBase("border-emerald-500 bg-emerald-500 text-[#06110B] hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-35")}
+                onClick={onClose}
+                className={buttonBase("border-white/10 bg-white/[0.02] text-slate-300 hover:bg-white/[0.05]")}
               >
-                {pending ? <LoaderCircle size={13} className="animate-spin" /> : <Check size={13} />}Confirm match
+                Cancel
               </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onResolve(row.id, "ADD_INCOMPLETE")}
-                disabled={pending || !canAdd}
-                className={buttonBase("border-blue-500 bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-35")}
-              >
-                {pending ? <LoaderCircle size={13} className="animate-spin" /> : <Plus size={13} />}Save to OKANE
-              </button>
-            )}
+
+              {isOkaneOnly ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onResolve(row.id, "KEEP")}
+                    disabled={pending}
+                    className={buttonBase("bg-emerald-500 border-emerald-500 text-[#06110B] hover:bg-emerald-400 disabled:opacity-40")}
+                  >
+                    <Check size={13} />Keep transaction
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (window.confirm("Delete this transaction from OKANE?")) onResolve(row.id, "DELETE");
+                    }}
+                    disabled={pending}
+                    className={buttonBase("border-red-400/20 bg-red-400/[0.05] text-red-300 hover:bg-red-400/[0.1] disabled:opacity-40")}
+                  >
+                    <Trash2 size={13} />Delete
+                  </button>
+                </>
+              ) : mode === "MATCH" ? (
+                <button
+                  type="button"
+                  onClick={() => onResolve(row.id, "ACCEPT_MATCH")}
+                  disabled={pending || !row.matchedTransactionId}
+                  className={buttonBase("border-emerald-500 bg-emerald-500 text-[#06110B] hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-35")}
+                >
+                  {pending ? <LoaderCircle size={13} className="animate-spin" /> : <Check size={13} />}Confirm match
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={saveEditedTransaction}
+                  disabled={pending || !canAdd}
+                  className={buttonBase("border-blue-500 bg-blue-500 text-white hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-35")}
+                >
+                  {pending ? <LoaderCircle size={13} className="animate-spin" /> : <Plus size={13} />}Save to OKANE
+                </button>
+              )}
+            </div>
           </div>
         </div>
       </aside>
