@@ -1,7 +1,7 @@
 import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
-import { getReconciliationSession, getReconciliationWallets } from "@/modules/reconciliation/service";
+import { getReconciliationFormData, getReconciliationSession } from "@/modules/reconciliation/service";
 import ReconciliationClient from "@/modules/reconciliation/components/ReconciliationClient";
 
 export const dynamic = "force-dynamic";
@@ -40,14 +40,14 @@ function serializeSession(session: Awaited<ReturnType<typeof getReconciliationSe
 
 export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<{ session?: string }> }) {
   const params = await searchParams;
-  const [wallets, session] = await Promise.all([
-    getReconciliationWallets(),
+  const [{ wallets, categories, subcategories }, session] = await Promise.all([
+    getReconciliationFormData(),
     params.session ? getReconciliationSession(params.session) : Promise.resolve(null),
   ]);
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
-      <ReconciliationClient wallets={wallets} session={serializeSession(session)} />
+      <ReconciliationClient wallets={wallets} categories={categories} subcategories={subcategories} session={serializeSession(session)} />
     </AppShell>
   );
 }
