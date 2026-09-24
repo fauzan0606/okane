@@ -304,7 +304,7 @@ export async function getReconciliationSession(id: string) {
   const transferById = new Map(matchedTransfers.map((transfer) => [transfer.id, transfer]));
 
   const historicalTransactions = await prisma.transaction.findMany({
-    where: { walletId: input.walletId },
+    where: { walletId: session.walletId },
     select: {
       type: true,
       payee: { select: { name: true } },
