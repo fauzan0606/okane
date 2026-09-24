@@ -153,17 +153,6 @@ export async function createReconciliationSession(input: { walletId: string; sou
   const windowStart = periodStart ? new Date(periodStart.getTime() - MATCH_WINDOW_DAYS * 86400000) : undefined;
   const windowEnd = periodEnd ? new Date(periodEnd.getTime() + MATCH_WINDOW_DAYS * 86400000) : undefined;
 
-  const historicalTransactions = await prisma.transaction.findMany({
-    where: { walletId: input.walletId },
-    select: {
-      type: true,
-      payee: { select: { name: true } },
-      category: { select: { id: true, name: true } },
-      subcategory: { select: { id: true, name: true } },
-      note: true,
-    },
-  });
-
   const [transactions, transfers] = await Promise.all([
     prisma.transaction.findMany({ where: { walletId: input.walletId, ...(windowStart && windowEnd ? { transactionDate: { gte: windowStart, lte: windowEnd } } : {}) }, select: { id: true, transactionDate: true, amount: true, type: true, payee: { select: { name: true } }, category: { select: { id: true, name: true } }, subcategory: { select: { id: true, name: true } }, note: true } }),
     prisma.transfer.findMany({ where: { OR: [{ fromWalletId: input.walletId }, { toWalletId: input.walletId }], ...(windowStart && windowEnd ? { transferDate: { gte: windowStart, lte: windowEnd } } : {}) }, select: { id: true, transferDate: true, amount: true, origin: true, fromWalletId: true, toWalletId: true } }),
@@ -291,8 +280,8 @@ export async function getReconciliationSession(id: string) {
               },
             },
             payee: { select: { name: true } },
-            category: { select: { name: true } },
-            subcategory: { select: { name: true } },
+            category: { select: { id: true, name: true } },
+            subcategory: { select: { id: true, name: true } },
           },
         })
       : [],
@@ -313,6 +302,17 @@ export async function getReconciliationSession(id: string) {
 
   const transactionById = new Map(matchedTransactions.map((transaction) => [transaction.id, transaction]));
   const transferById = new Map(matchedTransfers.map((transfer) => [transfer.id, transfer]));
+
+  const historicalTransactions = await prisma.transaction.findMany({
+    where: { walletId: input.walletId },
+    select: {
+      type: true,
+      payee: { select: { name: true } },
+      category: { select: { id: true, name: true } },
+      subcategory: { select: { id: true, name: true } },
+      note: true,
+    },
+  });
 
   return {
     ...session,
