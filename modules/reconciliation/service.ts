@@ -153,8 +153,19 @@ export async function createReconciliationSession(input: { walletId: string; sou
   const windowStart = periodStart ? new Date(periodStart.getTime() - MATCH_WINDOW_DAYS * 86400000) : undefined;
   const windowEnd = periodEnd ? new Date(periodEnd.getTime() + MATCH_WINDOW_DAYS * 86400000) : undefined;
 
+  const historicalTransactions = await prisma.transaction.findMany({
+    where: { walletId: input.walletId },
+    select: {
+      type: true,
+      payee: { select: { name: true } },
+      category: { select: { id: true, name: true } },
+      subcategory: { select: { id: true, name: true } },
+      note: true,
+    },
+  });
+
   const [transactions, transfers] = await Promise.all([
-    prisma.transaction.findMany({ where: { walletId: input.walletId, ...(windowStart && windowEnd ? { transactionDate: { gte: windowStart, lte: windowEnd } } : {}) }, select: { id: true, transactionDate: true, amount: true, type: true, payee: { select: { name: true } }, category: { select: { name: true } }, note: true } }),
+    prisma.transaction.findMany({ where: { walletId: input.walletId, ...(windowStart && windowEnd ? { transactionDate: { gte: windowStart, lte: windowEnd } } : {}) }, select: { id: true, transactionDate: true, amount: true, type: true, payee: { select: { name: true } }, category: { select: { id: true, name: true } }, subcategory: { select: { id: true, name: true } }, note: true } }),
     prisma.transfer.findMany({ where: { OR: [{ fromWalletId: input.walletId }, { toWalletId: input.walletId }], ...(windowStart && windowEnd ? { transferDate: { gte: windowStart, lte: windowEnd } } : {}) }, select: { id: true, transferDate: true, amount: true, origin: true, fromWalletId: true, toWalletId: true } }),
   ]);
 
@@ -297,11 +308,15 @@ export async function getReconciliationSession(id: string) {
 
   return {
     ...session,
-    rows: session.rows.map((row) => ({
-      ...row,
-      matchedTransaction: row.matchedTransactionId ? transactionById.get(row.matchedTransactionId) ?? null : null,
-      matchedTransfer: row.matchedTransferId ? transferById.get(row.matchedTransferId) ?? null : null,
-    })),
+    rows: session.rows.map((row) => {
+      const matchedTransaction = row.matchedTransactionId ? transactionById.get(row.matchedTransactionId) ?? null : null;
+      const matchedTransfer = row.matchedTransferId ? transferById.get(row.matchedTransferId) ?? null : null;
+      return {
+        ...row,
+        matchedTransaction,
+        matchedTransfer,
+      };
+    }),
   };
 }
 
@@ -374,7 +389,11 @@ export async function addReconciliationTransaction(input: {
   await prisma.reconciliationRow.update({
     where: { id: row.id },
     data: {
-      resolution: ReconciliationResolution.ADD_INCOMPLETE,
+      matchStatus: ReconciliationMatchStatus.MATCHED,
+      matchConfidence: 100,
+      matchReason: "Added to OKANE from statement and confirmed by user.",
+      matchedTransactionId: created.id,
+      resolution: ReconciliationResolution.ACCEPT_MATCH,
       createdTransactionId: created.id,
     },
   });
