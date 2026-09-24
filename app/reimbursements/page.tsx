@@ -48,7 +48,7 @@ export default async function ReimbursementsPage() {
                       {item.category && <p className="mt-1 text-xs text-slate-500">{item.category.name}{item.subcategory ? " · " + item.subcategory.name : ""}</p>}
                       {item.note && <p className="mt-1 text-xs text-slate-600">{item.note}</p>}
                     </div>
-                    <form action={reimburseTransactionAction} className="grid gap-2 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[1fr_1fr_auto] lg:min-w-[520px]">
+                    <form action={async (formData) => { await reimburseTransactionAction(formData); }} className="grid gap-2 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[1fr_1fr_auto] lg:min-w-[520px]">
                       <input type="hidden" name="transactionId" value={item.id} />
                       <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received date</span><input name="transactionDate" type="date" defaultValue={today} required className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none" /></label>
                       <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received into</span><select name="walletId" required className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none"><option value="">Select wallet</option>{formData.wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select></label>
