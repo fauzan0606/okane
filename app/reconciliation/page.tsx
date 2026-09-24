@@ -32,6 +32,10 @@ function serializeSession(session: Awaited<ReturnType<typeof getReconciliationSe
       matchStatus: row.matchStatus,
       matchConfidence: row.matchConfidence,
       matchReason: row.matchReason,
+      suggestedCategoryId: row.suggestedCategoryId ?? null,
+      suggestedCategoryName: row.suggestedCategoryName ?? null,
+      suggestedSubcategoryId: row.suggestedSubcategoryId ?? null,
+      suggestedSubcategoryName: row.suggestedSubcategoryName ?? null,
       matchedTransactionId: row.matchedTransactionId,
       matchedTransaction: row.matchedTransaction
         ? {
