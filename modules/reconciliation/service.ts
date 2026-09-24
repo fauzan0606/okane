@@ -311,10 +311,48 @@ export async function getReconciliationSession(id: string) {
     rows: session.rows.map((row) => {
       const matchedTransaction = row.matchedTransactionId ? transactionById.get(row.matchedTransactionId) ?? null : null;
       const matchedTransfer = row.matchedTransferId ? transferById.get(row.matchedTransferId) ?? null : null;
+      const expectedType =
+        session.sourceType === ReconciliationSourceType.CREDIT_CARD_STATEMENT
+          ? TransactionType.EXPENSE
+          : row.direction === ReconciliationDirection.CREDIT
+            ? TransactionType.INCOME
+            : TransactionType.EXPENSE;
+      const referenceText = row.description;
+      const historical = historicalTransactions
+        .filter((tx) => tx.type === expectedType && tx.category)
+        .map((tx) => ({
+          tx,
+          similarity: tokenSimilarity(
+            referenceText,
+            tx.payee?.name || tx.category?.name || tx.note || "",
+          ),
+        }))
+        .filter((candidate) => candidate.similarity >= 0.35)
+        .sort((a, b) => b.similarity - a.similarity)[0]?.tx;
+      const suggestedSource = matchedTransaction?.category
+        ? {
+            categoryId: matchedTransaction.category.id,
+            categoryName: matchedTransaction.category.name,
+            subcategoryId: matchedTransaction.subcategory?.id ?? null,
+            subcategoryName: matchedTransaction.subcategory?.name ?? null,
+          }
+        : historical?.category
+          ? {
+              categoryId: historical.category.id,
+              categoryName: historical.category.name,
+              subcategoryId: historical.subcategory?.id ?? null,
+              subcategoryName: historical.subcategory?.name ?? null,
+            }
+          : null;
+
       return {
         ...row,
         matchedTransaction,
         matchedTransfer,
+        suggestedCategoryId: suggestedSource?.categoryId ?? null,
+        suggestedCategoryName: suggestedSource?.categoryName ?? null,
+        suggestedSubcategoryId: suggestedSource?.subcategoryId ?? null,
+        suggestedSubcategoryName: suggestedSource?.subcategoryName ?? null,
       };
     }),
   };
