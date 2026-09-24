@@ -225,7 +225,84 @@ export async function createReconciliationSession(input: { walletId: string; sou
 }
 
 export async function getReconciliationSession(id: string) {
-  return prisma.reconciliationSession.findUnique({ where: { id }, include: { wallet: { select: { name: true, walletType: true, currency: { select: { symbol: true } } } }, rows: { orderBy: [{ sourceSide: "asc" }, { transactionDate: "desc" }, { sourceRowNumber: "asc" }] } } });
+  const session = await prisma.reconciliationSession.findUnique({
+    where: { id },
+    include: {
+      wallet: {
+        select: {
+          name: true,
+          walletType: true,
+          currency: { select: { symbol: true } },
+        },
+      },
+      rows: {
+        orderBy: [
+          { sourceSide: "asc" },
+          { transactionDate: "desc" },
+          { sourceRowNumber: "asc" },
+        ],
+      },
+    },
+  });
+
+  if (!session) return null;
+
+  const transactionIds = session.rows
+    .map((row) => row.matchedTransactionId)
+    .filter((value): value is string => Boolean(value));
+  const transferIds = session.rows
+    .map((row) => row.matchedTransferId)
+    .filter((value): value is string => Boolean(value));
+
+  const [matchedTransactions, matchedTransfers] = await Promise.all([
+    transactionIds.length
+      ? prisma.transaction.findMany({
+          where: { id: { in: transactionIds } },
+          select: {
+            id: true,
+            transactionDate: true,
+            type: true,
+            amount: true,
+            note: true,
+            wallet: {
+              select: {
+                name: true,
+                walletType: true,
+                currency: { select: { code: true, symbol: true } },
+              },
+            },
+            payee: { select: { name: true } },
+            category: { select: { name: true } },
+            subcategory: { select: { name: true } },
+          },
+        })
+      : [],
+    transferIds.length
+      ? prisma.transfer.findMany({
+          where: { id: { in: transferIds } },
+          select: {
+            id: true,
+            transferDate: true,
+            amount: true,
+            origin: true,
+            fromWallet: { select: { name: true } },
+            toWallet: { select: { name: true } },
+          },
+        })
+      : [],
+  ]);
+
+  const transactionById = new Map(matchedTransactions.map((transaction) => [transaction.id, transaction]));
+  const transferById = new Map(matchedTransfers.map((transfer) => [transfer.id, transfer]));
+
+  return {
+    ...session,
+    rows: session.rows.map((row) => ({
+      ...row,
+      matchedTransaction: row.matchedTransactionId ? transactionById.get(row.matchedTransactionId) ?? null : null,
+      matchedTransfer: row.matchedTransferId ? transferById.get(row.matchedTransferId) ?? null : null,
+    })),
+  };
 }
 
 export async function resolveReconciliationRow(input: { rowId: string; resolution: ReconciliationResolution }) {
