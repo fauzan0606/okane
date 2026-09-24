@@ -6,6 +6,7 @@ export type TransactionWithRelations = {
   id: string;
   transactionDate: string;
   type: "INCOME" | "EXPENSE";
+  kind: "STANDARD" | "REIMBURSEMENT";
   amount: string;
   note: string | null;
   walletId: string;
@@ -41,6 +42,7 @@ function serializeTransaction(transaction: RawTransaction): TransactionWithRelat
     id: String(transaction.id),
     transactionDate: transaction.transactionDate.toISOString(),
     type: transaction.type,
+    kind: transaction.kind,
     amount: transaction.amount.toString(),
     note: transaction.note ?? null,
     walletId: String(transaction.walletId),
