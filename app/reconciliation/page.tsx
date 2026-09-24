@@ -33,36 +33,6 @@ function serializeSession(session: Awaited<ReturnType<typeof getReconciliationSe
       matchConfidence: row.matchConfidence,
       matchReason: row.matchReason,
       matchedTransactionId: row.matchedTransactionId,
-      matchedTransaction: row.matchedTransaction
-        ? {
-            id: row.matchedTransaction.id,
-            transactionDate: row.matchedTransaction.transactionDate.toISOString(),
-            type: row.matchedTransaction.type,
-            amount: row.matchedTransaction.amount.toString(),
-            note: row.matchedTransaction.note,
-            wallet: {
-              name: row.matchedTransaction.wallet.name,
-              walletType: row.matchedTransaction.wallet.walletType,
-              currency: {
-                code: row.matchedTransaction.wallet.currency.code,
-                symbol: row.matchedTransaction.wallet.currency.symbol,
-              },
-            },
-            payee: row.matchedTransaction.payee ? { name: row.matchedTransaction.payee.name } : null,
-            category: row.matchedTransaction.category ? { name: row.matchedTransaction.category.name } : null,
-            subcategory: row.matchedTransaction.subcategory ? { name: row.matchedTransaction.subcategory.name } : null,
-          }
-        : null,
-      matchedTransfer: row.matchedTransfer
-        ? {
-            id: row.matchedTransfer.id,
-            transferDate: row.matchedTransfer.transferDate.toISOString(),
-            amount: row.matchedTransfer.amount.toString(),
-            origin: row.matchedTransfer.origin,
-            fromWallet: row.matchedTransfer.fromWallet.name,
-            toWallet: row.matchedTransfer.toWallet.name,
-          }
-        : null,
       resolution: row.resolution,
     })),
   };
