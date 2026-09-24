@@ -413,6 +413,13 @@ export default function ReconciliationClient({ wallets, categories, subcategorie
             >
               <Download size={13} />Export
             </button>
+            <button
+              type="button"
+              onClick={() => router.push("/reconciliation?new=1")}
+              className={buttonBase("border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]")}
+            >
+              <Upload size={13} />New statement
+            </button>
             <button type="button" className={buttonBase("border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.06]")}>
               <HelpCircle size={13} />Help
             </button>
