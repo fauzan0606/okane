@@ -39,6 +39,7 @@ export default function TransactionCard({ transaction, wallets, categories, subc
     id: String(transaction.id),
     transactionDate: String(transaction.transactionDate),
     type: transaction.type,
+    kind: transaction.kind,
     amount: String(transaction.amount),
     note: transaction.note ?? null,
     walletId: String(transaction.walletId),
