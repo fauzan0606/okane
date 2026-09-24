@@ -27,6 +27,7 @@ function formValues(formData: FormData) {
     type: formData.get("type"),
     amount: formData.get("amount"),
     walletId: formData.get("walletId"),
+    reimbursementEnabled: formData.get("reimbursementEnabled"),
     categoryId: nullableToUndefined(formData.get("categoryId")),
     subcategoryId: nullableToUndefined(formData.get("subcategoryId")),
     merchant: nullableToUndefined(formData.get("merchant")),
