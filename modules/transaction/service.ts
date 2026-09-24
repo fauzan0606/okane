@@ -1,5 +1,5 @@
 import { unstable_noStore as noStore } from "next/cache";
-import { Prisma, TransactionType, WalletType } from "@prisma/client";
+import { Prisma, TransactionKind, TransactionType, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTransactionById, getTransactions, getTransactionsPage, getTransactionCountsByPayeeIds } from "./repository";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
@@ -68,6 +68,7 @@ export async function createTransactionService(input: CreateTransactionInput) {
       data: {
         transactionDate: input.transactionDate,
         type: input.type,
+        kind: input.reimbursementEnabled ? TransactionKind.REIMBURSEMENT : TransactionKind.STANDARD,
         amount: input.amount,
         note: input.note ?? null,
         wallet: { connect: { id: input.walletId } },
@@ -80,6 +81,50 @@ export async function createTransactionService(input: CreateTransactionInput) {
     });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     return transaction;
+  });
+}
+
+export async function listReimbursements() {
+  return prisma.transaction.findMany({
+    where: { kind: TransactionKind.REIMBURSEMENT, type: TransactionType.EXPENSE },
+    include: {
+      wallet: { select: { id: true, name: true, currency: { select: { symbol: true, code: true } } } },
+      payee: { select: { name: true } },
+      category: { select: { name: true } },
+      subcategory: { select: { name: true } },
+      reimbursementReceipt: {
+        select: { id: true, transactionDate: true, amount: true, wallet: { select: { name: true } } },
+      },
+    },
+    orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+  });
+}
+
+export async function reimburseTransaction(input: { transactionId: string; walletId: string; transactionDate: Date }) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.transaction.findUnique({
+      where: { id: input.transactionId },
+      include: { reimbursementReceipt: true, payee: { select: { name: true } }, wallet: { select: { id: true, currencyId: true } } },
+    });
+    if (!source || source.kind !== TransactionKind.REIMBURSEMENT || source.type !== TransactionType.EXPENSE) throw new Error("Reimbursement transaction not found.");
+    if (source.reimbursementReceipt) throw new Error("This reimbursement has already been received.");
+    const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
+    if (!wallet) throw new Error("Wallet not found.");
+    const receipt = await tx.transaction.create({
+      data: {
+        transactionDate: input.transactionDate,
+        type: TransactionType.INCOME,
+        kind: TransactionKind.REIMBURSEMENT,
+        amount: source.amount,
+        note: "Reimbursement for " + (source.payee?.name ?? "expense") + " on " + source.transactionDate.toISOString().slice(0, 10),
+        wallet: { connect: { id: wallet.id } },
+        reimbursementSource: { connect: { id: source.id } },
+        ...(source.payeeId ? { payee: { connect: { id: source.payeeId } } } : {}),
+      },
+      include: { wallet: true },
+    });
+    if (affectsCurrentBalance(receipt, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(receipt));
+    return receipt;
   });
 }
 

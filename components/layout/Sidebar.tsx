@@ -15,6 +15,7 @@ export const menus: MenuGroup[] = [
     { icon: Wallet, label: "Wallets", href: "/wallet" },
     { icon: CreditCard, label: "Credit Cards", href: "/credit-card" },
     { icon: HandCoins, label: "Receivables", href: "/receivables" },
+    { icon: HandCoins, label: "Reimbursements", href: "/reimbursements" },
     { icon: ReceiptText, label: "Split Bill", href: "/split-bill" },
     { icon: FileSearch, label: "Reconciliation", href: "/reconciliation" },
     { icon: Tags, label: "Categories", href: "/category" },

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { applyTransactionMappingToMerchantService, createTransactionService, deleteTransactionService, updateTransactionService } from "./service";
+import { applyTransactionMappingToMerchantService, createTransactionService, deleteTransactionService, reimburseTransaction, updateTransactionService } from "./service";
 import { transactionSchema } from "./schema";
 import type { TransactionActionState } from "./types";
 
@@ -12,6 +12,7 @@ function revalidateFinancialViews() {
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
   revalidatePath("/");
+  revalidatePath("/reimbursements");
 }
 
 function nullableToUndefined(value: FormDataEntryValue | null) {
@@ -119,4 +120,20 @@ export async function deleteTransactionAction(_prevState: TransactionActionState
   }
   revalidateFinancialViews();
   return { success: true };
+}
+
+export async function reimburseTransactionAction(formData: FormData) {
+  const transactionId = formData.get("transactionId");
+  const walletId = formData.get("walletId");
+  const transactionDate = formData.get("transactionDate");
+  if (typeof transactionId !== "string" || !transactionId) return { success: false, message: "Missing reimbursement transaction." };
+  if (typeof walletId !== "string" || !walletId) return { success: false, message: "Wallet is required." };
+  if (typeof transactionDate !== "string" || !transactionDate) return { success: false, message: "Date is required." };
+  try {
+    await reimburseTransaction({ transactionId, walletId, transactionDate: new Date(transactionDate + "T00:00:00.000Z") });
+    revalidateFinancialViews();
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to record reimbursement." };
+  }
 }

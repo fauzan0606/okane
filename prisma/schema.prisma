@@ -153,6 +153,7 @@ model Transaction {
   transactionDate DateTime
   type TransactionType
   kind TransactionKind @default(STANDARD)
+  reimbursementSourceId String? @unique
   amount Decimal
   note String?
   walletId String
@@ -168,6 +169,8 @@ model Transaction {
   payablePayment PayablePayment?
   splitBill SplitBill?
   transferFee Transfer? @relation("TransferFee")
+  reimbursementSource Transaction? @relation("ReimbursementLink", fields: [reimbursementSourceId], references: [id], onDelete: SetNull)
+  reimbursementReceipt Transaction? @relation("ReimbursementLink")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
