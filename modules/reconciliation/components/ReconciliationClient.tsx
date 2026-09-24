@@ -41,6 +41,25 @@ type Row = {
   matchConfidence: number;
   matchReason: string | null;
   matchedTransactionId: string | null;
+  matchedTransaction: {
+    id: string;
+    transactionDate: string;
+    type: "INCOME" | "EXPENSE";
+    amount: string;
+    note: string | null;
+    wallet: { name: string; walletType: string; currency: { code: string; symbol: string } };
+    payee: { name: string } | null;
+    category: { name: string } | null;
+    subcategory: { name: string } | null;
+  } | null;
+  matchedTransfer: {
+    id: string;
+    transferDate: string;
+    amount: string;
+    origin: string;
+    fromWallet: string;
+    toWallet: string;
+  } | null;
   resolution: string;
 };
 
@@ -75,6 +94,18 @@ function date(value: string) {
 
 function shortDate(value: string) {
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
+}
+
+function dayDifference(a: string, b: string) {
+  const da = new Date(a);
+  const db = new Date(b);
+  const utcA = Date.UTC(da.getUTCFullYear(), da.getUTCMonth(), da.getUTCDate());
+  const utcB = Date.UTC(db.getUTCFullYear(), db.getUTCMonth(), db.getUTCDate());
+  return Math.round(Math.abs(utcA - utcB) / 86400000);
+}
+
+function transactionLabel(transaction: NonNullable<Row["matchedTransaction"]>) {
+  return transaction.payee?.name || transaction.category?.name || transaction.note || "Unnamed transaction";
 }
 
 function statusLabel(status: Row["matchStatus"]) {
@@ -906,18 +937,37 @@ function ReviewDrawer({
                   {row.matchConfidence > 0 && <span className={"text-[10px] font-bold " + matchColor}>{row.matchConfidence}% confidence</span>}
                 </div>
 
-                <div className="mt-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.03] p-3">
-                  <div className="flex items-start gap-3">
-                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400/50">
-                      {hasMatch && <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />}
+                {row.matchedTransaction ? (
+                  <div className="mt-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.03] p-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div>
+                        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-emerald-300">Recorded in OKANE</p>
+                        <p className="mt-1 text-[10px] text-slate-500">{transactionLabel(row.matchedTransaction)}</p>
+                      </div>
+                      <span className="text-[10px] font-bold text-emerald-300">{row.matchConfidence}% confidence</span>
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-semibold text-white">{hasMatch ? "Candidate transaction in OKANE" : "No matching transaction found"}</p>
-                      <p className="mt-1 text-[10px] text-slate-500">{row.matchedTransactionId ? "Transaction ID " + row.matchedTransactionId.slice(0, 10) + "…" : "No candidate transaction was linked to this row."}</p>
-                      {row.matchReason && <p className="mt-2 text-[10px] leading-4 text-slate-400">{row.matchReason}</p>}
+                    <div className="mt-3 grid gap-2.5 sm:grid-cols-2">
+                      <CompareField label="Date" value={date(row.matchedTransaction.transactionDate)} />
+                      <CompareField label="Amount" value={money(row.matchedTransaction.amount, row.matchedTransaction.wallet.currency.symbol)} strong />
+                      <CompareField label="Wallet" value={row.matchedTransaction.wallet.name} />
+                      <CompareField label="Type" value={row.matchedTransaction.type === "EXPENSE" ? "Expense" : "Income"} />
+                      <CompareField label="Category" value={row.matchedTransaction.category?.name || "Not assigned"} />
+                      <CompareField label="Subcategory" value={row.matchedTransaction.subcategory?.name || "Not assigned"} />
+                      <CompareField label="Note" value={row.matchedTransaction.note || "—"} />
+                      <CompareField label="ID" value={row.matchedTransaction.id.slice(0, 12) + "…"} />
                     </div>
+                    <div className="mt-3 grid grid-cols-3 gap-2">
+                      <MatchMetric label="Amount" value={Number(row.amount) === Number(row.matchedTransaction.amount) ? "Exact" : "Different"} />
+                      <MatchMetric label="Date gap" value={dayDifference(row.transactionDate, row.matchedTransaction.transactionDate) + " day" + (dayDifference(row.transactionDate, row.matchedTransaction.transactionDate) === 1 ? "" : "s")} />
+                      <MatchMetric label="Merchant" value={row.matchReason?.split(",")[0] || "Review"} />
+                    </div>
+                    {row.matchReason && <p className="mt-3 text-[10px] leading-4 text-slate-400">{row.matchReason}</p>}
                   </div>
-                </div>
+                ) : (
+                  <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.03] p-3 text-[10px] text-amber-200">
+                    No OKANE candidate is linked to this statement row. You can ignore it or switch to Add to OKANE.
+                  </div>
+                )}
 
                 <button
                   type="button"
@@ -1078,6 +1128,24 @@ function ReviewDrawer({
           </div>
         </div>
       </aside>
+    </div>
+  );
+}
+
+function CompareField({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
+  return (
+    <div>
+      <p className="text-[8px] font-bold uppercase tracking-[0.08em] text-slate-600">{label}</p>
+      <p className={"mt-1 break-words text-[10px] leading-4 " + (strong ? "font-semibold text-white" : "text-slate-300")}>{value}</p>
+    </div>
+  );
+}
+
+function MatchMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-[#08111A] px-2 py-2">
+      <p className="text-[8px] font-bold uppercase tracking-[0.08em] text-slate-600">{label}</p>
+      <p className="mt-1 text-[9px] font-semibold text-slate-200">{value}</p>
     </div>
   );
 }
