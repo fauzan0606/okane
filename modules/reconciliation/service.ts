@@ -235,6 +235,14 @@ export async function createReconciliationSession(input: { walletId: string; sou
   return prisma.reconciliationSession.create({ data: { walletId: input.walletId, sourceType: input.sourceType, fileName: input.fileName, periodStart, periodEnd, extractedCount: rowsToCreate.filter((row) => row.sourceSide === ReconciliationSourceSide.STATEMENT).length, rows: { create: rowsToCreate } }, include: { wallet: { select: { name: true, walletType: true, currency: { select: { symbol: true } } } }, rows: true } });
 }
 
+export async function getLatestReconciliationSession() {
+  return prisma.reconciliationSession.findFirst({
+    where: { status: "REVIEWING" },
+    orderBy: { updatedAt: "desc" },
+    select: { id: true },
+  });
+}
+
 export async function getReconciliationSession(id: string) {
   const session = await prisma.reconciliationSession.findUnique({
     where: { id },
