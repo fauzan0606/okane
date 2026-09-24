@@ -41,6 +41,10 @@ type Row = {
   matchConfidence: number;
   matchReason: string | null;
   matchedTransactionId: string | null;
+  suggestedCategoryId: string | null;
+  suggestedCategoryName: string | null;
+  suggestedSubcategoryId: string | null;
+  suggestedSubcategoryName: string | null;
   matchedTransaction: {
     id: string;
     transactionDate: string;
@@ -319,7 +323,7 @@ export default function ReconciliationClient({ wallets, categories, subcategorie
                   const wallet = wallets.find((entry) => entry.id === value);
                   if (wallet) setSourceType(wallet.walletType === "CREDIT_CARD" ? "CREDIT_CARD_STATEMENT" : "BANK_STATEMENT");
                 }}
-                className="w-full rounded-xl border border-white/10 bg-[#08111A] px-3 py-2.5 text-sm text-white outline-none"
+                className="h-10 w-full rounded-xl border border-white/10 bg-[#08111A] px-3 text-sm text-white outline-none"
               >
                 <option value="">Choose wallet</option>
                 {wallets.map((wallet) => (
@@ -348,7 +352,7 @@ export default function ReconciliationClient({ wallets, categories, subcategorie
                 type="file"
                 accept="application/pdf,.pdf"
                 onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-                className="w-full rounded-xl border border-dashed border-[#36506A] bg-[#08111A] px-3 py-2.5 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-500 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:text-[#07110b]"
+                className="h-10 w-full rounded-xl border border-dashed border-[#36506A] bg-[#08111A] px-3 py-1 text-xs text-slate-300 file:mr-3 file:rounded-lg file:border-0 file:bg-emerald-500 file:px-3 file:py-1.5 file:text-[10px] file:font-bold file:text-[#07110b]"
               />
             </label>
           </div>
@@ -713,7 +717,6 @@ export default function ReconciliationClient({ wallets, categories, subcategorie
             setSelectedRowId(null);
             router.refresh();
           }}
-          onModeChange={setDrawerMode}
         />
       )}
     </div>
@@ -800,7 +803,6 @@ function ReviewDrawer({
   onClose,
   onResolve,
   onImported,
-  onModeChange,
 }: {
   row: Row;
   session: Session;
@@ -813,7 +815,6 @@ function ReviewDrawer({
   onClose: () => void;
   onResolve: (rowId: string, resolution: string, closeDrawer?: boolean) => void;
   onImported: () => void;
-  onModeChange: (mode: DrawerMode) => void;
 }) {
   const isOkaneOnly = row.sourceSide === "OKANE";
   const hasMatch = Boolean(row.matchedTransactionId || row.matchStatus === "MATCHED");
@@ -830,8 +831,8 @@ function ReviewDrawer({
     return row.direction === "CREDIT" ? "INCOME" : "EXPENSE";
   });
   const [merchant, setMerchant] = useState(() => row.description);
-  const [categoryId, setCategoryId] = useState("");
-  const [subcategoryId, setSubcategoryId] = useState("");
+  const [categoryId, setCategoryId] = useState(() => row.suggestedCategoryId ?? "");
+  const [subcategoryId, setSubcategoryId] = useState(() => row.suggestedSubcategoryId ?? "");
   const [note, setNote] = useState(() => "Reconciliation import: " + session.fileName);
   const [localError, setLocalError] = useState("");
   const [saving, startSaveTransition] = useTransition();
@@ -884,31 +885,12 @@ function ReviewDrawer({
         <div className="flex items-center justify-between border-b border-white/5 px-5 py-4">
           <div>
             <p className="text-[9px] font-bold uppercase tracking-[0.14em] text-emerald-400">Reconciliation</p>
-            <h2 className="mt-1 text-base font-semibold text-white">{isOkaneOnly ? "Review OKANE transaction" : "Review transaction"}</h2>
+            <h2 className="mt-1 text-base font-semibold text-white">{isOkaneOnly ? "Review OKANE transaction" : mode === "ADD" ? "Add to OKANE" : "Review transaction"}</h2>
           </div>
           <button type="button" onClick={onClose} className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-white/[0.05] hover:text-slate-200">
             <XCircle size={18} />
           </button>
         </div>
-
-        {!isOkaneOnly && (
-          <div className="grid grid-cols-2 gap-1 border-b border-white/5 bg-[#0A131D] p-2">
-            <button
-              type="button"
-              onClick={() => onModeChange("MATCH")}
-              className={"rounded-lg px-3 py-2 text-[10px] font-semibold " + (mode === "MATCH" ? "bg-[#18384A] text-white ring-1 ring-emerald-400/20" : "text-slate-500")}
-            >
-              Review Match
-            </button>
-            <button
-              type="button"
-              onClick={() => onModeChange("ADD")}
-              className={"rounded-lg px-3 py-2 text-[10px] font-semibold " + (mode === "ADD" ? "bg-[#18384A] text-white ring-1 ring-blue-400/20" : "text-slate-500")}
-            >
-              Add to OKANE
-            </button>
-          </div>
-        )}
 
         <div className="flex-1 overflow-y-auto px-5 py-4">
           <div className="rounded-2xl border border-white/10 bg-[#0D1823] p-4">
@@ -989,7 +971,14 @@ function ReviewDrawer({
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/10 bg-[#0D1823] p-4">
                 <div className="mb-3 flex items-center justify-between">
-                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">Create transaction from statement</p>
+                  <div>
+                    <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">Create transaction from statement</p>
+                    {(row.suggestedCategoryName || row.suggestedSubcategoryName) && (
+                      <p className="mt-1 text-[9px] text-emerald-300">
+                        Suggested by OKANE: {row.suggestedCategoryName || "No category"}{row.suggestedSubcategoryName ? " · " + row.suggestedSubcategoryName : ""}
+                      </p>
+                    )}
+                  </div>
                   {selectedWallet && <span className="text-[9px] text-slate-600">{selectedWallet.currency.code}</span>}
                 </div>
 
