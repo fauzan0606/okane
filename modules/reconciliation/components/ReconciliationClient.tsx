@@ -41,25 +41,6 @@ type Row = {
   matchConfidence: number;
   matchReason: string | null;
   matchedTransactionId: string | null;
-  matchedTransaction: {
-    id: string;
-    transactionDate: string;
-    type: "INCOME" | "EXPENSE";
-    amount: string;
-    note: string | null;
-    wallet: { name: string; walletType: string; currency: { code: string; symbol: string } };
-    payee: { name: string } | null;
-    category: { name: string } | null;
-    subcategory: { name: string } | null;
-  } | null;
-  matchedTransfer: {
-    id: string;
-    transferDate: string;
-    amount: string;
-    origin: string;
-    fromWallet: string;
-    toWallet: string;
-  } | null;
   resolution: string;
 };
 
@@ -94,26 +75,6 @@ function date(value: string) {
 
 function shortDate(value: string) {
   return new Intl.DateTimeFormat("id-ID", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(value));
-}
-
-function dayDifference(a: string, b: string) {
-  const da = new Date(a);
-  const db = new Date(b);
-  const utcA = Date.UTC(da.getUTCFullYear(), da.getUTCMonth(), da.getUTCDate());
-  const utcB = Date.UTC(db.getUTCFullYear(), db.getUTCMonth(), db.getUTCDate());
-  return Math.round(Math.abs(utcA - utcB) / 86400000);
-}
-
-function comparisonAmount(row: Row, transaction: NonNullable<Row["matchedTransaction"]>, symbol: string) {
-  const statementAmount = Number(row.amount);
-  const okaneAmount = Number(transaction.amount);
-  const difference = statementAmount - okaneAmount;
-  return {
-    statement: money(statementAmount, symbol),
-    okane: money(okaneAmount, transaction.wallet.currency.symbol),
-    difference,
-    differenceLabel: difference === 0 ? "Same amount" : (difference > 0 ? "+" : "") + money(difference, symbol) + " difference",
-  };
 }
 
 function statusLabel(status: Row["matchStatus"]) {
@@ -844,8 +805,16 @@ function ReviewDrawer({
   const [localError, setLocalError] = useState("");
   const [saving, startSaveTransition] = useTransition();
 
+  const selectedCategory = categories.find((category) => category.id === categoryId);
   const availableCategories = categories.filter((category) => category.type === type);
   const availableSubcategories = subcategories.filter((subcategory) => !categoryId || subcategory.categoryId === categoryId);
+
+  useMemo(() => {
+    if (categoryId && selectedCategory && selectedCategory.type !== type) {
+      setCategoryId("");
+      setSubcategoryId("");
+    }
+  }, [categoryId, selectedCategory, type]);
 
   function saveEditedTransaction() {
     if (!transactionDate || !amount || !walletId || !merchant.trim()) {
@@ -932,82 +901,41 @@ function ReviewDrawer({
           ) : mode === "MATCH" ? (
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/10 bg-[#0D1823] p-4">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">Statement ↔ OKANE comparison</p>
-                    <p className="mt-1 text-[10px] text-slate-500">Review the stored OKANE transaction against the statement row before confirming.</p>
-                  </div>
-                  {row.matchConfidence > 0 && (
-                    <span className={"text-[10px] font-bold " + matchColor}>{row.matchConfidence}% confidence</span>
-                  )}
+                <div className="flex items-center justify-between">
+                  <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-600">Possible matches in OKANE</p>
+                  {row.matchConfidence > 0 && <span className={"text-[10px] font-bold " + matchColor}>{row.matchConfidence}% confidence</span>}
                 </div>
 
-                {row.matchedTransaction ? (
-                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                    <ComparisonCard
-                      title="From statement"
-                      badge="STATEMENT"
-                      dateValue={date(row.transactionDate)}
-                      description={row.description}
-                      amount={signedMoney(row, session.wallet.currency.symbol)}
-                      type={row.direction === "CREDIT" ? "Income / Credit" : row.direction === "DEBIT" ? "Expense / Debit" : "Unknown"}
-                      wallet={session.wallet.name}
-                      category="—"
-                      subcategory="—"
-                      note={row.entryType || "—"}
-                    />
-                    <ComparisonCard
-                      title="Recorded in OKANE"
-                      badge="OKANE"
-                      dateValue={date(row.matchedTransaction.transactionDate)}
-                      description={row.matchedTransaction.payee?.name || "No merchant / payee"}
-                      amount={money(row.matchedTransaction.amount, row.matchedTransaction.wallet.currency.symbol)}
-                      type={row.matchedTransaction.type === "EXPENSE" ? "Expense" : "Income"}
-                      wallet={row.matchedTransaction.wallet.name}
-                      category={row.matchedTransaction.category?.name || "Not assigned"}
-                      subcategory={row.matchedTransaction.subcategory?.name || "Not assigned"}
-                      note={row.matchedTransaction.note || "—"}
-                    />
-                  </div>
-                ) : row.matchedTransfer ? (
-                  <div className="mt-4 rounded-xl border border-blue-400/15 bg-blue-400/[0.03] p-3">
-                    <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-blue-300">Matched transfer</p>
-                    <div className="mt-2 grid gap-2 text-xs sm:grid-cols-2">
-                      <span className="text-slate-600">Date</span><span className="text-slate-200">{date(row.matchedTransfer.transferDate)}</span>
-                      <span className="text-slate-600">Amount</span><span className="font-bold text-white">{money(row.matchedTransfer.amount, session.wallet.currency.symbol)}</span>
-                      <span className="text-slate-600">From</span><span className="text-slate-200">{row.matchedTransfer.fromWallet}</span>
-                      <span className="text-slate-600">To</span><span className="text-slate-200">{row.matchedTransfer.toWallet}</span>
+                <div className="mt-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.03] p-3">
+                  <div className="flex items-start gap-3">
+                    <div className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-emerald-400/50">
+                      {hasMatch && <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-white">{hasMatch ? "Candidate transaction in OKANE" : "No matching transaction found"}</p>
+                      <p className="mt-1 text-[10px] text-slate-500">{row.matchedTransactionId ? "Transaction ID " + row.matchedTransactionId.slice(0, 10) + "…" : "No candidate transaction was linked to this row."}</p>
+                      {row.matchReason && <p className="mt-2 text-[10px] leading-4 text-slate-400">{row.matchReason}</p>}
                     </div>
                   </div>
-                ) : (
-                  <div className="mt-4 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] px-3 py-3 text-[10px] leading-4 text-amber-200">
-                    No OKANE candidate is linked yet. You can ignore this statement row or switch to Add to OKANE.
-                  </div>
-                )}
+                </div>
 
-                {row.matchedTransaction && (
-                  <div className="mt-3 grid grid-cols-3 gap-2">
-                    {(() => {
-                      const compare = comparisonAmount(row, row.matchedTransaction, session.wallet.currency.symbol);
-                      const days = dayDifference(row.transactionDate, row.matchedTransaction.transactionDate);
-                      return (
-                        <>
-                          <MetricChip label="Amount" value={compare.difference === 0 ? "Exact" : compare.differenceLabel} />
-                          <MetricChip label="Date gap" value={days === 0 ? "Same day" : days + " day" + (days > 1 ? "s" : "")} />
-                          <MetricChip label="Merchant" value={row.matchReason?.split(",")[0] || "See details"} />
-                        </>
-                      );
-                    })()}
-                  </div>
-                )}
+                <button
+                  type="button"
+                  onClick={() => onResolve(row.id, "IGNORE")}
+                  disabled={pending}
+                  className={buttonBase("mt-3 w-full border-white/10 bg-white/[0.02] text-slate-400 hover:bg-white/[0.04] disabled:opacity-40")}
+                >
+                  <XCircle size={13} />Ignore this statement transaction
+                </button>
               </div>
 
               {row.matchStatus === "CONFLICT" && (
                 <div className="rounded-xl border border-red-400/15 bg-red-400/[0.04] px-3 py-2.5 text-[10px] leading-4 text-red-200">
-                  A nearby OKANE transaction may be related, but the data is not an exact match. Verify both sides before confirming.
+                  A same-date description candidate exists, but the amount differs. Confirm only when you have verified the statement and OKANE transaction refer to the same event.
                 </div>
               )}
-            </div>          ) : (
+            </div>
+          ) : (
             <div className="mt-4 space-y-3">
               <div className="rounded-2xl border border-white/10 bg-[#0D1823] p-4">
                 <div className="mb-3 flex items-center justify-between">
@@ -1150,67 +1078,6 @@ function ReviewDrawer({
           </div>
         </div>
       </aside>
-    </div>
-  );
-}
-
-function ComparisonCard({
-  title,
-  badge,
-  dateValue,
-  description,
-  amount,
-  type,
-  wallet,
-  category,
-  subcategory,
-  note,
-}: {
-  title: string;
-  badge: string;
-  dateValue: string;
-  description: string;
-  amount: string;
-  type: string;
-  wallet: string;
-  category: string;
-  subcategory: string;
-  note: string;
-}) {
-  return (
-    <div className="rounded-xl border border-white/10 bg-[#08111A] p-3">
-      <div className="flex items-center justify-between gap-2">
-        <p className="text-[9px] font-bold uppercase tracking-[0.12em] text-slate-500">{title}</p>
-        <span className="rounded-md border border-white/10 bg-white/[0.03] px-1.5 py-1 text-[8px] font-bold tracking-[0.08em] text-slate-500">{badge}</span>
-      </div>
-      <div className="mt-3 space-y-2.5">
-        <ComparisonField label="Date" value={dateValue} />
-        <ComparisonField label="Description / Merchant" value={description} strong />
-        <ComparisonField label="Amount" value={amount} strong />
-        <ComparisonField label="Type" value={type} />
-        <ComparisonField label="Wallet" value={wallet} />
-        <ComparisonField label="Category" value={category} />
-        <ComparisonField label="Subcategory" value={subcategory} />
-        <ComparisonField label="Note / Entry" value={note} />
-      </div>
-    </div>
-  );
-}
-
-function ComparisonField({ label, value, strong = false }: { label: string; value: string; strong?: boolean }) {
-  return (
-    <div className="grid grid-cols-[92px_1fr] gap-2">
-      <span className="text-[9px] font-semibold uppercase tracking-[0.08em] text-slate-600">{label}</span>
-      <span className={"break-words text-[10px] leading-4 " + (strong ? "font-semibold text-white" : "text-slate-300")}>{value}</span>
-    </div>
-  );
-}
-
-function MetricChip({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-white/10 bg-[#08111A] px-2.5 py-2">
-      <p className="text-[8px] font-bold uppercase tracking-[0.08em] text-slate-600">{label}</p>
-      <p className="mt-1 truncate text-[9px] font-semibold text-slate-200">{value}</p>
     </div>
   );
 }
