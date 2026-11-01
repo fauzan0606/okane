@@ -255,6 +255,55 @@ export async function finalizeSplitBill(splitBillId: string, input: {
   });
 }
 
+export async function updateSplitBillPaymentWallet(splitBillId: string, walletId: string) {
+  return prisma.$transaction(async (tx) => {
+    const splitBill = await tx.splitBill.findUnique({
+      where: { id: splitBillId },
+      include: {
+        transaction: { include: { wallet: { select: { id: true, currencyId: true, balanceAsOf: true } } } },
+        participants: { select: { id: true } },
+      },
+    });
+    if (!splitBill) throw new Error("Split Bill not found.");
+    if (splitBill.status === SplitBillStatus.DRAFT || splitBill.status === SplitBillStatus.CANCELLED || !splitBill.transaction) {
+      throw new Error("Only a finalized Split Bill with a recorded expense can change its payment wallet.");
+    }
+
+    const transaction = splitBill.transaction;
+    const oldWallet = transaction.wallet;
+    if (walletId === oldWallet.id) return { walletId: oldWallet.id };
+
+    const newWallet = await tx.wallet.findUnique({
+      where: { id: walletId },
+      select: { id: true, currencyId: true, balanceAsOf: true, isActive: true },
+    });
+    if (!newWallet || !newWallet.isActive) throw new Error("Select an active payment wallet.");
+    if (newWallet.currencyId !== oldWallet.currencyId) throw new Error("Payment wallet must use the same currency.");
+
+    if (transactionAffectedBalance(transaction, oldWallet.balanceAsOf)) {
+      await applyBalanceDelta(tx, oldWallet.id, balanceDelta("EXPENSE", transaction.amount).negated());
+    }
+    if (transactionAffectedBalance(transaction, newWallet.balanceAsOf)) {
+      await applyBalanceDelta(tx, newWallet.id, balanceDelta("EXPENSE", transaction.amount));
+    }
+
+    await tx.transaction.update({
+      where: { id: transaction.id },
+      data: { wallet: { connect: { id: newWallet.id } } },
+    });
+
+    const participantIds = splitBill.participants.map((participant) => participant.id);
+    if (participantIds.length > 0) {
+      await tx.receivable.updateMany({
+        where: { splitBillParticipantId: { in: participantIds } },
+        data: { sourceWalletId: newWallet.id },
+      });
+    }
+
+    return { walletId: newWallet.id };
+  });
+}
+
 export async function getSplitBills() {
   return prisma.splitBill.findMany({ include: { transaction: { include: { wallet: { select: { name: true, walletType: true, currency: { select: { code: true, symbol: true } } } }, payee: { select: { name: true } }, category: { select: { name: true } } } }, participants: { include: { receivable: { include: { payments: { select: { amount: true } } } }, payable: { include: { currency: { select: { code: true, symbol: true } }, payments: { select: { amount: true, appliedAmount: true, excessAmount: true, paidAt: true, walletId: true } } } } }, orderBy: { isMe: "desc" } }, items: { include: { allocations: true }, orderBy: { id: "asc" } } }, orderBy: { createdAt: "desc" } });
 }
