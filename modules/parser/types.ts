@@ -51,6 +51,7 @@ export type ParsedTransaction = {
   category?: ParserCategory;
   subcategory?: ParserSubcategory;
   type: "INCOME" | "EXPENSE";
+  reimbursementEnabled?: boolean;
   confidence: ParserConfidence;
 };
 
