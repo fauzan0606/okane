@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { saveParsedTransactionAction } from "../actions";
 import type { ParsedTransaction, ParserSubcategory } from "../types";
 
-type Option = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
+type Option = { id: string; name: string; walletType?: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
 type EditablePreviewProps = {
   result: ParsedTransaction;
   wallets: Option[];
