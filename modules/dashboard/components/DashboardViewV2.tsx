@@ -23,6 +23,8 @@ function periodHref(period: DashboardPeriod, currencyCode: string) { return `/?p
 
 export default function DashboardViewV2({ data }: { data: DashboardData }) {
   const { summary, budget, aiAssessment, calendar } = data;
+  const localHour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Jakarta" }).format(new Date()));
+  const greeting = localHour < 12 ? "Good morning" : localHour < 18 ? "Good afternoon" : "Good evening";
   const maxCashflow = Math.max(...data.cashflow.flatMap((point) => [point.income, point.expense]), 1);
   const donutSegments = data.spendingByCategory.slice(0, 6).reduce<string[]>((segments, category, index) => {
     const previous = data.spendingByCategory.slice(0, index).reduce((sum, item) => sum + item.percentage, 0);
@@ -38,7 +40,7 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
         <header className="mb-6 flex flex-col gap-4 md:flex-row md:items-start md:justify-between md:gap-6">
           <div className="min-w-0">
             <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Personal Financial Operating System</p>
-            <h1 className="mt-2 text-[30px] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-[32px] md:text-[34px]">Good morning, Fauzan! <span aria-hidden>👋</span></h1>
+            <h1 className="mt-2 text-[30px] font-semibold leading-[1.08] tracking-[-0.035em] text-white sm:text-[32px] md:text-[34px]">{greeting}, Fauzan! <span aria-hidden>👋</span></h1>
             <p className="mt-2 max-w-[34rem] text-sm leading-6 text-slate-400">Let&apos;s make today a great financial day.</p>
           </div>
           <div className="flex w-full items-center justify-between gap-3 md:w-auto md:justify-end">
