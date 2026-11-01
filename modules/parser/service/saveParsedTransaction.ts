@@ -17,5 +17,15 @@ export async function saveParsedTransaction(parsed: ParsedTransaction) {
     categoryId: parsed.category?.id,
     subcategoryId: parsed.subcategory?.id,
     merchant: parsed.merchant,
+    installment: parsed.installment?.enabled
+      ? {
+          enabled: true,
+          tenorMonths: parsed.installment.tenorMonths,
+          startDate: parsed.installment.startDate
+            ? new Date(`${parsed.installment.startDate}T00:00:00`)
+            : undefined,
+          feeAmount: parsed.installment.feeAmount,
+        }
+      : { enabled: false },
   });
 }
