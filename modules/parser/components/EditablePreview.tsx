@@ -64,11 +64,28 @@ export default function EditablePreview({ result, wallets, categories, subcatego
           <div className="space-y-1.5"><Label htmlFor="transaction-date" className="text-slate-200">Date</Label><Input id="transaction-date" className={fieldClassName} type="date" value={parsed.transactionDate} onChange={(event) => setParsed((current) => ({ ...current, transactionDate: event.target.value }))} /></div>
           <div className="space-y-1.5"><Label htmlFor="merchant" className="text-slate-200">Merchant</Label><Input id="merchant" className={fieldClassName} value={parsed.merchant ?? ""} onChange={(event) => setParsed((current) => ({ ...current, merchant: event.target.value.trim() || undefined }))} placeholder="Nama merchant" /></div>
           <div className="space-y-1.5"><Label htmlFor="amount" className="text-slate-200">Amount</Label><Input id="amount" className={fieldClassName} type="number" min="1" step="1" value={parsed.amount ?? ""} onChange={(event) => { const value = event.target.valueAsNumber; setParsed((current) => ({ ...current, amount: Number.isFinite(value) ? value : undefined })); }} placeholder="0" /></div>
-          <div className="space-y-1.5"><Label htmlFor="type" className="text-slate-200">Type</Label><Select value={parsed.type} onValueChange={(value) => { if (value === "INCOME" || value === "EXPENSE") setParsed((current) => ({ ...current, type: value })); }}><SelectTrigger id="type" className={`w-full ${fieldClassName}`}><SelectValue /></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white"><SelectItem value="EXPENSE">Expense</SelectItem><SelectItem value="INCOME">Income</SelectItem></SelectContent></Select></div>
+          <div className="space-y-1.5"><Label htmlFor="type" className="text-slate-200">Type</Label><Select value={parsed.type} onValueChange={(value) => { if (value === "INCOME" || value === "EXPENSE") setParsed((current) => ({ ...current, type: value, reimbursementEnabled: value === "EXPENSE" ? current.reimbursementEnabled : false })); }}><SelectTrigger id="type" className={`w-full ${fieldClassName}`}><SelectValue /></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white"><SelectItem value="EXPENSE">Expense</SelectItem><SelectItem value="INCOME">Income</SelectItem></SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor="wallet" className="text-slate-200">Wallet</Label><Select value={parsed.wallet?.id ?? null} onValueChange={updateWallet}><SelectTrigger id="wallet" className={`w-full ${fieldClassName}`}><SelectValue placeholder="Pilih wallet">{(walletId: string | null) => wallets.find((wallet) => wallet.id === walletId)?.name ?? "Pilih wallet"}</SelectValue></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white">{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor="category" className="text-slate-200">Category</Label><Select value={parsed.category?.id ?? null} onValueChange={updateCategory}><SelectTrigger id="category" className={`w-full ${fieldClassName}`}><SelectValue placeholder="Pilih category">{(categoryId: string | null) => categories.find((category) => category.id === categoryId)?.name ?? "Pilih category"}</SelectValue></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white">{categories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor="subcategory" className="text-slate-200">Subcategory</Label><Select value={parsed.subcategory?.id ?? null} onValueChange={updateSubcategory} disabled={!parsed.category}><SelectTrigger id="subcategory" className={`w-full ${fieldClassName}`}><SelectValue placeholder={parsed.category ? "Pilih subcategory" : "Pilih category dulu"}>{(subcategoryId: string | null) => visibleSubcategories.find((item) => item.id === subcategoryId)?.name ?? "Pilih subcategory"}</SelectValue></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white">{visibleSubcategories.map((subcategory) => <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.name}</SelectItem>)}</SelectContent></Select></div>
         </div>
+
+        {parsed.type === "EXPENSE" && (
+          <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={Boolean(parsed.reimbursementEnabled)}
+                onChange={(event) => setParsed((current) => ({ ...current, reimbursementEnabled: event.target.checked }))}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-emerald-500"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-white">Akan direimburse</span>
+                <span className="mt-0.5 block text-xs text-slate-500">Tandai jika pengeluaran ini dibayar dulu menggunakan uang pribadi dan akan diganti oleh kantor/orang lain.</span>
+              </span>
+            </label>
+          </div>
+        )}
 
         <Button className="w-full bg-blue-600 text-white hover:bg-blue-500" onClick={handleSave} disabled={isPending}>{isPending ? "Saving..." : "Save Transaction"}</Button>
       </div>
