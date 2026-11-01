@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Check, Pencil, X } from "lucide-react";
+import { Check, LoaderCircle, Pencil, X } from "lucide-react";
 import { toast } from "sonner";
 import { updateSplitBillPaymentWalletAction } from "../actions";
 
@@ -57,7 +57,7 @@ export default function SplitBillPaymentWalletEditor({ splitBillId, currentWalle
         {wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}
       </select>
       <button type="button" onClick={save} disabled={isSaving || !walletId || walletId === currentWalletId} className="inline-flex items-center gap-1 rounded-lg bg-emerald-500 px-2.5 py-1.5 text-[10px] font-bold text-[#07110b] disabled:cursor-not-allowed disabled:opacity-40">
-        <Check size={11} /> {isSaving ? "Saving..." : "Save"}
+        {isSaving ? <LoaderCircle size={11} className="animate-spin" /> : <Check size={11} />} {isSaving ? "Saving…" : "Save"}
       </button>
       <button type="button" onClick={() => { setWalletId(currentWalletId); setEditing(false); }} disabled={isSaving} className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-2.5 py-1.5 text-[10px] font-semibold text-slate-400 disabled:opacity-50">
         <X size={11} /> Cancel
