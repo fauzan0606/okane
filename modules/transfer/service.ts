@@ -12,7 +12,7 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
 
 async function getWalletPair(tx: Prisma.TransactionClient, fromWalletId: string, toWalletId: string) {
   const [fromWallet, toWallet] = await Promise.all([
-    tx.wallet.findUnique({ where: { id: fromWalletId }, select: { id: true, name: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
+    tx.wallet.findUnique({ where: { id: fromWalletId }, select: { id: true, name: true, bank: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
     tx.wallet.findUnique({ where: { id: toWalletId }, select: { id: true, name: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
   ]);
   if (!fromWallet) throw new Error("Source wallet not found.");
@@ -30,8 +30,8 @@ function validateAmounts(amount: number, feeAmount: number) {
   if (!Number.isFinite(feeAmount) || feeAmount < 0) throw new Error("Transfer fee cannot be negative.");
 }
 
-async function getTransferFeePayee(tx: Prisma.TransactionClient) {
-  const name = "Biaya transfer bank asal transfer";
+async function getTransferFeePayee(tx: Prisma.TransactionClient, sourceBank: string) {
+  const name = `Biaya transfer ${sourceBank}`;
   const existing = await tx.payee.findFirst({ where: { name } });
   return existing ?? tx.payee.create({ data: { name, sortOrder: 0, isActive: true } });
 }
@@ -119,7 +119,7 @@ export async function createTransfer(input: { transferDate: Date; fromWalletId: 
 
     let feeTransactionId: string | undefined;
     if (!fee.isZero()) {
-      const feePayee = await getTransferFeePayee(tx);
+      const feePayee = await getTransferFeePayee(tx, fromWallet.bank?.trim() || fromWallet.name);
       const feeCategory = await getTransferFeeCategory(tx);
       const feeTransaction = await tx.transaction.create({
         data: {
@@ -186,7 +186,7 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         await tx.transaction.delete({ where: { id: existing.feeTransaction.id } });
         feeTransactionId = null;
       } else {
-        const feePayee = await getTransferFeePayee(tx);
+        const feePayee = await getTransferFeePayee(tx, fromWallet.bank?.trim() || fromWallet.name);
         const feeCategory = await getTransferFeeCategory(tx);
         const updatedFee = await tx.transaction.update({
           where: { id: existing.feeTransaction.id },
@@ -198,7 +198,7 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         }
       }
     } else if (!fee.isZero()) {
-      const feePayee = await getTransferFeePayee(tx);
+      const feePayee = await getTransferFeePayee(tx, fromWallet.bank?.trim() || fromWallet.name);
       const feeCategory = await getTransferFeeCategory(tx);
       const createdFee = await tx.transaction.create({
         data: {
