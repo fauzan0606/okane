@@ -162,7 +162,7 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         const feePayee = await getTransferFeePayee(tx);
         const updatedFee = await tx.transaction.update({
           where: { id: existing.feeTransaction.id },
-          data: { transactionDate: input.transferDate, amount: fee, walletId: fromWallet.id, payee: { connect: { id: feePayee.id } } },
+          data: { transactionDate: input.transferDate, amount: fee, wallet: { connect: { id: fromWallet.id } }, payee: { connect: { id: feePayee.id } } },
         });
         feeTransactionId = updatedFee.id;
         if (affectsCurrentBalance(input.transferDate, updatedFee.createdAt, fromWallet.balanceAsOf)) {
