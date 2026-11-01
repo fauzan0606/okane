@@ -58,6 +58,7 @@ export async function transactionCountsByPayeeIds(payeeIds: string[]) { return g
 export async function findTransaction(id: string) { return getTransactionById(id); }
 
 export async function createTransactionService(input: CreateTransactionInput) {
+  if (input.reimbursementEnabled && input.type !== TransactionType.EXPENSE) throw new Error("Reimbursement is available for expense transactions only.");
   const payee = await findOrCreatePayeeByName(input.merchant);
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
@@ -141,6 +142,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
       },
     });
     if (!existing) throw new Error("Transaction not found.");
+    if (input.reimbursementEnabled && (input.type ?? existing.type) !== TransactionType.EXPENSE) throw new Error("Reimbursement is available for expense transactions only.");
     if (existing.payablePayment) throw new Error("This transaction is linked to a payable repayment. Manage it from the related Split Bill instead.");
     if (existing.splitBill && (input.transactionDate !== undefined || input.type !== undefined || input.amount !== undefined || input.walletId !== undefined || input.installment !== undefined)) throw new Error("This transaction is linked to a Split Bill. Edit the Split Bill first, or remove the Split Bill before changing the transaction amount, date, wallet, type, or installment.");
     const newWalletId = input.walletId ?? existing.walletId;
@@ -171,6 +173,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     return tx.transaction.update({
       where: { id },
       data: {
+        ...(input.reimbursementEnabled !== undefined && { kind: input.reimbursementEnabled ? TransactionKind.REIMBURSEMENT : TransactionKind.STANDARD }),
         ...(input.transactionDate && { transactionDate: input.transactionDate }),
         ...(input.type && { type: input.type }),
         ...(input.amount !== undefined && { amount: input.amount }),
