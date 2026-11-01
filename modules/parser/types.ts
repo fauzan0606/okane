@@ -52,6 +52,12 @@ export type ParsedTransaction = {
   subcategory?: ParserSubcategory;
   type: "INCOME" | "EXPENSE";
   reimbursementEnabled?: boolean;
+  installment?: {
+    enabled: boolean;
+    tenorMonths?: number;
+    startDate?: string;
+    feeAmount?: number;
+  };
   confidence: ParserConfidence;
 };
 
