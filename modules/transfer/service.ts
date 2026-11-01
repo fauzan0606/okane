@@ -178,6 +178,7 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
           amount: fee,
           note: "Transfer Fee",
           wallet: { connect: { id: fromWallet.id } },
+          payee: { connect: { id: feePayee.id } },
         },
       });
       feeTransactionId = createdFee.id;
