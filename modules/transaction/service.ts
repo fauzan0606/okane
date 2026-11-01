@@ -212,6 +212,38 @@ export async function applyTransactionMappingToMerchantService(id: string, input
   });
 }
 
+export async function deleteIncompleteTransactionsService() {
+  const incomplete = await prisma.transaction.findMany({
+    where: {
+      OR: [
+        { kind: TransactionKind.STANDARD },
+        { kind: TransactionKind.REIMBURSEMENT, type: TransactionType.EXPENSE },
+      ],
+      AND: [{
+        OR: [
+          { wallet: { name: "Unassigned (Review)" } },
+          { categoryId: null },
+          { subcategoryId: null },
+        ],
+      }],
+    },
+    select: {
+      id: true,
+      splitBill: { select: { id: true } },
+      transferFee: { select: { id: true } },
+    },
+  });
+
+  if (incomplete.some((transaction) => transaction.splitBill || transaction.transferFee)) {
+    throw new Error("Some incomplete transactions are linked to Split Bill or Transfer records. Remove those links before deleting all.");
+  }
+
+  for (const transaction of incomplete) {
+    await deleteTransactionService(transaction.id);
+  }
+  return incomplete.length;
+}
+
 export async function deleteTransactionService(id: string) {
   return prisma.$transaction(async (tx) => {
     const existing = await tx.transaction.findUnique({
