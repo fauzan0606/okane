@@ -6,6 +6,7 @@ const checkbox = z.preprocess((value) => value === true || value === "true" || v
 export const transactionSchema = z.object({
   transactionDate: z.coerce.date(),
   type: z.nativeEnum(TransactionType),
+  reimbursementEnabled: checkbox.default(false),
   amount: z.coerce.number().positive("Amount must be greater than zero."),
   walletId: z.string().min(1, "Wallet is required."),
   categoryId: z.string().optional().transform((value) => value || undefined),
@@ -19,6 +20,9 @@ export const transactionSchema = z.object({
 }).superRefine((value, ctx) => {
   if (value.installmentEnabled && !value.installmentTenor) {
     ctx.addIssue({ code: "custom", path: ["installmentTenor"], message: "Installment tenor is required." });
+  }
+  if (value.reimbursementEnabled && value.type !== TransactionType.EXPENSE) {
+    ctx.addIssue({ code: "custom", path: ["reimbursementEnabled"], message: "Reimbursement is available for expense transactions only." });
   }
   if (value.subcategoryId && !value.categoryId) {
     ctx.addIssue({ code: "custom", path: ["subcategoryId"], message: "Category is required when a subcategory is selected." });

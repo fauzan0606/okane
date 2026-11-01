@@ -1,5 +1,5 @@
 import { unstable_noStore as noStore } from "next/cache";
-import { Prisma, TransactionType, WalletType } from "@prisma/client";
+import { Prisma, TransactionKind, TransactionType, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getTransactionById, getTransactions, getTransactionsPage, getTransactionCountsByPayeeIds } from "./repository";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
@@ -58,6 +58,7 @@ export async function transactionCountsByPayeeIds(payeeIds: string[]) { return g
 export async function findTransaction(id: string) { return getTransactionById(id); }
 
 export async function createTransactionService(input: CreateTransactionInput) {
+  if (input.reimbursementEnabled && input.type !== TransactionType.EXPENSE) throw new Error("Reimbursement is available for expense transactions only.");
   const payee = await findOrCreatePayeeByName(input.merchant);
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
@@ -68,6 +69,7 @@ export async function createTransactionService(input: CreateTransactionInput) {
       data: {
         transactionDate: input.transactionDate,
         type: input.type,
+        kind: input.reimbursementEnabled ? TransactionKind.REIMBURSEMENT : TransactionKind.STANDARD,
         amount: input.amount,
         note: input.note ?? null,
         wallet: { connect: { id: input.walletId } },
@@ -80,6 +82,52 @@ export async function createTransactionService(input: CreateTransactionInput) {
     });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     return transaction;
+  });
+}
+
+export async function listReimbursements() {
+  return prisma.transaction.findMany({
+    where: { kind: TransactionKind.REIMBURSEMENT, type: TransactionType.EXPENSE },
+    include: {
+      wallet: { select: { id: true, name: true, currency: { select: { symbol: true, code: true } } } },
+      payee: { select: { name: true } },
+      category: { select: { name: true } },
+      subcategory: { select: { name: true } },
+      reimbursementReceipt: {
+        select: { id: true, transactionDate: true, amount: true, wallet: { select: { name: true } } },
+      },
+    },
+    orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+  });
+}
+
+export async function reimburseTransaction(input: { transactionId: string; walletId: string; transactionDate: Date }) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.transaction.findUnique({
+      where: { id: input.transactionId },
+      include: { reimbursementReceipt: true, payee: { select: { name: true } }, wallet: { select: { id: true, currencyId: true } } },
+    });
+    if (!source || source.kind !== TransactionKind.REIMBURSEMENT || source.type !== TransactionType.EXPENSE) throw new Error("Reimbursement transaction not found.");
+    if (source.reimbursementReceipt) throw new Error("This reimbursement has already been received.");
+    const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
+    if (!wallet) throw new Error("Wallet not found.");
+    const receipt = await tx.transaction.create({
+      data: {
+        transactionDate: input.transactionDate,
+        type: TransactionType.INCOME,
+        kind: TransactionKind.REIMBURSEMENT,
+        amount: source.amount,
+        note: "Reimbursement for " + (source.payee?.name ?? "expense") + " on " + source.transactionDate.toISOString().slice(0, 10),
+        wallet: { connect: { id: wallet.id } },
+        reimbursementSource: { connect: { id: source.id } },
+        ...(source.payeeId ? { payee: { connect: { id: source.payeeId } } } : {}),
+      },
+      include: { wallet: true },
+    });
+    // Receiving the reimbursement is a new wallet movement now, even when its
+    // accounting date is earlier than the wallet's balance snapshot.
+    await applyBalanceDelta(tx, wallet.id, balanceDelta(receipt));
+    return receipt;
   });
 }
 
@@ -96,6 +144,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
       },
     });
     if (!existing) throw new Error("Transaction not found.");
+    if (input.reimbursementEnabled && (input.type ?? existing.type) !== TransactionType.EXPENSE) throw new Error("Reimbursement is available for expense transactions only.");
     if (existing.payablePayment) throw new Error("This transaction is linked to a payable repayment. Manage it from the related Split Bill instead.");
     if (existing.splitBill && (input.transactionDate !== undefined || input.type !== undefined || input.amount !== undefined || input.walletId !== undefined || input.installment !== undefined)) throw new Error("This transaction is linked to a Split Bill. Edit the Split Bill first, or remove the Split Bill before changing the transaction amount, date, wallet, type, or installment.");
     const newWalletId = input.walletId ?? existing.walletId;
@@ -126,6 +175,7 @@ export async function updateTransactionService(id: string, input: UpdateTransact
     return tx.transaction.update({
       where: { id },
       data: {
+        ...(input.reimbursementEnabled !== undefined && { kind: input.reimbursementEnabled ? TransactionKind.REIMBURSEMENT : TransactionKind.STANDARD }),
         ...(input.transactionDate && { transactionDate: input.transactionDate }),
         ...(input.type && { type: input.type }),
         ...(input.amount !== undefined && { amount: input.amount }),
@@ -160,6 +210,38 @@ export async function applyTransactionMappingToMerchantService(id: string, input
     }
     return transactions.length;
   });
+}
+
+export async function deleteIncompleteTransactionsService() {
+  const incomplete = await prisma.transaction.findMany({
+    where: {
+      OR: [
+        { kind: TransactionKind.STANDARD },
+        { kind: TransactionKind.REIMBURSEMENT, type: TransactionType.EXPENSE },
+      ],
+      AND: [{
+        OR: [
+          { wallet: { name: "Unassigned (Review)" } },
+          { categoryId: null },
+          { subcategoryId: null },
+        ],
+      }],
+    },
+    select: {
+      id: true,
+      splitBill: { select: { id: true } },
+      transferFee: { select: { id: true } },
+    },
+  });
+
+  if (incomplete.some((transaction) => transaction.splitBill || transaction.transferFee)) {
+    throw new Error("Some incomplete transactions are linked to Split Bill or Transfer records. Remove those links before deleting all.");
+  }
+
+  for (const transaction of incomplete) {
+    await deleteTransactionService(transaction.id);
+  }
+  return incomplete.length;
 }
 
 export async function deleteTransactionService(id: string) {

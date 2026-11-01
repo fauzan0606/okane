@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { applyTransactionMappingToMerchantService, createTransactionService, deleteTransactionService, updateTransactionService } from "./service";
+import { applyTransactionMappingToMerchantService, createTransactionService, deleteIncompleteTransactionsService, deleteTransactionService, reimburseTransaction, updateTransactionService } from "./service";
 import { transactionSchema } from "./schema";
 import type { TransactionActionState } from "./types";
 
@@ -12,6 +12,7 @@ function revalidateFinancialViews() {
   revalidatePath("/wallet");
   revalidatePath("/credit-card");
   revalidatePath("/");
+  revalidatePath("/reimbursements");
 }
 
 function nullableToUndefined(value: FormDataEntryValue | null) {
@@ -26,6 +27,7 @@ function formValues(formData: FormData) {
     type: formData.get("type"),
     amount: formData.get("amount"),
     walletId: formData.get("walletId"),
+    reimbursementEnabled: formData.get("reimbursementEnabled"),
     categoryId: nullableToUndefined(formData.get("categoryId")),
     subcategoryId: nullableToUndefined(formData.get("subcategoryId")),
     merchant: nullableToUndefined(formData.get("merchant")),
@@ -109,6 +111,16 @@ export async function applyTransactionMappingToMerchantAction(_prevState: Transa
   }
 }
 
+export async function deleteAllIncompleteTransactionsAction() {
+  try {
+    const count = await deleteIncompleteTransactionsService();
+    revalidateFinancialViews();
+    return { success: true, count };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to delete incomplete transactions." };
+  }
+}
+
 export async function deleteTransactionAction(_prevState: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
   const id = formData.get("id");
   if (typeof id !== "string" || id.length === 0) return { success: false, message: "Missing transaction id." };
@@ -119,4 +131,31 @@ export async function deleteTransactionAction(_prevState: TransactionActionState
   }
   revalidateFinancialViews();
   return { success: true };
+}
+
+async function processReimbursement(formData: FormData) {
+  const transactionId = formData.get("transactionId");
+  const walletId = formData.get("walletId");
+  const transactionDate = formData.get("transactionDate");
+  if (typeof transactionId !== "string" || !transactionId) return { success: false, message: "Missing reimbursement transaction." };
+  if (typeof walletId !== "string" || !walletId) return { success: false, message: "Wallet is required." };
+  if (typeof transactionDate !== "string" || !transactionDate) return { success: false, message: "Date is required." };
+  try {
+    const receivedDate = new Date(transactionDate + "T00:00:00.000Z");
+    if (Number.isNaN(receivedDate.getTime())) return { success: false, message: "Date is invalid." };
+    await reimburseTransaction({ transactionId, walletId, transactionDate: receivedDate });
+    revalidateFinancialViews();
+    return { success: true };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to record reimbursement." };
+  }
+}
+
+export async function reimburseTransactionAction(formData: FormData) {
+  return processReimbursement(formData);
+}
+
+export async function markReimbursementReceivedAction(formData: FormData): Promise<void> {
+  const result = await processReimbursement(formData);
+  if (!result.success) throw new Error(result.message ?? "Failed to record reimbursement.");
 }

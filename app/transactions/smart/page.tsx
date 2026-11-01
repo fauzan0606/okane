@@ -18,6 +18,7 @@ export default async function Page() {
           id: true,
           name: true,
           bank: true,
+          walletType: true,
         },
         orderBy: {
           name: "asc",

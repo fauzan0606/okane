@@ -6,6 +6,7 @@ export type TransactionWithRelations = {
   id: string;
   transactionDate: string;
   type: "INCOME" | "EXPENSE";
+  kind: "STANDARD" | "REIMBURSEMENT";
   amount: string;
   note: string | null;
   walletId: string;
@@ -41,6 +42,7 @@ function serializeTransaction(transaction: RawTransaction): TransactionWithRelat
     id: String(transaction.id),
     transactionDate: transaction.transactionDate.toISOString(),
     type: transaction.type,
+    kind: transaction.kind,
     amount: transaction.amount.toString(),
     note: transaction.note ?? null,
     walletId: String(transaction.walletId),
@@ -123,7 +125,12 @@ type TransactionListFilters = {
 };
 
 function buildTransactionWhere(filters: TransactionListFilters): Prisma.TransactionWhereInput {
-  const where: Prisma.TransactionWhereInput = { kind: "STANDARD" };
+  const where: Prisma.TransactionWhereInput = {
+    OR: [
+      { kind: "STANDARD" },
+      { kind: "REIMBURSEMENT", type: "EXPENSE" },
+    ],
+  };
   if (filters.categoryId) where.categoryId = filters.categoryId;
   if (filters.walletId) where.walletId = filters.walletId;
 
@@ -134,10 +141,14 @@ function buildTransactionWhere(filters: TransactionListFilters): Prisma.Transact
   }
 
   if (filters.reviewOnly) {
-    where.OR = [
-      { wallet: { name: IMPORT_REVIEW_WALLET_NAME } },
-      { categoryId: null },
-      { subcategoryId: null },
+    where.AND = [
+      {
+        OR: [
+          { wallet: { name: IMPORT_REVIEW_WALLET_NAME } },
+          { categoryId: null },
+          { subcategoryId: null },
+        ],
+      },
     ];
   }
 
@@ -146,7 +157,12 @@ function buildTransactionWhere(filters: TransactionListFilters): Prisma.Transact
 
 export async function getTransactions() {
   const transactions = await prisma.transaction.findMany({
-    where: { kind: "STANDARD" },
+    where: {
+      OR: [
+        { kind: "STANDARD" },
+        { kind: "REIMBURSEMENT", type: "EXPENSE" },
+      ],
+    },
     include: transactionInclude,
     orderBy: [
       { transactionDate: "desc" },
@@ -195,7 +211,13 @@ export async function getTransactionCountsByPayeeIds(payeeIds: string[]) {
 
 export async function getTransactionById(id: string) {
   const transaction = await prisma.transaction.findFirst({
-    where: { id, kind: "STANDARD" },
+    where: {
+      id,
+      OR: [
+        { kind: "STANDARD" },
+        { kind: "REIMBURSEMENT", type: "EXPENSE" },
+      ],
+    },
     include: transactionInclude,
   });
   return transaction ? serializeTransaction(transaction) : null;

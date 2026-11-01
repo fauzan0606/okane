@@ -1,4 +1,4 @@
-import { Prisma, TransactionType, TransferOrigin, WalletType } from "@prisma/client";
+import { CategoryType, Prisma, TransactionType, TransferOrigin, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 
 function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAsOf: Date | null) {
@@ -12,7 +12,7 @@ function affectsCurrentBalance(transactionDate: Date, createdAt: Date, balanceAs
 
 async function getWalletPair(tx: Prisma.TransactionClient, fromWalletId: string, toWalletId: string) {
   const [fromWallet, toWallet] = await Promise.all([
-    tx.wallet.findUnique({ where: { id: fromWalletId }, select: { id: true, name: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
+    tx.wallet.findUnique({ where: { id: fromWalletId }, select: { id: true, name: true, bank: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
     tx.wallet.findUnique({ where: { id: toWalletId }, select: { id: true, name: true, walletType: true, currencyId: true, currentBalance: true, balanceAsOf: true } }),
   ]);
   if (!fromWallet) throw new Error("Source wallet not found.");
@@ -28,6 +28,36 @@ async function getWalletPair(tx: Prisma.TransactionClient, fromWalletId: string,
 function validateAmounts(amount: number, feeAmount: number) {
   if (!Number.isFinite(amount) || amount <= 0) throw new Error("Transfer amount must be greater than zero.");
   if (!Number.isFinite(feeAmount) || feeAmount < 0) throw new Error("Transfer fee cannot be negative.");
+}
+
+async function getTransferFeePayee(tx: Prisma.TransactionClient, sourceBank: string) {
+  const name = `Biaya transfer ${sourceBank}`;
+  const existing = await tx.payee.findFirst({ where: { name } });
+  return existing ?? tx.payee.create({ data: { name, sortOrder: 0, isActive: true } });
+}
+
+async function getTransferFeeCategory(tx: Prisma.TransactionClient) {
+  const categoryName = "Finance & Fees";
+  const subcategoryName = "Transfer Fee";
+  let category = await tx.category.findFirst({ where: { name: categoryName, type: CategoryType.EXPENSE } });
+  if (!category) {
+    category = await tx.category.create({
+      data: { name: categoryName, type: CategoryType.EXPENSE, isSystem: true, isActive: true },
+    });
+  } else if (!category.isActive) {
+    category = await tx.category.update({ where: { id: category.id }, data: { isActive: true } });
+  }
+
+  let subcategory = await tx.subcategory.findFirst({ where: { categoryId: category.id, name: subcategoryName } });
+  if (!subcategory) {
+    subcategory = await tx.subcategory.create({
+      data: { categoryId: category.id, name: subcategoryName, isSystem: true, isActive: true },
+    });
+  } else if (!subcategory.isActive) {
+    subcategory = await tx.subcategory.update({ where: { id: subcategory.id }, data: { isActive: true } });
+  }
+
+  return { categoryId: category.id, subcategoryId: subcategory.id };
 }
 
 async function applyTransferBalance(
@@ -89,6 +119,8 @@ export async function createTransfer(input: { transferDate: Date; fromWalletId: 
 
     let feeTransactionId: string | undefined;
     if (!fee.isZero()) {
+      const feePayee = await getTransferFeePayee(tx, fromWallet.bank?.trim() || fromWallet.name);
+      const feeCategory = await getTransferFeeCategory(tx);
       const feeTransaction = await tx.transaction.create({
         data: {
           transactionDate: input.transferDate,
@@ -96,6 +128,9 @@ export async function createTransfer(input: { transferDate: Date; fromWalletId: 
           amount: fee,
           note: "Transfer Fee",
           wallet: { connect: { id: fromWallet.id } },
+          payee: { connect: { id: feePayee.id } },
+          category: { connect: { id: feeCategory.categoryId } },
+          subcategory: { connect: { id: feeCategory.subcategoryId } },
         },
       });
       feeTransactionId = feeTransaction.id;
@@ -151,9 +186,11 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         await tx.transaction.delete({ where: { id: existing.feeTransaction.id } });
         feeTransactionId = null;
       } else {
+        const feePayee = await getTransferFeePayee(tx, fromWallet.bank?.trim() || fromWallet.name);
+        const feeCategory = await getTransferFeeCategory(tx);
         const updatedFee = await tx.transaction.update({
           where: { id: existing.feeTransaction.id },
-          data: { transactionDate: input.transferDate, amount: fee, walletId: fromWallet.id },
+          data: { transactionDate: input.transferDate, amount: fee, wallet: { connect: { id: fromWallet.id } }, payee: { connect: { id: feePayee.id } }, category: { connect: { id: feeCategory.categoryId } }, subcategory: { connect: { id: feeCategory.subcategoryId } } },
         });
         feeTransactionId = updatedFee.id;
         if (affectsCurrentBalance(input.transferDate, updatedFee.createdAt, fromWallet.balanceAsOf)) {
@@ -161,6 +198,8 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         }
       }
     } else if (!fee.isZero()) {
+      const feePayee = await getTransferFeePayee(tx, fromWallet.bank?.trim() || fromWallet.name);
+      const feeCategory = await getTransferFeeCategory(tx);
       const createdFee = await tx.transaction.create({
         data: {
           transactionDate: input.transferDate,
@@ -168,6 +207,9 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
           amount: fee,
           note: "Transfer Fee",
           wallet: { connect: { id: fromWallet.id } },
+          payee: { connect: { id: feePayee.id } },
+          category: { connect: { id: feeCategory.categoryId } },
+          subcategory: { connect: { id: feeCategory.subcategoryId } },
         },
       });
       feeTransactionId = createdFee.id;

@@ -1,7 +1,7 @@
 import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
-import { getReconciliationSession, getReconciliationWallets } from "@/modules/reconciliation/service";
+import { getLatestReconciliationSession, getReconciliationFormData, getReconciliationSession } from "@/modules/reconciliation/service";
 import ReconciliationClient from "@/modules/reconciliation/components/ReconciliationClient";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,11 @@ function serializeSession(session: Awaited<ReturnType<typeof getReconciliationSe
     sourceType: session.sourceType,
     status: session.status,
     extractedCount: session.extractedCount,
-    wallet: { name: session.wallet.name, walletType: session.wallet.walletType, currency: { symbol: session.wallet.currency.symbol } },
+    wallet: {
+      name: session.wallet.name,
+      walletType: session.wallet.walletType,
+      currency: { symbol: session.wallet.currency.symbol },
+    },
     rows: session.rows.map((row) => ({
       id: row.id,
       sourceSide: row.sourceSide,
@@ -28,27 +32,58 @@ function serializeSession(session: Awaited<ReturnType<typeof getReconciliationSe
       matchStatus: row.matchStatus,
       matchConfidence: row.matchConfidence,
       matchReason: row.matchReason,
+      suggestedCategoryId: row.suggestedCategoryId ?? null,
+      suggestedCategoryName: row.suggestedCategoryName ?? null,
+      suggestedSubcategoryId: row.suggestedSubcategoryId ?? null,
+      suggestedSubcategoryName: row.suggestedSubcategoryName ?? null,
       matchedTransactionId: row.matchedTransactionId,
+      matchedTransaction: row.matchedTransaction
+        ? {
+            id: row.matchedTransaction.id,
+            transactionDate: row.matchedTransaction.transactionDate.toISOString(),
+            type: row.matchedTransaction.type,
+            amount: row.matchedTransaction.amount.toString(),
+            note: row.matchedTransaction.note,
+            wallet: {
+              name: row.matchedTransaction.wallet.name,
+              walletType: row.matchedTransaction.wallet.walletType,
+              currency: {
+                code: row.matchedTransaction.wallet.currency.code,
+                symbol: row.matchedTransaction.wallet.currency.symbol,
+              },
+            },
+            payee: row.matchedTransaction.payee ? { name: row.matchedTransaction.payee.name } : null,
+            category: row.matchedTransaction.category ? { name: row.matchedTransaction.category.name } : null,
+            subcategory: row.matchedTransaction.subcategory ? { name: row.matchedTransaction.subcategory.name } : null,
+          }
+        : null,
+      matchedTransfer: row.matchedTransfer
+        ? {
+            id: row.matchedTransfer.id,
+            transferDate: row.matchedTransfer.transferDate.toISOString(),
+            amount: row.matchedTransfer.amount.toString(),
+            origin: row.matchedTransfer.origin,
+            fromWallet: row.matchedTransfer.fromWallet.name,
+            toWallet: row.matchedTransfer.toWallet.name,
+          }
+        : null,
       resolution: row.resolution,
     })),
   };
 }
 
-export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<{ session?: string }> }) {
+export default async function ReconciliationPage({ searchParams }: { searchParams: Promise<{ session?: string; new?: string }> }) {
   const params = await searchParams;
-  const [wallets, session] = await Promise.all([
-    getReconciliationWallets(),
-    params.session ? getReconciliationSession(params.session) : Promise.resolve(null),
+  const draft = !params.session && params.new !== "1" ? await getLatestReconciliationSession() : null;
+  const sessionId = params.session ?? draft?.id;
+  const [{ wallets, categories, subcategories }, session] = await Promise.all([
+    getReconciliationFormData(),
+    sessionId ? getReconciliationSession(sessionId) : Promise.resolve(null),
   ]);
 
-  return <AppShell sidebar={<Sidebar />} header={<Header />}>
-    <div className="space-y-6">
-      <div>
-        <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-emerald-400">Statement control</p>
-        <h1 className="mt-1 text-3xl font-bold text-white">Reconciliation</h1>
-        <p className="mt-2 max-w-3xl text-sm text-slate-500">Compare a PDF bank or credit-card statement against OKANE without changing transactions until you explicitly confirm each difference.</p>
-      </div>
-      <ReconciliationClient wallets={wallets} session={serializeSession(session)} />
-    </div>
-  </AppShell>;
+  return (
+    <AppShell sidebar={<Sidebar />} header={<Header />}>
+      <ReconciliationClient wallets={wallets} categories={categories} subcategories={subcategories} session={serializeSession(session)} />
+    </AppShell>
+  );
 }

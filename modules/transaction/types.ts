@@ -10,6 +10,7 @@ export interface InstallmentInput {
 export interface CreateTransactionInput {
   transactionDate: Date;
   type: TransactionType;
+  reimbursementEnabled?: boolean;
   amount: number;
   walletId: string;
   categoryId?: string;

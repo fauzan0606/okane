@@ -3,6 +3,7 @@ import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import { Button } from "@/components/ui/button";
 import TransactionForm from "@/modules/transaction/components/TransactionForm";
+import DeleteIncompleteTransactionsButton from "@/modules/transaction/components/DeleteIncompleteTransactionsButton";
 import TransactionImport from "@/modules/transaction/components/TransactionImport";
 import TransactionList from "@/modules/transaction/components/TransactionList";
 import TransactionPagination from "@/modules/transaction/components/TransactionPagination";
@@ -80,7 +81,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         {reviewOnly && (
           <div className="flex flex-col gap-2 rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-4 text-sm text-amber-100 md:flex-row md:items-center md:justify-between">
             <span>Showing {paged.total} incomplete transactions. Complete missing wallet, category, or subcategory fields and the transaction will leave this review view.</span>
-            <a href="/transactions" className="font-semibold underline underline-offset-2">Show all transactions</a>
+            <div className="flex flex-wrap items-center gap-3"><DeleteIncompleteTransactionsButton count={paged.total} /><a href="/transactions" className="font-semibold underline underline-offset-2">Show all transactions</a></div>
           </div>
         )}
 
