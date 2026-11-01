@@ -341,10 +341,8 @@ export async function updateSplitBillPayablePaymentWallet(splitBillId: string, p
       await applyBalanceDelta(tx, newWallet.id, balanceDelta("EXPENSE", transaction.amount));
     }
 
-    await Promise.all([
-      tx.payablePayment.update({ where: { id: paymentId }, data: { walletId: newWallet.id } }),
-      tx.transaction.update({ where: { id: transaction.id }, data: { wallet: { connect: { id: newWallet.id } } } }),
-    ]);
+    await tx.payablePayment.update({ where: { id: paymentId }, data: { walletId: newWallet.id } });
+    await tx.transaction.update({ where: { id: transaction.id }, data: { wallet: { connect: { id: newWallet.id } } } });
 
     return { walletId: newWallet.id };
   });
