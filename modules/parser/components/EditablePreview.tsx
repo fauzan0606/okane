@@ -26,6 +26,8 @@ export default function EditablePreview({ result, wallets, categories, subcatego
   const [installmentTenor, setInstallmentTenor] = useState("6");
   const [installmentStartDate, setInstallmentStartDate] = useState(result.transactionDate);
   const [installmentFee, setInstallmentFee] = useState("0");
+  const [tipsEnabled, setTipsEnabled] = useState(false);
+  const [tipsAmount, setTipsAmount] = useState("");
   const selectedWallet = wallets.find((wallet) => wallet.id === parsed.wallet?.id);
   const canInstallment = selectedWallet?.walletType === "CREDIT_CARD" && parsed.type === "EXPENSE";
   const fee = Number(installmentFee || 0);
@@ -55,6 +57,8 @@ export default function EditablePreview({ result, wallets, categories, subcatego
       try {
         await saveParsedTransactionAction({
           ...parsed,
+          tipsEnabled: parsed.type === "EXPENSE" && tipsEnabled,
+          tipsAmount: tipsEnabled ? Number(tipsAmount) : undefined,
           installment: canInstallment && installmentEnabled
             ? { enabled: true, tenorMonths: Number(installmentTenor), startDate: installmentStartDate, feeAmount: fee }
             : { enabled: false },
@@ -81,11 +85,34 @@ export default function EditablePreview({ result, wallets, categories, subcatego
           {parsed.type === "EXPENSE" && <div className="space-y-1.5"><Label htmlFor="merchant" className="text-slate-200">Merchant</Label><Input id="merchant" className={fieldClassName} value={parsed.merchant ?? ""} onChange={(event) => setParsed((current) => ({ ...current, merchant: event.target.value.trim() || undefined }))} placeholder="Nama merchant" /></div>}
           <div className="space-y-1.5"><Label htmlFor="amount" className="text-slate-200">Amount</Label><Input id="amount" className={fieldClassName} type="number" min="1" step="1" value={parsed.amount ?? ""} onChange={(event) => { const value = event.target.valueAsNumber; setParsed((current) => ({ ...current, amount: Number.isFinite(value) ? value : undefined })); }} placeholder="0" /></div>
           <div className="space-y-1.5"><Label htmlFor="type" className="text-slate-200">Type</Label><Select value={parsed.type} onValueChange={(value) => { if (value === "INCOME" || value === "EXPENSE") setParsed((current) => ({ ...current, type: value, merchant: value === "INCOME" ? undefined : current.merchant, reimbursementEnabled: value === "EXPENSE" ? current.reimbursementEnabled : false }));
-                  if (value === "INCOME") setInstallmentEnabled(false); }}><SelectTrigger id="type" className={`w-full ${fieldClassName}`}><SelectValue /></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white"><SelectItem value="EXPENSE">Expense</SelectItem><SelectItem value="INCOME">Income</SelectItem></SelectContent></Select></div>
+                  if (value === "INCOME") { setInstallmentEnabled(false); setTipsEnabled(false); } }}><SelectTrigger id="type" className={`w-full ${fieldClassName}`}><SelectValue /></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white"><SelectItem value="EXPENSE">Expense</SelectItem><SelectItem value="INCOME">Income</SelectItem></SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor="wallet" className="text-slate-200">Wallet</Label><Select value={parsed.wallet?.id ?? null} onValueChange={updateWallet}><SelectTrigger id="wallet" className={`w-full ${fieldClassName}`}><SelectValue placeholder="Pilih wallet">{(walletId: string | null) => wallets.find((wallet) => wallet.id === walletId)?.name ?? "Pilih wallet"}</SelectValue></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white">{wallets.map((wallet) => <SelectItem key={wallet.id} value={wallet.id}>{wallet.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor="category" className="text-slate-200">Category</Label><Select value={parsed.category?.id ?? null} onValueChange={updateCategory}><SelectTrigger id="category" className={`w-full ${fieldClassName}`}><SelectValue placeholder="Pilih category">{(categoryId: string | null) => categories.find((category) => category.id === categoryId)?.name ?? "Pilih category"}</SelectValue></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white">{categories.map((category) => <SelectItem key={category.id} value={category.id}>{category.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="space-y-1.5"><Label htmlFor="subcategory" className="text-slate-200">Subcategory</Label><Select value={parsed.subcategory?.id ?? null} onValueChange={updateSubcategory} disabled={!parsed.category}><SelectTrigger id="subcategory" className={`w-full ${fieldClassName}`}><SelectValue placeholder={parsed.category ? "Pilih subcategory" : "Pilih category dulu"}>{(subcategoryId: string | null) => visibleSubcategories.find((item) => item.id === subcategoryId)?.name ?? "Pilih subcategory"}</SelectValue></SelectTrigger><SelectContent className="border-white/10 bg-[#182335] text-white">{visibleSubcategories.map((subcategory) => <SelectItem key={subcategory.id} value={subcategory.id}>{subcategory.name}</SelectItem>)}</SelectContent></Select></div>
         </div>
+
+        {parsed.type === "EXPENSE" && (
+          <div className="rounded-2xl border border-white/10 bg-[#0E151E] p-4">
+            <label className="flex cursor-pointer items-start gap-3">
+              <input
+                type="checkbox"
+                checked={tipsEnabled}
+                onChange={(event) => setTipsEnabled(event.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-white/20 bg-transparent accent-emerald-500"
+              />
+              <span>
+                <span className="block text-sm font-semibold text-white">Tambahkan tips</span>
+                <span className="mt-0.5 block text-xs text-slate-500">Tips akan dicatat sebagai transaksi pengeluaran terpisah.</span>
+              </span>
+            </label>
+            {tipsEnabled && (
+              <div className="mt-4 space-y-1.5">
+                <Label htmlFor="tips-amount" className="text-slate-200">Jumlah tips</Label>
+                <Input id="tips-amount" className={fieldClassName} type="number" min="0.01" step="0.01" value={tipsAmount} onChange={(event) => setTipsAmount(event.target.value)} placeholder="10000" required />
+              </div>
+            )}
+          </div>
+        )}
 
         {parsed.type === "EXPENSE" && (
           <div className="rounded-2xl border border-emerald-500/20 bg-emerald-500/[0.04] p-4">

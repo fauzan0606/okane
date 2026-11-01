@@ -165,8 +165,8 @@ export async function getTransactions() {
     },
     include: transactionInclude,
     orderBy: [
-      { transactionDate: "desc" },
       { createdAt: "desc" },
+      { transactionDate: "desc" },
       { id: "desc" },
     ],
   });
@@ -183,8 +183,8 @@ export async function getTransactionsPage(filters: TransactionListFilters & { pa
       where,
       include: transactionInclude,
       orderBy: [
-        { transactionDate: "desc" },
         { createdAt: "desc" },
+        { transactionDate: "desc" },
         { id: "desc" },
       ],
       skip: (page - 1) * pageSize,

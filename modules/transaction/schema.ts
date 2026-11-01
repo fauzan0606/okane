@@ -7,6 +7,8 @@ export const transactionSchema = z.object({
   transactionDate: z.coerce.date(),
   type: z.nativeEnum(TransactionType),
   reimbursementEnabled: checkbox.default(false),
+  tipsEnabled: checkbox.default(false),
+  tipsAmount: z.coerce.number().positive("Tips amount must be greater than zero.").optional(),
   amount: z.coerce.number().positive("Amount must be greater than zero."),
   walletId: z.string().min(1, "Wallet is required."),
   categoryId: z.string().optional().transform((value) => value || undefined),
@@ -23,6 +25,12 @@ export const transactionSchema = z.object({
   }
   if (value.reimbursementEnabled && value.type !== TransactionType.EXPENSE) {
     ctx.addIssue({ code: "custom", path: ["reimbursementEnabled"], message: "Reimbursement is available for expense transactions only." });
+  }
+  if (value.tipsEnabled && value.type !== TransactionType.EXPENSE) {
+    ctx.addIssue({ code: "custom", path: ["tipsEnabled"], message: "Tips are available for expense transactions only." });
+  }
+  if (value.tipsEnabled && !value.tipsAmount) {
+    ctx.addIssue({ code: "custom", path: ["tipsAmount"], message: "Tips amount is required when tips are enabled." });
   }
   if (value.subcategoryId && !value.categoryId) {
     ctx.addIssue({ code: "custom", path: ["subcategoryId"], message: "Category is required when a subcategory is selected." });

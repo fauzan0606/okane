@@ -12,6 +12,8 @@ export async function saveParsedTransaction(parsed: ParsedTransaction) {
     transactionDate,
     type: parsed.type,
     reimbursementEnabled: parsed.reimbursementEnabled ?? false,
+    tipsEnabled: parsed.tipsEnabled ?? false,
+    tipsAmount: parsed.tipsAmount,
     amount: parsed.amount,
     walletId: parsed.wallet.id,
     categoryId: parsed.category?.id,
