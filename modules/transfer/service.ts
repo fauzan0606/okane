@@ -30,6 +30,12 @@ function validateAmounts(amount: number, feeAmount: number) {
   if (!Number.isFinite(feeAmount) || feeAmount < 0) throw new Error("Transfer fee cannot be negative.");
 }
 
+async function getTransferFeePayee(tx: Prisma.TransactionClient) {
+  const name = "Biaya transfer bank asal transfer";
+  const existing = await tx.payee.findFirst({ where: { name } });
+  return existing ?? tx.payee.create({ data: { name, sortOrder: 0, isActive: true } });
+}
+
 async function applyTransferBalance(
   tx: Prisma.TransactionClient,
   transfer: { transferDate: Date; createdAt: Date; amount: Prisma.Decimal; fromWalletId: string; toWalletId: string },
@@ -89,6 +95,7 @@ export async function createTransfer(input: { transferDate: Date; fromWalletId: 
 
     let feeTransactionId: string | undefined;
     if (!fee.isZero()) {
+      const feePayee = await getTransferFeePayee(tx);
       const feeTransaction = await tx.transaction.create({
         data: {
           transactionDate: input.transferDate,
@@ -96,6 +103,7 @@ export async function createTransfer(input: { transferDate: Date; fromWalletId: 
           amount: fee,
           note: "Transfer Fee",
           wallet: { connect: { id: fromWallet.id } },
+          payee: { connect: { id: feePayee.id } },
         },
       });
       feeTransactionId = feeTransaction.id;
@@ -151,9 +159,10 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         await tx.transaction.delete({ where: { id: existing.feeTransaction.id } });
         feeTransactionId = null;
       } else {
+        const feePayee = await getTransferFeePayee(tx);
         const updatedFee = await tx.transaction.update({
           where: { id: existing.feeTransaction.id },
-          data: { transactionDate: input.transferDate, amount: fee, walletId: fromWallet.id },
+          data: { transactionDate: input.transferDate, amount: fee, walletId: fromWallet.id, payee: { connect: { id: feePayee.id } } },
         });
         feeTransactionId = updatedFee.id;
         if (affectsCurrentBalance(input.transferDate, updatedFee.createdAt, fromWallet.balanceAsOf)) {
@@ -161,6 +170,7 @@ export async function updateTransfer(input: { id: string; transferDate: Date; fr
         }
       }
     } else if (!fee.isZero()) {
+      const feePayee = await getTransferFeePayee(tx);
       const createdFee = await tx.transaction.create({
         data: {
           transactionDate: input.transferDate,
