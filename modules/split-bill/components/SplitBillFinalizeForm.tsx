@@ -1,6 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition, type FormEvent } from "react";
+import { useRouter } from "next/navigation";
+import { LoaderCircle } from "lucide-react";
+import { toast } from "sonner";
 import { finalizeSplitBillAction } from "../actions";
 
 type Option = { id: string; name: string };
@@ -45,13 +48,30 @@ export default function SplitBillFinalizeForm({
   const [categoryId, setCategoryId] = useState(recommendedCategoryId ?? "");
   const [subcategoryId, setSubcategoryId] = useState(recommendedSubcategoryId ?? "");
   const [amountTransferred, setAmountTransferred] = useState(String(Math.round(personalAmount)));
+  const [isFinalizing, startFinalizing] = useTransition();
+  const router = useRouter();
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (isFinalizing) return;
+    const formData = new FormData(event.currentTarget);
+    startFinalizing(async () => {
+      try {
+        await finalizeSplitBillAction(formData);
+        toast.success("Split Bill finalized and saved.");
+        router.refresh();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Unable to finalize Split Bill.");
+      }
+    });
+  }
+
   const visibleSubcategories = useMemo(
     () => subcategories.filter((subcategory) => subcategory.categoryId === categoryId),
     [categoryId, subcategories],
   );
 
   return (
-    <form action={finalizeSplitBillAction} className="mt-4 space-y-3">
+    <form onSubmit={handleSubmit} aria-busy={isFinalizing} className="mt-4 space-y-3">
       <input type="hidden" name="splitBillId" value={splitBillId} />
       <div className="grid gap-2 lg:grid-cols-4">
         <div>
@@ -96,7 +116,8 @@ export default function SplitBillFinalizeForm({
         )}
       </div>
       {payerIsMe && recommendationConfidence !== "NONE" && Boolean(recommendedCategoryId) && <p className="text-[10px] text-emerald-300/80">Category suggestion is based on your Smart Transaction learning for this merchant. You can change it before saving.</p>}
-      <button type="submit" className="rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-[#07110b]">{payerIsMe ? "Finalize & Add to Finance" : "Finalize & Record Payment"}</button>
+      <button type="submit" disabled={isFinalizing} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-[#07110b] disabled:cursor-not-allowed disabled:opacity-60">{isFinalizing && <LoaderCircle size={14} className="animate-spin" />}{isFinalizing ? "Finalizing & Saving…" : payerIsMe ? "Finalize & Add to Finance" : "Finalize & Record Payment"}</button>
+      {isFinalizing && <p role="status" className="inline-flex items-center gap-2 text-[10px] text-emerald-200"><LoaderCircle size={12} className="animate-spin" /> Processing and saving Split Bill records. Please wait.</p>}
     </form>
   );
 }
