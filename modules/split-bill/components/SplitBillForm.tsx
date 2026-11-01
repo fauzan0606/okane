@@ -503,7 +503,7 @@ export default function SplitBillForm({ currencySymbol = "Rp", onSaved }: Props)
         {isSaving && <div className="mt-3 rounded-xl border border-emerald-400/15 bg-emerald-400/[0.05] px-3 py-2.5 text-xs text-emerald-200"><span className="mr-2 inline-block h-3 w-3 animate-spin rounded-full border-2 border-emerald-300/30 border-t-emerald-300 align-[-2px]" />Saving Split Bill… Please wait.</div>}
         <div className="mt-3 flex justify-end">
           <button type="submit" disabled={isSaving} className={`inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-5 py-3 text-sm font-bold text-[#07110b] transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 ${valid ? "" : "opacity-80"}`}>
-            {isSaving ? "Saving…" : "Save Split Bill"}
+            {isSaving && <span className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-[#07110b]/30 border-t-[#07110b]" />}{isSaving ? "Saving…" : "Save Split Bill"}
           </button>
         </div>
       </div>
