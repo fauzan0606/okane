@@ -123,7 +123,7 @@ export async function deleteTransactionAction(_prevState: TransactionActionState
   return { success: true };
 }
 
-export async function reimburseTransactionAction(formData: FormData) {
+async function processReimbursement(formData: FormData) {
   const transactionId = formData.get("transactionId");
   const walletId = formData.get("walletId");
   const transactionDate = formData.get("transactionDate");
@@ -131,10 +131,21 @@ export async function reimburseTransactionAction(formData: FormData) {
   if (typeof walletId !== "string" || !walletId) return { success: false, message: "Wallet is required." };
   if (typeof transactionDate !== "string" || !transactionDate) return { success: false, message: "Date is required." };
   try {
-    await reimburseTransaction({ transactionId, walletId, transactionDate: new Date(transactionDate + "T00:00:00.000Z") });
+    const receivedDate = new Date(transactionDate + "T00:00:00.000Z");
+    if (Number.isNaN(receivedDate.getTime())) return { success: false, message: "Date is invalid." };
+    await reimburseTransaction({ transactionId, walletId, transactionDate: receivedDate });
     revalidateFinancialViews();
     return { success: true };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Failed to record reimbursement." };
   }
+}
+
+export async function reimburseTransactionAction(formData: FormData) {
+  return processReimbursement(formData);
+}
+
+export async function markReimbursementReceivedAction(formData: FormData): Promise<void> {
+  const result = await processReimbursement(formData);
+  if (!result.success) throw new Error(result.message ?? "Failed to record reimbursement.");
 }
