@@ -124,7 +124,9 @@ export async function reimburseTransaction(input: { transactionId: string; walle
       },
       include: { wallet: true },
     });
-    if (affectsCurrentBalance(receipt, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(receipt));
+    // Receiving the reimbursement is a new wallet movement now, even when its
+    // accounting date is earlier than the wallet's balance snapshot.
+    await applyBalanceDelta(tx, wallet.id, balanceDelta(receipt));
     return receipt;
   });
 }
