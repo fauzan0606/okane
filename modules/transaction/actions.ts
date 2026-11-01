@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { applyTransactionMappingToMerchantService, createTransactionService, deleteTransactionService, reimburseTransaction, updateTransactionService } from "./service";
+import { applyTransactionMappingToMerchantService, createTransactionService, deleteIncompleteTransactionsService, deleteTransactionService, reimburseTransaction, updateTransactionService } from "./service";
 import { transactionSchema } from "./schema";
 import type { TransactionActionState } from "./types";
 
@@ -108,6 +108,16 @@ export async function applyTransactionMappingToMerchantAction(_prevState: Transa
     return { success: true, message: `Updated ${count} transactions with the same merchant.` };
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Failed to update matching transactions." };
+  }
+}
+
+export async function deleteAllIncompleteTransactionsAction() {
+  try {
+    const count = await deleteIncompleteTransactionsService();
+    revalidateFinancialViews();
+    return { success: true, count };
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to delete incomplete transactions." };
   }
 }
 
