@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSplitBill, deleteSplitBill, finalizeSplitBill, updateSplitBillPaymentWallet } from "./service";
+import { createSplitBill, deleteSplitBill, finalizeSplitBill, updateSplitBillPaymentWallet, updateSplitBillPayablePaymentWallet } from "./service";
 import { updateSplitBillItemAllocation } from "./item-edit-service";
 import { recordPayablePayment } from "@/modules/payable/service";
 
@@ -113,12 +113,17 @@ export async function deleteSplitBillAction(formData: FormData) {
 export async function updateSplitBillPaymentWalletAction(formData: FormData): Promise<{ success: boolean; message?: string }> {
   const splitBillId = formData.get("splitBillId");
   const walletId = formData.get("walletId");
+  const paymentId = formData.get("paymentId");
   if (typeof splitBillId !== "string" || !splitBillId || typeof walletId !== "string" || !walletId) {
     return { success: false, message: "Split Bill and payment wallet are required." };
   }
 
   try {
-    await updateSplitBillPaymentWallet(splitBillId, walletId);
+    if (typeof paymentId === "string" && paymentId) {
+      await updateSplitBillPayablePaymentWallet(splitBillId, paymentId, walletId);
+    } else {
+      await updateSplitBillPaymentWallet(splitBillId, walletId);
+    }
     refreshAll();
     return { success: true };
   } catch (error) {
