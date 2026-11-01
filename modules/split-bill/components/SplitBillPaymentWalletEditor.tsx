@@ -11,12 +11,13 @@ type WalletOption = { id: string; name: string };
 type Props = {
   splitBillId: string;
   currentWalletId: string;
+  paymentId?: string;
   wallets: WalletOption[];
 };
 
 const selectClass = "rounded-xl border border-[#30465D] bg-[#0A1119] px-3 py-2 text-xs text-white outline-none focus:border-emerald-400/50";
 
-export default function SplitBillPaymentWalletEditor({ splitBillId, currentWalletId, wallets }: Props) {
+export default function SplitBillPaymentWalletEditor({ splitBillId, currentWalletId, paymentId, wallets }: Props) {
   const [editing, setEditing] = useState(false);
   const [walletId, setWalletId] = useState(currentWalletId);
   const [isSaving, startSaving] = useTransition();
@@ -29,6 +30,7 @@ export default function SplitBillPaymentWalletEditor({ splitBillId, currentWalle
     const formData = new FormData();
     formData.set("splitBillId", splitBillId);
     formData.set("walletId", walletId);
+    if (paymentId) formData.set("paymentId", paymentId);
     startSaving(async () => {
       const result = await updateSplitBillPaymentWalletAction(formData);
       if (!result.success) {
