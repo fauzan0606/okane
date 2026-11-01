@@ -11,6 +11,7 @@ export async function saveParsedTransaction(parsed: ParsedTransaction) {
   return createTransactionService({
     transactionDate,
     type: parsed.type,
+    reimbursementEnabled: parsed.reimbursementEnabled ?? false,
     amount: parsed.amount,
     walletId: parsed.wallet.id,
     categoryId: parsed.category?.id,
