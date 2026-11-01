@@ -59,7 +59,13 @@ export async function findTransaction(id: string) { return getTransactionById(id
 
 export async function createTransactionService(input: CreateTransactionInput) {
   if (input.reimbursementEnabled && input.type !== TransactionType.EXPENSE) throw new Error("Reimbursement is available for expense transactions only.");
+  if (input.tipsEnabled && input.type !== TransactionType.EXPENSE) throw new Error("Tips are available for expense transactions only.");
+  if (input.tipsEnabled && (!input.tipsAmount || input.tipsAmount <= 0)) throw new Error("Tips amount must be greater than zero.");
   const payee = await findOrCreatePayeeByName(input.merchant);
+  const tipDescription = input.merchant?.trim() || input.note?.trim() || "Transaction";
+  const tipsPayee = input.tipsEnabled && input.tipsAmount
+    ? await findOrCreatePayeeByName(`Tips - ${tipDescription}`)
+    : null;
   return prisma.$transaction(async (tx) => {
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
     if (!wallet) throw new Error("Wallet not found.");
@@ -81,6 +87,22 @@ export async function createTransactionService(input: CreateTransactionInput) {
       include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true },
     });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
+    if (tipsPayee && input.tipsAmount) {
+      const tipsTransaction = await tx.transaction.create({
+        data: {
+          transactionDate: input.transactionDate,
+          type: TransactionType.EXPENSE,
+          kind: input.reimbursementEnabled ? TransactionKind.REIMBURSEMENT : TransactionKind.STANDARD,
+          amount: input.tipsAmount,
+          note: `Tips for ${tipDescription}`,
+          wallet: { connect: { id: input.walletId } },
+          ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
+          ...(input.subcategoryId && { subcategory: { connect: { id: input.subcategoryId } } }),
+          payee: { connect: { id: tipsPayee.id } },
+        },
+      });
+      if (affectsCurrentBalance(tipsTransaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(tipsTransaction));
+    }
     return transaction;
   });
 }

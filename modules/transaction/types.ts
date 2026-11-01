@@ -11,6 +11,8 @@ export interface CreateTransactionInput {
   transactionDate: Date;
   type: TransactionType;
   reimbursementEnabled?: boolean;
+  tipsEnabled?: boolean;
+  tipsAmount?: number;
   amount: number;
   walletId: string;
   categoryId?: string;
