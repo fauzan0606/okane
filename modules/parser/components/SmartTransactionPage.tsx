@@ -7,7 +7,7 @@ import EditablePreview from "./EditablePreview";
 import type { SmartTransactionResult } from "../types";
 
 type SmartTransactionPageProps = {
-  wallets: { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" }[];
+  wallets: { id: string; name: string; walletType?: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" }[];
   categories: { id: string; name: string }[];
 };
 
