@@ -7,7 +7,7 @@ import DeleteIncompleteTransactionsButton from "@/modules/transaction/components
 import TransactionImport from "@/modules/transaction/components/TransactionImport";
 import TransactionList from "@/modules/transaction/components/TransactionList";
 import TransactionPagination from "@/modules/transaction/components/TransactionPagination";
-import { listTransactionsPage, transactionCountsByPayeeIds, transactionFormData } from "@/modules/transaction/service";
+import { countIncompleteTransactions, listTransactionsPage, transactionCountsByPayeeIds, transactionFormData } from "@/modules/transaction/service";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -36,7 +36,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const [paged, rawFormData, reviewCount] = await Promise.all([
     listTransactionsPage({ page, pageSize: PAGE_SIZE, categoryId: categoryId || undefined, walletId: walletId || undefined, from: from || undefined, to: to || undefined, reviewOnly }),
     transactionFormData(),
-    reviewOnly ? Promise.resolve(null) : listTransactionsPage({ page: 1, pageSize: 1, reviewOnly: true }),
+    reviewOnly ? Promise.resolve(null) : countIncompleteTransactions(),
   ]);
 
   const formData = {
@@ -46,9 +46,11 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     payees: rawFormData.payees.map((payee) => ({ id: String(payee.id), name: String(payee.name), note: payee.note ?? null })),
   };
 
-  const merchantCounts = await transactionCountsByPayeeIds(paged.transactions.map((transaction) => transaction.payeeId ? String(transaction.payeeId) : ""));
+  const merchantCounts = reviewOnly
+    ? await transactionCountsByPayeeIds(paged.transactions.map((transaction) => transaction.payeeId ? String(transaction.payeeId) : ""))
+    : {};
   const hasFilters = Boolean(categoryId || walletId || from || to || reviewOnly);
-  const incompleteCount = reviewOnly ? paged.total : reviewCount?.total ?? 0;
+  const incompleteCount = reviewOnly ? paged.total : reviewCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(paged.total / PAGE_SIZE));
   const safePage = Math.min(paged.page, totalPages);
   const paginationParams: Record<string, string> = {};

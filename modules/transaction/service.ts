@@ -1,7 +1,7 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { Prisma, TransactionKind, TransactionType, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getTransactionById, getTransactions, getTransactionsPage, getTransactionCountsByPayeeIds } from "./repository";
+import { getIncompleteTransactionsCount, getTransactionById, getTransactions, getTransactionsPage, getTransactionCountsByPayeeIds } from "./repository";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
 import { IMPORT_REVIEW_WALLET_NOTE } from "./importReview";
 import type { CreateTransactionInput, UpdateTransactionInput } from "./types";
@@ -54,6 +54,7 @@ export async function listTransactions() { return getTransactions(); }
 export async function listTransactionsPage(filters: { page: number; pageSize: number; categoryId?: string; walletId?: string; from?: string; to?: string; reviewOnly?: boolean }) {
   return getTransactionsPage(filters);
 }
+export async function countIncompleteTransactions() { return getIncompleteTransactionsCount(); }
 export async function transactionCountsByPayeeIds(payeeIds: string[]) { return getTransactionCountsByPayeeIds(payeeIds); }
 export async function findTransaction(id: string) { return getTransactionById(id); }
 

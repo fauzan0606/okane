@@ -10,13 +10,12 @@ export function getPeriodRange(period: DashboardPeriod, now = new Date()) {
 
 export async function getDashboardSummary(period: DashboardPeriod, currencyCode: string) {
   const { start, end } = getPeriodRange(period);
-  const [currency, wallets, income, expense] = await Promise.all([
+  const [currency, income, expense] = await Promise.all([
     prisma.currency.findUnique({ where: { code: currencyCode } }),
-    prisma.wallet.findMany({ where: { isActive: true, currency: { code: currencyCode } }, select: { currentBalance: true } }),
     prisma.transaction.aggregate({ where: { kind: "STANDARD", type: "INCOME", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } } }, _sum: { amount: true } }),
     prisma.transaction.aggregate({ where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } } }, _sum: { amount: true } }),
   ]);
-  return { currency, netWorth: wallets.reduce((sum, wallet) => sum + Number(wallet.currentBalance), 0), income: Number(income._sum.amount ?? 0), expense: Number(expense._sum.amount ?? 0) };
+  return { currency, income: Number(income._sum.amount ?? 0), expense: Number(expense._sum.amount ?? 0) };
 }
 
 export async function getDashboardWallets(currencyCode: string) { return prisma.wallet.findMany({ where: { isActive: true, currency: { code: currencyCode } }, select: { id: true, name: true, walletType: true, currentBalance: true, currency: { select: { code: true, symbol: true } } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }); }
@@ -26,7 +25,7 @@ export async function getDashboardSpending(period: DashboardPeriod, currencyCode
   return prisma.transaction.groupBy({ by: ["categoryId"], where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } }, categoryId: { not: null } }, _sum: { amount: true }, orderBy: { _sum: { amount: "desc" } } });
 }
 
-export async function getDashboardCategories(categoryIds: string[]) { if (categoryIds.length === 0) return []; return prisma.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true, name: true } }); }
+export async function getDashboardCategories() { return prisma.category.findMany({ select: { id: true, name: true } }); }
 
 export async function getDashboardCashflow(period: DashboardPeriod, currencyCode: string) {
   const { start, end } = getPeriodRange(period);

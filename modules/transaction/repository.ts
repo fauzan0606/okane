@@ -196,6 +196,10 @@ export async function getTransactionsPage(filters: TransactionListFilters & { pa
   return { transactions: transactions.map(serializeTransaction), total, page, pageSize };
 }
 
+export async function getIncompleteTransactionsCount() {
+  return prisma.transaction.count({ where: buildTransactionWhere({ reviewOnly: true }) });
+}
+
 export async function getTransactionCountsByPayeeIds(payeeIds: string[]) {
   const ids = [...new Set(payeeIds.filter(Boolean))];
   if (ids.length === 0) return {} as Record<string, number>;

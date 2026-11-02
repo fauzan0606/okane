@@ -41,6 +41,44 @@ export async function getBudgetOverview(month = currentMonthKey(), currencyCode 
   return { budgetId: budget.id, name: budget.name, month, mode, currency: { id: currency.id, code: currency.code, name: currency.name, symbol: currency.symbol, decimalPlaces: currency.decimalPlaces }, totalBudget, totalActual: totalActual.toNumber(), totalRemaining, unbudgetedActual, incomeEstimate: totalIncome.toNumber(), recommendedTotalBudget, items };
 }
 
+export async function getDashboardBudgetSummary(month = currentMonthKey(), currencyCode = "IDR") {
+  const { start, end } = monthBounds(month);
+  const currency = await prisma.currency.findUnique({ where: { code: currencyCode }, select: { id: true } });
+  if (!currency) throw new Error(`Currency ${currencyCode} not found.`);
+
+  const [budget, expenseGroups] = await Promise.all([
+    prisma.budget.findUnique({
+      where: { currencyId_periodStart_periodEnd: { currencyId: currency.id, periodStart: start, periodEnd: end } },
+      select: { totalAmount: true, items: { select: { amount: true, categoryId: true, subcategoryId: true } } },
+    }),
+    prisma.transaction.groupBy({
+      by: ["categoryId", "subcategoryId"],
+      where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  const totalActual = expenseGroups.reduce((sum, group) => sum.plus(group._sum.amount ?? 0), new Prisma.Decimal(0));
+  const items = budget?.items ?? [];
+  const mode: BudgetOverview["mode"] = budget?.totalAmount !== null && budget?.totalAmount !== undefined
+    ? "OVERALL"
+    : items.length > 0 ? "CATEGORY" : "NONE";
+  const totalBudget = budget?.totalAmount?.toNumber() ?? items.reduce((sum, item) => sum + item.amount.toNumber(), 0);
+  const budgetedActual = budget?.totalAmount !== null && budget?.totalAmount !== undefined
+    ? totalActual
+    : items.reduce((sum, item) => sum.plus(expenseGroups
+      .filter((group) => group.categoryId === item.categoryId && (item.subcategoryId ? group.subcategoryId === item.subcategoryId : true))
+      .reduce((itemSum, group) => itemSum.plus(group._sum.amount ?? 0), new Prisma.Decimal(0))), new Prisma.Decimal(0));
+
+  return {
+    mode,
+    totalBudget,
+    totalActual: totalActual.toNumber(),
+    totalRemaining: totalBudget - budgetedActual.toNumber(),
+    unbudgetedActual: mode === "OVERALL" ? 0 : Math.max(totalActual.minus(budgetedActual).toNumber(), 0),
+  };
+}
+
 export async function getBudgetFormData(currencyCode = "IDR") {
   const [currencies, categories, subcategories] = await Promise.all([
     prisma.currency.findMany({ where: { isActive: true }, orderBy: { code: "asc" }, select: { id: true, code: true, name: true, symbol: true, decimalPlaces: true } }),
