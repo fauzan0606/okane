@@ -124,6 +124,59 @@ export async function listReimbursements() {
   });
 }
 
+export async function reimbursementWalletOptions() {
+  noStore();
+  return prisma.wallet.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function deleteReimbursementService(id: string) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.transaction.findUnique({
+      where: { id },
+      include: {
+        wallet: { select: { id: true, balanceAsOf: true, note: true } },
+        splitBill: { select: { id: true } },
+        payablePayment: { include: { payable: { select: { id: true, amount: true, paidAmount: true } } } },
+        reimbursementReceipt: { select: { id: true, walletId: true, amount: true } },
+      },
+    });
+    if (!source || source.kind !== TransactionKind.REIMBURSEMENT || source.type !== TransactionType.EXPENSE) {
+      throw new Error("Reimbursement transaction not found.");
+    }
+    if (source.splitBill) throw new Error("This reimbursement is linked to a Split Bill. Delete the Split Bill first.");
+
+    const expense: BalanceTransaction = { transactionDate: source.transactionDate, type: source.type, amount: source.amount, createdAt: source.createdAt };
+    if (affectsCurrentBalance(expense, source.wallet)) await applyBalanceDelta(tx, source.wallet.id, balanceDelta(expense).negated());
+
+    if (source.reimbursementReceipt) {
+      // Receipt creation always applies the income to its wallet immediately,
+      // so deleting it must reverse that exact balance change.
+      await applyBalanceDelta(tx, source.reimbursementReceipt.walletId, source.reimbursementReceipt.amount.negated());
+      await tx.transaction.delete({ where: { id: source.reimbursementReceipt.id } });
+    }
+
+    if (source.payablePayment) {
+      const payable = source.payablePayment.payable;
+      const paidAmount = payable.paidAmount.minus(source.payablePayment.appliedAmount).gt(0)
+        ? payable.paidAmount.minus(source.payablePayment.appliedAmount)
+        : new Prisma.Decimal(0);
+      const status = paidAmount.gte(payable.amount)
+        ? "PAID"
+        : paidAmount.gt(0)
+          ? "PARTIALLY_PAID"
+          : "OUTSTANDING";
+      await tx.payable.update({ where: { id: payable.id }, data: { paidAmount, status } });
+    }
+
+    await tx.transaction.delete({ where: { id: source.id } });
+    return { deletedReceipt: Boolean(source.reimbursementReceipt) };
+  });
+}
+
 export async function reimburseTransaction(input: { transactionId: string; walletId: string; transactionDate: Date }) {
   return prisma.$transaction(async (tx) => {
     const source = await tx.transaction.findUnique({

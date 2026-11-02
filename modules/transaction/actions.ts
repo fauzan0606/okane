@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { applyTransactionMappingToMerchantService, createTransactionService, deleteIncompleteTransactionsService, deleteTransactionService, reimburseTransaction, updateTransactionService } from "./service";
+import { applyTransactionMappingToMerchantService, createTransactionService, deleteIncompleteTransactionsService, deleteReimbursementService, deleteTransactionService, reimburseTransaction, updateTransactionService } from "./service";
 import { transactionSchema } from "./schema";
 import type { TransactionActionState } from "./types";
 
@@ -130,6 +130,18 @@ export async function deleteTransactionAction(_prevState: TransactionActionState
     await deleteTransactionService(id);
   } catch (error) {
     return { success: false, message: error instanceof Error ? error.message : "Failed to delete transaction." };
+  }
+  revalidateFinancialViews();
+  return { success: true };
+}
+
+export async function deleteReimbursementAction(_prevState: TransactionActionState, formData: FormData): Promise<TransactionActionState> {
+  const id = formData.get("id");
+  if (typeof id !== "string" || id.length === 0) return { success: false, message: "Missing reimbursement transaction id." };
+  try {
+    await deleteReimbursementService(id);
+  } catch (error) {
+    return { success: false, message: error instanceof Error ? error.message : "Failed to delete reimbursement." };
   }
   revalidateFinancialViews();
   return { success: true };

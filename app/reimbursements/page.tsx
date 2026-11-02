@@ -2,7 +2,8 @@ import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
 import { markReimbursementReceivedAction } from "@/modules/transaction/actions";
-import { listReimbursements, transactionFormData } from "@/modules/transaction/service";
+import DeleteReimbursementButton from "@/modules/transaction/components/DeleteReimbursementButton";
+import { listReimbursements, reimbursementWalletOptions } from "@/modules/transaction/service";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -16,7 +17,7 @@ function formatDate(value: Date) {
 }
 
 export default async function ReimbursementsPage() {
-  const [reimbursements, formData] = await Promise.all([listReimbursements(), transactionFormData()]);
+  const [reimbursements, wallets] = await Promise.all([listReimbursements(), reimbursementWalletOptions()]);
   const pending = reimbursements.filter((item) => !item.reimbursementReceipt);
   const completed = reimbursements.filter((item) => item.reimbursementReceipt);
   const today = new Date().toISOString().slice(0, 10);
@@ -51,10 +52,11 @@ export default async function ReimbursementsPage() {
                     <form action={markReimbursementReceivedAction} className="grid gap-2 rounded-xl border border-white/10 bg-black/10 p-3 sm:grid-cols-[1fr_1fr_auto] lg:min-w-[520px]">
                       <input type="hidden" name="transactionId" value={item.id} />
                       <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received date</span><input name="transactionDate" type="date" defaultValue={today} required className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none" /></label>
-                      <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received into</span><select name="walletId" required className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none"><option value="">Select wallet</option>{formData.wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select></label>
+                      <label className="block"><span className="mb-1 block text-[10px] font-semibold uppercase tracking-wide text-slate-500">Received into</span><select name="walletId" required className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none"><option value="">Select wallet</option>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select></label>
                       <button type="submit" className="self-end rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-slate-950 hover:bg-emerald-400">Mark reimbursed</button>
                     </form>
                   </div>
+                  <div className="mt-3 flex justify-end"><DeleteReimbursementButton transactionId={item.id} /></div>
                 </div>
               ))}
             </div>
@@ -70,7 +72,7 @@ export default async function ReimbursementsPage() {
                 {completed.map((item) => (
                   <div key={item.id} className="grid gap-2 px-4 py-4 md:grid-cols-[1fr_auto] md:items-center md:px-5">
                     <div><p className="font-medium text-white">{item.payee?.name ?? "Reimbursement"}</p><p className="mt-1 text-xs text-slate-500">Expense {formatDate(item.transactionDate)} · Received {formatDate(item.reimbursementReceipt!.transactionDate)} · {item.reimbursementReceipt!.wallet.name}</p></div>
-                    <p className="font-semibold text-emerald-300">{formatAmount(item.amount, item.wallet.currency.symbol)}</p>
+                    <div className="flex items-center justify-between gap-4 md:justify-end"><p className="font-semibold text-emerald-300">{formatAmount(item.amount, item.wallet.currency.symbol)}</p><DeleteReimbursementButton transactionId={item.id} /></div>
                   </div>
                 ))}
               </div>
