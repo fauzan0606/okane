@@ -26,6 +26,43 @@ export type OcrResult = {
 };
 
 type Props = { onUseResult: (result: OcrResult) => void };
+const MAX_UPLOAD_BYTES = 3.8 * 1024 * 1024;
+
+async function prepareReceiptImage(file: File): Promise<File> {
+  if (file.size <= MAX_UPLOAD_BYTES) return file;
+
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("Foto terlalu besar dan tidak dapat dikompres di browser. Pilih foto JPG/PNG yang lebih kecil.");
+  }
+
+  try {
+    const maxDimension = 2400;
+    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.round(bitmap.width * scale);
+    canvas.height = Math.round(bitmap.height * scale);
+    const context = canvas.getContext("2d");
+    if (!context) throw new Error("Browser tidak dapat memproses foto ini. Pilih foto yang lebih kecil.");
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+
+    let quality = 0.88;
+    let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    while (blob && blob.size > MAX_UPLOAD_BYTES && quality > 0.6) {
+      quality -= 0.08;
+      blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
+    }
+    if (!blob || blob.size > MAX_UPLOAD_BYTES) {
+      throw new Error("Ukuran foto masih terlalu besar setelah dikompres. Pilih foto dengan resolusi lebih rendah.");
+    }
+    const baseName = file.name.replace(/\.[^.]+$/, "") || "receipt";
+    return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+  } finally {
+    bitmap.close();
+  }
+}
 
 function money(value?: number) { return value === undefined ? "Not detected" : value.toLocaleString("id-ID", { maximumFractionDigits: 2 }); }
 function treatmentLabel(value?: ChargeTreatment) { return value === "INCLUDED" ? "Included" : value === "EXCLUDED" ? "Excluded" : "Unknown"; }
@@ -47,15 +84,27 @@ export default function SplitBillOcr({ onUseResult }: Props) {
     const nextPreview = URL.createObjectURL(selectedFile);
     setPreviewUrl((current) => { if (current) URL.revokeObjectURL(current); return nextPreview; });
     try {
+      setStatus(selectedFile.size > MAX_UPLOAD_BYTES ? "Optimizing photo before upload…" : "Sending receipt to Gemini OCR…");
+      const uploadFile = await prepareReceiptImage(selectedFile);
       const body = new FormData();
-      body.append("file", selectedFile);
-      const response = await fetch("/api/ocr/receipt", { method: "POST", body });
-      const data = await response.json() as OcrResult & { error?: string };
-      if (!response.ok) throw new Error(data.error || "Gemini OCR failed.");
+      body.append("file", uploadFile);
+      setStatus("Sending receipt to Gemini OCR…");
+      const response = await fetch("/api/ocr/receipt", { method: "POST", body, signal: AbortSignal.timeout(65_000) });
+      if (response.status === 413) throw new Error("Foto masih terlalu besar untuk diunggah. Pilih foto dengan ukuran lebih kecil.");
+      const data = await response.json().catch(() => null) as (OcrResult & { error?: string }) | null;
+      if (!response.ok) throw new Error(data?.error || "Gemini OCR failed.");
+      if (!data) throw new Error("Server mengirim respons yang tidak terbaca. Silakan coba lagi.");
       setResult(data);
       setStatus("OCR complete. Review the detected values before using them.");
     } catch (scanError) {
-      console.error(scanError); setError(scanError instanceof Error ? scanError.message : "OCR could not read this receipt."); setStatus("");
+      const message = scanError instanceof Error ? scanError.message : "OCR could not read this receipt.";
+      console.error("Receipt OCR failed", message);
+      setError(message === "The operation was aborted due to timeout" || message === "signal timed out"
+        ? "Pemrosesan OCR terlalu lama. Periksa koneksi internet lalu coba lagi."
+        : message === "Failed to fetch"
+          ? "Tidak dapat terhubung ke layanan OCR. Periksa koneksi internet lalu coba lagi."
+          : message);
+      setStatus("");
     } finally { setLoading(false); }
   }
 
