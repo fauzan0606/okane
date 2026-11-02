@@ -22,7 +22,6 @@ export type BudgetOverview = {
   totalRemaining: number;
   unbudgetedActual: number;
   incomeEstimate: number;
-  recommendedTotalBudget: number;
   items: BudgetItemView[];
 };
 

@@ -28,6 +28,7 @@ export async function getReceivables() {
   const receivables = await prisma.receivable.findMany({
     include: {
       currency: { select: { code: true, symbol: true } },
+      sourceWallet: { select: { id: true, name: true, walletType: true } },
       payments: {
         orderBy: { receivedAt: "desc" },
         include: { wallet: { select: { name: true, currency: { select: { symbol: true, code: true } } } } },
@@ -37,23 +38,49 @@ export async function getReceivables() {
     orderBy: [{ status: "asc" }, { dueDate: "asc" }, { createdAt: "desc" }],
   });
 
-  const sourceWalletIds = receivables.map((item) => item.sourceWalletId).filter((id): id is string => Boolean(id));
-  const sourceWallets = sourceWalletIds.length
-    ? await prisma.wallet.findMany({
-        where: { id: { in: sourceWalletIds } },
-        select: { id: true, name: true, walletType: true },
-      })
-    : [];
-  const sourceWalletMap = new Map(sourceWallets.map((wallet) => [wallet.id, wallet]));
-
   return receivables.map((item) => ({
     ...item,
-    sourceWallet: item.sourceWalletId ? sourceWalletMap.get(item.sourceWalletId) ?? null : null,
+    status: getStatus(new Prisma.Decimal(item.amount), new Prisma.Decimal(item.receivedAmount), item.dueDate),
     amount: Number(item.amount),
     receivedAmount: Number(item.receivedAmount),
     remaining: Math.max(Number(item.amount) - Number(item.receivedAmount), 0),
     payments: item.payments.map((payment) => ({ ...payment, amount: Number(payment.amount) })),
   }));
+}
+
+export async function getDashboardReceivableSummary() {
+  const [groups, openItems] = await Promise.all([
+    prisma.receivable.groupBy({
+      by: ["currencyId"],
+      where: { status: { not: ReceivableStatus.RECEIVED } },
+      _count: { _all: true },
+      _sum: { amount: true, receivedAmount: true },
+    }),
+    prisma.receivable.findMany({
+      where: { status: { not: ReceivableStatus.RECEIVED } },
+      take: 3,
+      orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
+      select: { id: true, personName: true, amount: true, receivedAmount: true, currency: { select: { code: true, symbol: true } } },
+    }),
+  ]);
+  const currencies = await prisma.currency.findMany({
+    where: { id: { in: groups.map((group) => group.currencyId) } },
+    select: { id: true, code: true, symbol: true },
+  });
+  const currencyById = new Map(currencies.map((currency) => [currency.id, currency]));
+  return {
+    count: groups.reduce((sum, group) => sum + group._count._all, 0),
+    totals: groups.flatMap((group) => {
+      const currency = currencyById.get(group.currencyId);
+      return currency ? [{ code: currency.code, symbol: currency.symbol, amount: Math.max(Number(group._sum.amount ?? 0) - Number(group._sum.receivedAmount ?? 0), 0) }] : [];
+    }),
+    items: openItems.map((item) => ({
+      id: item.id,
+      personName: item.personName,
+      remaining: Math.max(Number(item.amount) - Number(item.receivedAmount), 0),
+      currency: item.currency,
+    })),
+  };
 }
 
 export async function getReceivableSummary(currencyCode = "IDR") {

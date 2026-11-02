@@ -9,7 +9,7 @@ import {
   getDashboardWallets,
   getPeriodRange,
 } from "./repository";
-import { getBudgetOverview } from "@/modules/budget/service";
+import { getDashboardBudgetSummary } from "@/modules/budget/service";
 import type { DashboardAiAssessment, DashboardCalendar, DashboardCashflowPoint, DashboardData, DashboardFilters, DashboardPeriod } from "./types";
 
 const DEFAULT_PERIOD: DashboardPeriod = "THIS_MONTH";
@@ -133,23 +133,28 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
   const now = new Date();
   const calendarStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const calendarEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const calendarTransactionsPromise = prisma.transaction.findMany({
+    where: { kind: "STANDARD", type: { in: ["INCOME", "EXPENSE"] }, transactionDate: { gte: calendarStart, lt: calendarEnd }, wallet: { currency: { code: currencyCode } } },
+    select: { transactionDate: true, type: true, amount: true },
+    orderBy: { transactionDate: "asc" },
+  });
+  const cashflowTransactionsPromise = period === "THIS_MONTH"
+    ? calendarTransactionsPromise
+    : getDashboardCashflow(period, currencyCode);
 
-  const [summary, wallets, spending, recentTransactions, cashflowTransactions, splitTransactions, budgetOverview, calendarTransactions] = await Promise.all([
+  const [summary, wallets, spending, recentTransactions, cashflowTransactions, splitTransactions, budgetSummary, calendarTransactions, categories] = await Promise.all([
     getDashboardSummary(period, currencyCode),
     getDashboardWallets(currencyCode),
     getDashboardSpending(period, currencyCode),
     getDashboardRecentTransactions(currencyCode),
-    getDashboardCashflow(period, currencyCode),
+    cashflowTransactionsPromise,
     prisma.transaction.findMany({
       where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } }, splitBill: { isNot: null } },
       select: { categoryId: true, amount: true, splitBill: { select: { personalAmount: true } } },
     }),
-    getBudgetOverview(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, currencyCode),
-    prisma.transaction.findMany({
-      where: { kind: "STANDARD", type: { in: ["INCOME", "EXPENSE"] }, transactionDate: { gte: calendarStart, lt: calendarEnd }, wallet: { currency: { code: currencyCode } } },
-      select: { transactionDate: true, type: true, amount: true },
-      orderBy: { transactionDate: "asc" },
-    }),
+    getDashboardBudgetSummary(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, currencyCode),
+    calendarTransactionsPromise,
+    getDashboardCategories(),
   ]);
 
   const splitFullAmount = splitTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
@@ -165,21 +170,16 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
   });
   const adjustedSpending = [...spendingMap.entries()].filter(([, amount]) => amount > 0).sort((a, b) => b[1] - a[1]).map(([categoryId, amount]) => ({ categoryId, _sum: { amount } }));
 
-  const categoryIds = adjustedSpending
-    .map((item) => item.categoryId)
-    .filter((id): id is string => id !== null);
-
-  const categories = await getDashboardCategories(categoryIds);
   const categoryMap = new Map(categories.map((category) => [category.id, category.name]));
   const totalSpending = adjustedSpending.reduce((sum, item) => sum + Number(item._sum.amount ?? 0), 0);
-  const budgetUsed = budgetOverview.totalActual;
+  const budgetUsed = budgetSummary.totalActual;
   const aiAssessment = buildAiAssessment({
     income: summary.income,
     expense: personalExpense,
     netCashFlow: summary.income - personalExpense,
     budgetUsed,
-    budgetTotal: budgetOverview.totalBudget,
-    unbudgeted: budgetOverview.unbudgetedActual,
+    budgetTotal: budgetSummary.totalBudget,
+    unbudgeted: budgetSummary.unbudgetedActual,
   });
 
   return {
@@ -188,18 +188,18 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
     summary: {
       currencyCode,
       currencySymbol: summary.currency?.symbol ?? currencyCode,
-      netWorth: summary.netWorth,
+      netWorth: wallets.reduce((sum, wallet) => sum + Number(wallet.currentBalance), 0),
       income: summary.income,
       expense: personalExpense,
       netCashFlow: summary.income - personalExpense,
     },
     budget: {
-      hasBudget: budgetOverview.mode !== "NONE",
-      mode: budgetOverview.mode,
-      totalBudget: budgetOverview.totalBudget,
+      hasBudget: budgetSummary.mode !== "NONE",
+      mode: budgetSummary.mode,
+      totalBudget: budgetSummary.totalBudget,
       actualUsed: budgetUsed,
-      remaining: budgetOverview.totalRemaining,
-      progressPercentage: budgetOverview.totalBudget > 0 ? Math.min((budgetUsed / budgetOverview.totalBudget) * 100, 100) : 0,
+      remaining: budgetSummary.totalRemaining,
+      progressPercentage: budgetSummary.totalBudget > 0 ? Math.min((budgetUsed / budgetSummary.totalBudget) * 100, 100) : 0,
     },
     aiAssessment,
     calendar: buildCalendar(now, calendarTransactions),

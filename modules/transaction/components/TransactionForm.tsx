@@ -17,12 +17,27 @@ type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOU
 type CategoryOption = { id: string; name: string; type: "INCOME" | "EXPENSE"; icon: string | null; color: string | null };
 type SubcategoryOption = { id: string; categoryId: string; name: string; isActive?: boolean; sortOrder?: number };
 type PayeeOption = { id: string; name: string; note: string | null };
-type TransactionFormProps = { mode: "create" | "edit"; transaction?: TransactionWithRelations; wallets: WalletOption[]; categories: CategoryOption[]; subcategories: SubcategoryOption[]; payees: PayeeOption[]; trigger: ReactElement; reviewMode?: boolean; sameMerchantCount?: number };
+type FormOptions = { wallets: WalletOption[]; categories: CategoryOption[]; subcategories: SubcategoryOption[]; payees: PayeeOption[] };
+type TransactionFormProps = { mode: "create" | "edit"; transaction?: TransactionWithRelations; wallets?: WalletOption[]; categories?: CategoryOption[]; subcategories?: SubcategoryOption[]; payees?: PayeeOption[]; trigger: ReactElement; reviewMode?: boolean; sameMerchantCount?: number };
 const initialState: TransactionActionState = { success: false };
 function dateInputValue(value?: Date | string | null) { return value ? new Date(value).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10); }
+let editFormOptionsPromise: Promise<FormOptions> | null = null;
+function getEditFormOptions() {
+  if (!editFormOptionsPromise) {
+    editFormOptionsPromise = fetch("/api/transactions/form-data", { cache: "no-store" })
+      .then(async (response) => {
+        const data = await response.json();
+        if (!response.ok || data.error) throw new Error(data.error || "Unable to load transaction options.");
+        return data as FormOptions;
+      })
+      .catch((error) => { editFormOptionsPromise = null; throw error; });
+  }
+  return editFormOptionsPromise;
+}
 
-export default function TransactionForm({ mode, transaction, wallets, categories, subcategories, payees, trigger, reviewMode = false, sameMerchantCount = 0 }: TransactionFormProps) {
+export default function TransactionForm({ mode, transaction, wallets: providedWallets, categories: providedCategories, subcategories: providedSubcategories, payees: providedPayees, trigger, reviewMode = false, sameMerchantCount = 0 }: TransactionFormProps) {
   const [open, setOpen] = useState(false);
+  const [editOptions, setEditOptions] = useState<FormOptions | null>(null);
   const [formKey, setFormKey] = useState(0);
   const [isBulkPending, startBulk] = useTransition();
   const [walletId, setWalletId] = useState(transaction?.walletId ?? "");
@@ -37,6 +52,12 @@ export default function TransactionForm({ mode, transaction, wallets, categories
   const [installmentTenor, setInstallmentTenor] = useState(transaction?.installmentPlan?.tenorMonths?.toString() ?? "6");
   const [installmentStartDate, setInstallmentStartDate] = useState(dateInputValue(transaction?.installmentPlan?.startDate ?? transaction?.transactionDate));
   const [installmentFee, setInstallmentFee] = useState(transaction?.installmentPlan?.feeAmount?.toString() ?? "0");
+  const wallets = providedWallets ?? editOptions?.wallets ?? [];
+  const categories = providedCategories ?? editOptions?.categories ?? [];
+  const subcategories = providedSubcategories ?? editOptions?.subcategories ?? [];
+  const payees = providedPayees ?? editOptions?.payees ?? [];
+  const hasProvidedOptions = providedWallets !== undefined && providedCategories !== undefined && providedSubcategories !== undefined && providedPayees !== undefined;
+  const optionsReady = hasProvidedOptions || editOptions !== null;
   const selectedWallet = wallets.find((wallet) => wallet.id === walletId);
   const visibleCategories = categories.filter((category) => category.type === type);
   const visibleSubcategories = subcategories.filter((subcategory) => subcategory.categoryId === categoryId);
@@ -67,8 +88,23 @@ export default function TransactionForm({ mode, transaction, wallets, categories
     });
   }
 
+  function handleOpenChange(isOpen: boolean) {
+    if (!isOpen) {
+      if (mode === "create") resetCreateForm();
+      setOpen(false);
+      return;
+    }
+    setOpen(true);
+    if (mode === "edit" && !optionsReady) {
+      void getEditFormOptions().then(setEditOptions).catch((error: unknown) => {
+        setOpen(false);
+        toast.error(error instanceof Error ? error.message : "Unable to load transaction options.");
+      });
+    }
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen && mode === "create") resetCreateForm(); setOpen(isOpen); }}>
+    <Dialog open={open && (mode === "create" || optionsReady)} onOpenChange={handleOpenChange}>
       <DialogTrigger render={trigger} />
       <DialogContent showCloseButton className="!w-[calc(100vw-1.5rem)] !max-w-[760px] max-h-[92vh] overflow-y-auto rounded-[26px] border border-[#30465D] bg-[#0E1925] p-0 text-white shadow-[0_24px_70px_rgba(0,0,0,0.45)] sm:!w-[calc(100vw-3rem)]">
         <div className="p-5 sm:p-7 md:p-8"><DialogHeader className="mb-5 flex-row items-start gap-4 pr-10 sm:mb-6"><div><DialogTitle className="text-xl font-semibold text-white sm:text-2xl">{mode === "create" ? "Add Transaction" : "Edit Transaction"}</DialogTitle><DialogDescription className="mt-1.5 text-xs leading-5 text-slate-500 sm:text-sm sm:leading-6">Record an income or expense.</DialogDescription></div></DialogHeader>

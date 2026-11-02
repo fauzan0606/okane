@@ -3,7 +3,7 @@ import Sidebar from "@/components/layout/Sidebar";
 import Header from "@/components/layout/Header";
 import { prisma } from "@/lib/prisma";
 import { deleteReceivableAction, deleteReceivablePaymentAction, updateReceivableAction, updateReceivablePaymentAction } from "@/modules/receivable/actions";
-import { getReceivables, refreshReceivableStatuses } from "@/modules/receivable/service";
+import { getReceivables } from "@/modules/receivable/service";
 import ReceivableForm from "@/modules/receivable/components/ReceivableForm";
 import ReceivablePaymentForm from "@/modules/receivable/components/ReceivablePaymentForm";
 import { CalendarDays, Edit3, Trash2, UserRound, WalletCards } from "lucide-react";
@@ -17,7 +17,6 @@ const inputClass = "rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 t
 const selectClass = "rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none";
 
 export default async function ReceivablesPage() {
-  await refreshReceivableStatuses();
   const [items, wallets, currencies] = await Promise.all([
     getReceivables(),
     prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true, currencyId: true, currency: { select: { symbol: true, code: true } } }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),

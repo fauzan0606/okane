@@ -1,7 +1,7 @@
 import { unstable_noStore as noStore } from "next/cache";
 import { Prisma, TransactionKind, TransactionType, WalletType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getTransactionById, getTransactions, getTransactionsPage, getTransactionCountsByPayeeIds } from "./repository";
+import { getIncompleteTransactionsCount, getTransactionById, getTransactions, getTransactionsPage, getTransactionCountsByPayeeIds } from "./repository";
 import { findOrCreatePayeeByName } from "@/modules/payee/service";
 import { IMPORT_REVIEW_WALLET_NOTE } from "./importReview";
 import type { CreateTransactionInput, UpdateTransactionInput } from "./types";
@@ -54,6 +54,7 @@ export async function listTransactions() { return getTransactions(); }
 export async function listTransactionsPage(filters: { page: number; pageSize: number; categoryId?: string; walletId?: string; from?: string; to?: string; reviewOnly?: boolean }) {
   return getTransactionsPage(filters);
 }
+export async function countIncompleteTransactions() { return getIncompleteTransactionsCount(); }
 export async function transactionCountsByPayeeIds(payeeIds: string[]) { return getTransactionCountsByPayeeIds(payeeIds); }
 export async function findTransaction(id: string) { return getTransactionById(id); }
 
@@ -120,6 +121,59 @@ export async function listReimbursements() {
       },
     },
     orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+  });
+}
+
+export async function reimbursementWalletOptions() {
+  noStore();
+  return prisma.wallet.findMany({
+    where: { isActive: true },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+export async function deleteReimbursementService(id: string) {
+  return prisma.$transaction(async (tx) => {
+    const source = await tx.transaction.findUnique({
+      where: { id },
+      include: {
+        wallet: { select: { id: true, balanceAsOf: true, note: true } },
+        splitBill: { select: { id: true } },
+        payablePayment: { include: { payable: { select: { id: true, amount: true, paidAmount: true } } } },
+        reimbursementReceipt: { select: { id: true, walletId: true, amount: true } },
+      },
+    });
+    if (!source || source.kind !== TransactionKind.REIMBURSEMENT || source.type !== TransactionType.EXPENSE) {
+      throw new Error("Reimbursement transaction not found.");
+    }
+    if (source.splitBill) throw new Error("This reimbursement is linked to a Split Bill. Delete the Split Bill first.");
+
+    const expense: BalanceTransaction = { transactionDate: source.transactionDate, type: source.type, amount: source.amount, createdAt: source.createdAt };
+    if (affectsCurrentBalance(expense, source.wallet)) await applyBalanceDelta(tx, source.wallet.id, balanceDelta(expense).negated());
+
+    if (source.reimbursementReceipt) {
+      // Receipt creation always applies the income to its wallet immediately,
+      // so deleting it must reverse that exact balance change.
+      await applyBalanceDelta(tx, source.reimbursementReceipt.walletId, source.reimbursementReceipt.amount.negated());
+      await tx.transaction.delete({ where: { id: source.reimbursementReceipt.id } });
+    }
+
+    if (source.payablePayment) {
+      const payable = source.payablePayment.payable;
+      const paidAmount = payable.paidAmount.minus(source.payablePayment.appliedAmount).gt(0)
+        ? payable.paidAmount.minus(source.payablePayment.appliedAmount)
+        : new Prisma.Decimal(0);
+      const status = paidAmount.gte(payable.amount)
+        ? "PAID"
+        : paidAmount.gt(0)
+          ? "PARTIALLY_PAID"
+          : "OUTSTANDING";
+      await tx.payable.update({ where: { id: payable.id }, data: { paidAmount, status } });
+    }
+
+    await tx.transaction.delete({ where: { id: source.id } });
+    return { deletedReceipt: Boolean(source.reimbursementReceipt) };
   });
 }
 
@@ -301,9 +355,9 @@ export async function transactionFormData() {
   noStore();
   const [wallets, categories, subcategories, payees] = await Promise.all([
     prisma.wallet.findMany({ where: { isActive: true }, select: { id: true, name: true, walletType: true }, orderBy: { name: "asc" } }),
-    prisma.category.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    prisma.subcategory.findMany({ where: { isActive: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
-    prisma.payee.findMany({ where: { isActive: true }, orderBy: { name: "asc" } }),
+    prisma.category.findMany({ where: { isActive: true }, select: { id: true, name: true, type: true, icon: true, color: true, sortOrder: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    prisma.subcategory.findMany({ where: { isActive: true }, select: { id: true, categoryId: true, name: true, isActive: true, sortOrder: true }, orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
+    prisma.payee.findMany({ where: { isActive: true }, select: { id: true, name: true, note: true }, orderBy: { name: "asc" } }),
   ]);
   return { wallets, categories, subcategories, payees };
 }

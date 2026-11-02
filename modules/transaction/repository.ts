@@ -26,16 +26,44 @@ export type TransactionWithRelations = {
   splitBill: { id: string; totalAmount: string; personalAmount: string; status: "DRAFT" | "OPEN" | "SETTLED" | "CANCELLED" } | null;
 };
 
-type RawTransaction = Prisma.TransactionGetPayload<{
-  include: {
-    wallet: { include: { currency: true } };
-    category: true;
-    subcategory: true;
-    payee: true;
-    installmentPlan: true;
-    splitBill: true;
-  };
-}>;
+const transactionSelect = {
+  id: true,
+  transactionDate: true,
+  type: true,
+  kind: true,
+  amount: true,
+  note: true,
+  walletId: true,
+  categoryId: true,
+  subcategoryId: true,
+  payeeId: true,
+  wallet: {
+    select: {
+      id: true,
+      name: true,
+      walletType: true,
+      currency: { select: { id: true, code: true, name: true, symbol: true, decimalPlaces: true } },
+    },
+  },
+  category: { select: { id: true, name: true, type: true, icon: true, color: true } },
+  subcategory: { select: { id: true, name: true, categoryId: true } },
+  payee: { select: { id: true, name: true, note: true } },
+  installmentPlan: {
+    select: {
+      id: true,
+      transactionId: true,
+      totalAmount: true,
+      feeAmount: true,
+      installmentAmount: true,
+      tenorMonths: true,
+      startDate: true,
+      status: true,
+    },
+  },
+  splitBill: { select: { id: true, totalAmount: true, personalAmount: true, status: true } },
+} satisfies Prisma.TransactionSelect;
+
+type RawTransaction = Prisma.TransactionGetPayload<{ select: typeof transactionSelect }>;
 
 function serializeTransaction(transaction: RawTransaction): TransactionWithRelations {
   return {
@@ -107,15 +135,6 @@ function serializeTransaction(transaction: RawTransaction): TransactionWithRelat
   };
 }
 
-const transactionInclude = {
-  wallet: { include: { currency: true } },
-  category: true,
-  subcategory: true,
-  payee: true,
-  installmentPlan: true,
-  splitBill: true,
-} satisfies Prisma.TransactionInclude;
-
 type TransactionListFilters = {
   categoryId?: string;
   walletId?: string;
@@ -163,7 +182,7 @@ export async function getTransactions() {
         { kind: "REIMBURSEMENT", type: "EXPENSE" },
       ],
     },
-    include: transactionInclude,
+    select: transactionSelect,
     orderBy: [
       { createdAt: "desc" },
       { transactionDate: "desc" },
@@ -181,7 +200,7 @@ export async function getTransactionsPage(filters: TransactionListFilters & { pa
   const [transactions, total] = await Promise.all([
     prisma.transaction.findMany({
       where,
-      include: transactionInclude,
+      select: transactionSelect,
       orderBy: [
         { createdAt: "desc" },
         { transactionDate: "desc" },
@@ -194,6 +213,10 @@ export async function getTransactionsPage(filters: TransactionListFilters & { pa
   ]);
 
   return { transactions: transactions.map(serializeTransaction), total, page, pageSize };
+}
+
+export async function getIncompleteTransactionsCount() {
+  return prisma.transaction.count({ where: buildTransactionWhere({ reviewOnly: true }) });
 }
 
 export async function getTransactionCountsByPayeeIds(payeeIds: string[]) {
@@ -218,7 +241,7 @@ export async function getTransactionById(id: string) {
         { kind: "REIMBURSEMENT", type: "EXPENSE" },
       ],
     },
-    include: transactionInclude,
+    select: transactionSelect,
   });
   return transaction ? serializeTransaction(transaction) : null;
 }

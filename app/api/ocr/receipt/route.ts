@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 
 const MODEL = "gemini-3.1-flash-lite";
 const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
+const MAX_IMAGE_BYTES = 4.2 * 1024 * 1024;
+
+export const maxDuration = 60;
 
 type ChargeTreatment = "INCLUDED" | "EXCLUDED" | "UNKNOWN";
 type DiscountScope = "ORDER" | "DELIVERY" | "ITEM";
@@ -198,11 +201,16 @@ export async function POST(request: Request) {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return jsonError("GEMINI_API_KEY is not configured on the server.", 500);
 
-  const formData = await request.formData();
+  let formData: FormData;
+  try {
+    formData = await request.formData();
+  } catch {
+    return jsonError("Receipt upload could not be read. Please choose the image again.");
+  }
   const file = formData.get("file");
   if (!(file instanceof File)) return jsonError("Receipt image is required.");
   if (!file.type.startsWith("image/")) return jsonError("Please upload an image receipt.");
-  if (file.size > 12 * 1024 * 1024) return jsonError("Receipt image must be 12 MB or smaller.");
+  if (file.size > MAX_IMAGE_BYTES) return jsonError("Receipt image is too large. Please choose a smaller photo.", 413);
 
   const base64 = Buffer.from(new Uint8Array(await file.arrayBuffer())).toString("base64");
   const prompt = `Analyze this restaurant receipt image and transcribe the bill into the JSON schema exactly.
@@ -223,18 +231,28 @@ Rules:
 - Do not include grand total, delivery fee, tax, service charge, or discounts as food/drink items.
 - The grand total is informational source-of-truth and must never be used to alter line-item prices.`;
 
-  const response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-    body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64 } }] }],
-      generationConfig: {
-        responseMimeType: "application/json",
-        responseJsonSchema: responseSchema,
-        thinkingConfig: { thinkingLevel: "minimal" },
-      },
-    }),
-  });
+  let response: Response;
+  try {
+    response = await fetch(`${GEMINI_URL}?key=${encodeURIComponent(apiKey)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: prompt }, { inlineData: { mimeType: file.type, data: base64 } }] }],
+        generationConfig: {
+          responseMimeType: "application/json",
+          responseJsonSchema: responseSchema,
+          thinkingConfig: { thinkingLevel: "minimal" },
+        },
+      }),
+      signal: AbortSignal.timeout(50_000),
+    });
+  } catch (error) {
+    if (error instanceof Error && (error.name === "TimeoutError" || error.name === "AbortError")) {
+      return jsonError("Gemini OCR took too long to process this receipt. Please try again.", 504);
+    }
+    console.error("Gemini receipt OCR network request failed", error instanceof Error ? error.name : "unknown error");
+    return jsonError("Could not connect to Gemini OCR. Please try again.", 502);
+  }
 
   if (!response.ok) {
     const body = await response.text();
@@ -251,7 +269,12 @@ Rules:
     return jsonError(`Gemini could not process this receipt.${providerMessage}`, 502);
   }
 
-  const data = (await response.json()) as GeminiResponse;
+  let data: GeminiResponse;
+  try {
+    data = (await response.json()) as GeminiResponse;
+  } catch {
+    return jsonError("Gemini returned an unreadable OCR response. Please try again.", 502);
+  }
   const candidate = data.candidates?.[0];
   const text = candidate?.content?.parts?.map((part) => part.text ?? "").join("").trim();
 

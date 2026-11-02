@@ -27,14 +27,16 @@ function roundBudget(value: number) {
 async function monthExpenseStats(month: string, currencyId: string) {
   const { start, end } = monthBounds(month);
   const [expenses, income] = await Promise.all([
-    prisma.transaction.findMany({
+    prisma.transaction.groupBy({
+      by: ["categoryId"],
       where: {
         kind: "STANDARD",
         type: "EXPENSE",
         transactionDate: { gte: start, lt: end },
         wallet: { currencyId },
       },
-      select: { amount: true, categoryId: true, subcategoryId: true },
+      _sum: { amount: true },
+      _count: { _all: true },
     }),
     prisma.transaction.aggregate({
       where: {
@@ -72,7 +74,7 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
   ]);
 
   const incomeValues = [...history.map((item) => item.income), current.income].filter((value) => value > 0);
-  const expenseValues = [...history.map((item) => item.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0)), current.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0)].filter((value) => value > 0);
+  const expenseValues = [...history.map((item) => item.expenses.reduce((sum, group) => sum + Number(group._sum.amount ?? 0), 0)), current.expenses.reduce((sum, group) => sum + Number(group._sum.amount ?? 0), 0)].filter((value) => value > 0);
   const incomeEstimate = incomeValues.length ? incomeValues.reduce((a, b) => a + b, 0) / incomeValues.length : 0;
   const historicalExpenseAverage = expenseValues.length ? expenseValues.reduce((a, b) => a + b, 0) / expenseValues.length : 0;
   const previousBudgetTotal = previousBudget?.totalAmount?.toNumber() ?? previousBudget?.items.reduce((sum, item) => sum + item.amount.toNumber(), 0) ?? 0;
@@ -81,17 +83,20 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
     Math.max(historicalExpenseAverage * 1.03, previousBudgetTotal * 0.98),
   ));
 
-  const categoryMap = new Map<string, { historical: number[]; current: number; previous: number }>();
-  for (const category of categories) categoryMap.set(category.id, { historical: [], current: 0, previous: 0 });
-  for (const stats of history) for (const tx of stats.expenses) {
-    if (!tx.categoryId) continue;
-    const entry = categoryMap.get(tx.categoryId);
-    if (entry) entry.historical.push(Number(tx.amount));
+  const categoryMap = new Map<string, { historicalTotal: number; historicalCount: number; current: number; previous: number }>();
+  for (const category of categories) categoryMap.set(category.id, { historicalTotal: 0, historicalCount: 0, current: 0, previous: 0 });
+  for (const stats of history) for (const group of stats.expenses) {
+    if (!group.categoryId) continue;
+    const entry = categoryMap.get(group.categoryId);
+    if (entry) {
+      entry.historicalTotal += Number(group._sum.amount ?? 0);
+      entry.historicalCount += group._count._all;
+    }
   }
-  for (const tx of current.expenses) {
-    if (!tx.categoryId) continue;
-    const entry = categoryMap.get(tx.categoryId);
-    if (entry) entry.current += Number(tx.amount);
+  for (const group of current.expenses) {
+    if (!group.categoryId) continue;
+    const entry = categoryMap.get(group.categoryId);
+    if (entry) entry.current += Number(group._sum.amount ?? 0);
   }
   for (const item of previousBudget?.items ?? []) {
     if (!item.categoryId) continue;
@@ -101,7 +106,7 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
 
   const raw = categories.map((category) => {
     const entry = categoryMap.get(category.id)!;
-    const historicalAverage = entry.historical.length ? entry.historical.reduce((a, b) => a + b, 0) / entry.historical.length : 0;
+    const historicalAverage = entry.historicalCount > 0 ? entry.historicalTotal / entry.historicalCount : 0;
     const recommended = historicalAverage * 0.55 + entry.current * 0.15 + entry.previous * 0.30;
     return { categoryId: category.id, categoryName: category.name, subcategoryId: null, subcategoryName: null, recommendedAmountRaw: recommended, historicalAverage, previousBudget: entry.previous };
   });

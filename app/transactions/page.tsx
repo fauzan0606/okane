@@ -7,7 +7,7 @@ import DeleteIncompleteTransactionsButton from "@/modules/transaction/components
 import TransactionImport from "@/modules/transaction/components/TransactionImport";
 import TransactionList from "@/modules/transaction/components/TransactionList";
 import TransactionPagination from "@/modules/transaction/components/TransactionPagination";
-import { listTransactionsPage, transactionCountsByPayeeIds, transactionFormData } from "@/modules/transaction/service";
+import { countIncompleteTransactions, listTransactionsPage, transactionCountsByPayeeIds, transactionFormData } from "@/modules/transaction/service";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -36,7 +36,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const [paged, rawFormData, reviewCount] = await Promise.all([
     listTransactionsPage({ page, pageSize: PAGE_SIZE, categoryId: categoryId || undefined, walletId: walletId || undefined, from: from || undefined, to: to || undefined, reviewOnly }),
     transactionFormData(),
-    reviewOnly ? Promise.resolve(null) : listTransactionsPage({ page: 1, pageSize: 1, reviewOnly: true }),
+    reviewOnly ? Promise.resolve(null) : countIncompleteTransactions(),
   ]);
 
   const formData = {
@@ -46,9 +46,11 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
     payees: rawFormData.payees.map((payee) => ({ id: String(payee.id), name: String(payee.name), note: payee.note ?? null })),
   };
 
-  const merchantCounts = await transactionCountsByPayeeIds(paged.transactions.map((transaction) => transaction.payeeId ? String(transaction.payeeId) : ""));
+  const merchantCounts = reviewOnly
+    ? await transactionCountsByPayeeIds(paged.transactions.map((transaction) => transaction.payeeId ? String(transaction.payeeId) : ""))
+    : {};
   const hasFilters = Boolean(categoryId || walletId || from || to || reviewOnly);
-  const incompleteCount = reviewOnly ? paged.total : reviewCount?.total ?? 0;
+  const incompleteCount = reviewOnly ? paged.total : reviewCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(paged.total / PAGE_SIZE));
   const safePage = Math.min(paged.page, totalPages);
   const paginationParams: Record<string, string> = {};
@@ -97,7 +99,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
 
         {hasFilters && <div className="flex items-center justify-between text-xs text-slate-500"><span>Showing {paged.total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paged.total)} of {paged.total} transactions</span></div>}
 
-        <TransactionList transactions={paged.transactions} wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} payees={formData.payees} reviewMode={reviewOnly} merchantCounts={merchantCounts} />
+        <TransactionList transactions={paged.transactions} reviewMode={reviewOnly} merchantCounts={merchantCounts} />
         <TransactionPagination page={safePage} pageSize={PAGE_SIZE} total={paged.total} searchParams={paginationParams} />
       </div>
     </AppShell>
