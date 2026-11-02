@@ -163,6 +163,8 @@ export async function getInvestmentOverview() {
     cashAccounts,
     currencies,
     wallets,
+    realizedTransactions,
+    dividendTransactions,
   ] = await Promise.all([
     prisma.investmentProvider.findMany({
       where: { isActive: true },
@@ -274,6 +276,18 @@ export async function getInvestmentOverview() {
         name: "asc",
       },
     }),
+
+    prisma.investmentTransaction.groupBy({
+      by: ["accountId"],
+      where: { transactionType: InvestmentTransactionType.SELL },
+      _sum: { realizedGainLoss: true },
+    }),
+
+    prisma.investmentTransaction.groupBy({
+      by: ["accountId"],
+      where: { transactionType: InvestmentTransactionType.DIVIDEND, netCashAmount: { gt: 0 } },
+      _sum: { netCashAmount: true },
+    }),
   ]);
 
   const holdingRows = holdings.map((h) => {
@@ -319,6 +333,12 @@ export async function getInvestmentOverview() {
     cashAccounts,
     currencies,
     wallets,
+    realizedByAccount: Object.fromEntries(
+      realizedTransactions.map((row) => [row.accountId, row._sum.realizedGainLoss ?? new D(0)]),
+    ),
+    dividendByAccount: Object.fromEntries(
+      dividendTransactions.map((row) => [row.accountId, row._sum.netCashAmount ?? new D(0)]),
+    ),
     summary: {
       totalValue,
       totalCost,

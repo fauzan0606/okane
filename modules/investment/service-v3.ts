@@ -139,7 +139,18 @@ export async function createInvestmentTransactionV3(input: {
 export async function getInvestmentAccountLedger(accountId: string) {
   const account = await prisma.investmentAccount.findUnique({ where: { id: accountId }, include: { provider: true, currency: true, cashAccount: true } });
   if (!account) throw new Error("Investment account not found.");
-  const transactions = await prisma.investmentTransaction.findMany({ where: { accountId }, include: { asset: { include: { currency: true } }, holding: true, currency: true }, orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }] });
+  const [transactions, dividends] = await Promise.all([
+    prisma.investmentTransaction.findMany({
+      where: { accountId, transactionType: { in: [InvestmentTransactionType.BUY, InvestmentTransactionType.SELL] } },
+      include: { asset: { include: { currency: true } } },
+      orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.investmentTransaction.findMany({
+      where: { accountId, transactionType: InvestmentTransactionType.DIVIDEND },
+      select: { id: true, transactionDate: true, netCashAmount: true, asset: { include: { currency: true } } },
+      orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
+    }),
+  ]);
   const buys = transactions.filter((t) => t.transactionType === InvestmentTransactionType.BUY);
   const sells = transactions.filter((t) => t.transactionType === InvestmentTransactionType.SELL);
   const saleMap = new Map<string, Array<{ id: string; date: Date; quantity: Prisma.Decimal; price: Prisma.Decimal; proceeds: Prisma.Decimal; realized: Prisma.Decimal }>>();
@@ -152,7 +163,7 @@ export async function getInvestmentAccountLedger(accountId: string) {
     const minSell = b.quantity.isZero() ? new D(0) : b.costBasisAmount.div(b.quantity).div(new D(99.71).div(100));
     return { id: b.id, lotId, transactionDate: b.transactionDate, asset: b.asset, quantity: b.quantity, soldQuantity: sold, remainingQuantity: remaining, unitPrice: b.unitPrice, totalCost: b.costBasisAmount, minimumSellPrice: money(minSell), currentPrice: p?.price ?? null, priceAsOf: p?.asOf ?? null, currentValue: money(currentValue), unrealizedGainLoss: money(currentValue.minus(remainingCost)), sales };
   });
-  return { account, rows, transactions, summary: { openLots: rows.filter((r) => r.remainingQuantity.gt(0)).length, openQuantity: rows.reduce((s, r) => s.plus(r.remainingQuantity), new D(0)), realizedGainLoss: sells.reduce((s, t) => s.plus(t.realizedGainLoss ?? 0), new D(0)) } };
+  return { account, rows, dividends, summary: { openLots: rows.filter((r) => r.remainingQuantity.gt(0)).length, openQuantity: rows.reduce((s, r) => s.plus(r.remainingQuantity), new D(0)), realizedGainLoss: sells.reduce((s, t) => s.plus(t.realizedGainLoss ?? 0), new D(0)) } };
 }
 
 export async function setInvestmentCashBalance(input: { cashAccountId: string; balance: number; date: Date; note?: string }) {

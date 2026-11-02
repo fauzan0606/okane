@@ -43,7 +43,7 @@ export async function GET(request: Request) {
         unrealizedGainLoss: netCurrentValue.minus(remainingCost).toDecimalPlaces(2).toString(),
       };
     });
-    return NextResponse.json(serialize({ ...ledger, rows }));
+    return NextResponse.json(serialize({ account: ledger.account, rows, dividends: ledger.dividends, summary: ledger.summary }));
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to load investment account." }, { status: 500 });
   }
