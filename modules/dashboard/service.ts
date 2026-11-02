@@ -133,23 +133,27 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
   const now = new Date();
   const calendarStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const calendarEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+  const calendarTransactionsPromise = prisma.transaction.findMany({
+    where: { kind: "STANDARD", type: { in: ["INCOME", "EXPENSE"] }, transactionDate: { gte: calendarStart, lt: calendarEnd }, wallet: { currency: { code: currencyCode } } },
+    select: { transactionDate: true, type: true, amount: true },
+    orderBy: { transactionDate: "asc" },
+  });
+  const cashflowTransactionsPromise = period === "THIS_MONTH"
+    ? calendarTransactionsPromise
+    : getDashboardCashflow(period, currencyCode);
 
   const [summary, wallets, spending, recentTransactions, cashflowTransactions, splitTransactions, budgetSummary, calendarTransactions, categories] = await Promise.all([
     getDashboardSummary(period, currencyCode),
     getDashboardWallets(currencyCode),
     getDashboardSpending(period, currencyCode),
     getDashboardRecentTransactions(currencyCode),
-    getDashboardCashflow(period, currencyCode),
+    cashflowTransactionsPromise,
     prisma.transaction.findMany({
       where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } }, splitBill: { isNot: null } },
       select: { categoryId: true, amount: true, splitBill: { select: { personalAmount: true } } },
     }),
     getDashboardBudgetSummary(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, currencyCode),
-    prisma.transaction.findMany({
-      where: { kind: "STANDARD", type: { in: ["INCOME", "EXPENSE"] }, transactionDate: { gte: calendarStart, lt: calendarEnd }, wallet: { currency: { code: currencyCode } } },
-      select: { transactionDate: true, type: true, amount: true },
-      orderBy: { transactionDate: "asc" },
-    }),
+    calendarTransactionsPromise,
     getDashboardCategories(),
   ]);
 

@@ -16,18 +16,28 @@ function monthLabel(month: string) { const { start } = monthBounds(month); retur
 
 export async function getBudgetOverview(month = currentMonthKey(), currencyCode = "IDR"): Promise<BudgetOverview> {
   const { start, end } = monthBounds(month);
-  const currency = await prisma.currency.findUnique({ where: { code: currencyCode } });
+  const currency = await prisma.currency.findUnique({ where: { code: currencyCode }, select: { id: true, code: true, name: true, symbol: true, decimalPlaces: true } });
   if (!currency) throw new Error(`Currency ${currencyCode} not found.`);
-  const budget = await prisma.budget.upsert({ where: { currencyId_periodStart_periodEnd: { currencyId: currency.id, periodStart: start, periodEnd: end } }, create: { name: `Budget ${monthLabel(month)}`, currencyId: currency.id, periodStart: start, periodEnd: end }, update: {}, include: { items: { include: { category: true, subcategory: true }, orderBy: [{ createdAt: "asc" }] } } });
-  const [transactions, incomeTransactions] = await Promise.all([
-    prisma.transaction.findMany({ where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } }, select: { amount: true, categoryId: true, subcategoryId: true } }),
-    prisma.transaction.findMany({ where: { kind: "STANDARD", type: "INCOME", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } }, select: { amount: true } }),
+  const [budget, expenseGroups, income] = await Promise.all([
+    prisma.budget.findUnique({
+      where: { currencyId_periodStart_periodEnd: { currencyId: currency.id, periodStart: start, periodEnd: end } },
+      include: { items: { include: { category: true, subcategory: true }, orderBy: [{ createdAt: "asc" }] } },
+    }),
+    prisma.transaction.groupBy({
+      by: ["categoryId", "subcategoryId"],
+      where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } },
+      _sum: { amount: true },
+    }),
+    prisma.transaction.aggregate({ where: { kind: "STANDARD", type: "INCOME", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } }, _sum: { amount: true } }),
   ]);
-  const totalActual = transactions.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
-  const totalIncome = incomeTransactions.reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
-  const overallBudgetAmount = budget.totalAmount?.toNumber() ?? null;
-  const items = budget.items.map((item) => {
-    const actual = transactions.filter((transaction) => item.subcategoryId ? transaction.subcategoryId === item.subcategoryId : item.categoryId ? transaction.categoryId === item.categoryId : false).reduce((sum, transaction) => sum.plus(transaction.amount), new Prisma.Decimal(0));
+  const totalActual = expenseGroups.reduce((sum, group) => sum.plus(group._sum.amount ?? 0), new Prisma.Decimal(0));
+  const totalIncome = new Prisma.Decimal(income._sum.amount ?? 0);
+  const overallBudgetAmount = budget?.totalAmount?.toNumber() ?? null;
+  const items = (budget?.items ?? []).map((item) => {
+    const actual = expenseGroups.filter((group) => item.subcategoryId
+      ? group.subcategoryId === item.subcategoryId
+      : item.categoryId ? group.categoryId === item.categoryId : false)
+      .reduce((sum, group) => sum.plus(group._sum.amount ?? 0), new Prisma.Decimal(0));
     const budgetAmount = item.amount;
     const remaining = budgetAmount.minus(actual);
     return { id: item.id, categoryId: item.categoryId, categoryName: item.category?.name ?? null, subcategoryId: item.subcategoryId, subcategoryName: item.subcategory?.name ?? null, amount: budgetAmount.toNumber(), budgetAmount: budgetAmount.toNumber(), actualAmount: actual.toNumber(), remainingAmount: remaining.toNumber(), percentage: budgetAmount.gt(0) ? actual.div(budgetAmount).mul(100).toNumber() : 0 };
@@ -36,9 +46,8 @@ export async function getBudgetOverview(month = currentMonthKey(), currencyCode 
   const budgetedActual = overallBudgetAmount !== null ? totalActual.toNumber() : items.reduce((sum, item) => sum + item.actualAmount, 0);
   const totalRemaining = totalBudget - budgetedActual;
   const unbudgetedActual = overallBudgetAmount !== null ? 0 : Math.max(totalActual.toNumber() - budgetedActual, 0);
-  const recommendedTotalBudget = await recommendTotalBudget(month, currency.id, totalIncome.toNumber(), totalActual.toNumber());
   const mode: BudgetOverview["mode"] = overallBudgetAmount !== null ? "OVERALL" : items.length > 0 ? "CATEGORY" : "NONE";
-  return { budgetId: budget.id, name: budget.name, month, mode, currency: { id: currency.id, code: currency.code, name: currency.name, symbol: currency.symbol, decimalPlaces: currency.decimalPlaces }, totalBudget, totalActual: totalActual.toNumber(), totalRemaining, unbudgetedActual, incomeEstimate: totalIncome.toNumber(), recommendedTotalBudget, items };
+  return { budgetId: budget?.id ?? "", name: budget?.name ?? `Budget ${monthLabel(month)}`, month, mode, currency, totalBudget, totalActual: totalActual.toNumber(), totalRemaining, unbudgetedActual, incomeEstimate: totalIncome.toNumber(), items };
 }
 
 export async function getDashboardBudgetSummary(month = currentMonthKey(), currencyCode = "IDR") {
@@ -136,12 +145,6 @@ async function monthExpenseStats(month: string, currencyId: string) {
   return { expenses, income: Number(income._sum.amount ?? 0) };
 }
 function roundBudget(value: number) { return Math.max(Math.round(value / 1000) * 1000, 0); }
-async function recommendTotalBudget(month: string, currencyId: string, currentIncome: number, currentExpense: number) {
-  const stats = await Promise.all((await historicalMonths(month)).map((item) => monthExpenseStats(item, currencyId)));
-  const incomes = stats.map((item) => item.income).filter((value) => value > 0); const expenses = stats.map((item) => item.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0)).filter((value) => value > 0);
-  const avgIncome = currentIncome > 0 ? currentIncome : incomes.length ? incomes.reduce((a, b) => a + b, 0) / incomes.length : 0; const avgExpense = currentExpense > 0 ? currentExpense : expenses.length ? expenses.reduce((a, b) => a + b, 0) / expenses.length : 0;
-  if (avgIncome <= 0) return roundBudget(avgExpense * 1.05); return roundBudget(Math.min(avgIncome * 0.8, Math.max(avgExpense * 1.03, 0)));
-}
 
 export async function getBudgetSuggestion(month: string, currencyCode: string): Promise<BudgetSuggestion> {
   const currency = await prisma.currency.findUnique({ where: { code: currencyCode } }); if (!currency) throw new Error("Currency not found.");

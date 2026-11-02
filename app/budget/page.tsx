@@ -6,7 +6,6 @@ import BudgetItemRow from "@/modules/budget/components/BudgetItemRow";
 import BudgetCategoryActions from "@/modules/budget/components/BudgetCategoryActions";
 import BudgetPlannerTool from "@/modules/budget/components/BudgetPlannerTool";
 import { currentMonthKey, getBudgetFormData, getBudgetOverview } from "@/modules/budget/service";
-import { getBudgetMode } from "@/modules/budget/replacement";
 
 function formatMoney(value: number) { return new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(value); }
 
@@ -14,7 +13,8 @@ export default async function BudgetPage({ searchParams }: { searchParams: Promi
   const params = await searchParams;
   const month = params.month && /^\d{4}-\d{2}$/.test(params.month) ? params.month : currentMonthKey();
   const currency = params.currency || "IDR";
-  const [overview, formData, mode] = await Promise.all([getBudgetOverview(month, currency), getBudgetFormData(currency), getBudgetMode(month, currency)]);
+  const [overview, formData] = await Promise.all([getBudgetOverview(month, currency), getBudgetFormData(currency)]);
+  const mode = overview.mode;
   const previous = (() => { const date = new Date(`${month}-01T00:00:00`); date.setMonth(date.getMonth() - 1); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; })();
   const next = (() => { const date = new Date(`${month}-01T00:00:00`); date.setMonth(date.getMonth() + 1); return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`; })();
   const totalProgress = overview.totalBudget > 0 ? Math.min((overview.totalActual / overview.totalBudget) * 100, 100) : 0;
