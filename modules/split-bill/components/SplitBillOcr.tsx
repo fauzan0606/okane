@@ -28,25 +28,61 @@ export type OcrResult = {
 type Props = { onUseResult: (result: OcrResult) => void };
 const MAX_UPLOAD_BYTES = 3.8 * 1024 * 1024;
 
+async function decodeReceiptImage(file: File) {
+  if (typeof createImageBitmap === "function") {
+    try {
+      const bitmap = await createImageBitmap(file);
+      return {
+        source: bitmap as CanvasImageSource,
+        width: bitmap.width,
+        height: bitmap.height,
+        cleanup: () => bitmap.close(),
+      };
+    } catch {
+      // Older mobile browsers may decode the same JPEG through an image element instead.
+    }
+  }
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    const loaded = new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve();
+      image.onerror = () => reject(new Error("Foto tidak dapat dibuka di browser."));
+    });
+    image.src = url;
+    await loaded;
+    return {
+      source: image as CanvasImageSource,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      cleanup: () => URL.revokeObjectURL(url),
+    };
+  } catch (error) {
+    URL.revokeObjectURL(url);
+    throw error;
+  }
+}
+
 async function prepareReceiptImage(file: File): Promise<File> {
   if (file.size <= MAX_UPLOAD_BYTES) return file;
 
-  let bitmap: ImageBitmap;
+  let image: Awaited<ReturnType<typeof decodeReceiptImage>>;
   try {
-    bitmap = await createImageBitmap(file);
+    image = await decodeReceiptImage(file);
   } catch {
-    throw new Error("Foto terlalu besar dan tidak dapat dikompres di browser. Pilih foto JPG/PNG yang lebih kecil.");
+    throw new Error("Foto terlalu besar dan tidak dapat diproses di browser ini. Pilih JPG/PNG yang lebih kecil atau coba browser lain.");
   }
 
   try {
     const maxDimension = 2400;
-    const scale = Math.min(1, maxDimension / Math.max(bitmap.width, bitmap.height));
+    const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
     const canvas = document.createElement("canvas");
-    canvas.width = Math.round(bitmap.width * scale);
-    canvas.height = Math.round(bitmap.height * scale);
+    canvas.width = Math.round(image.width * scale);
+    canvas.height = Math.round(image.height * scale);
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Browser tidak dapat memproses foto ini. Pilih foto yang lebih kecil.");
-    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    context.drawImage(image.source, 0, 0, canvas.width, canvas.height);
 
     let quality = 0.88;
     let blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", quality));
@@ -60,7 +96,7 @@ async function prepareReceiptImage(file: File): Promise<File> {
     const baseName = file.name.replace(/\.[^.]+$/, "") || "receipt";
     return new File([blob], `${baseName}.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
   } finally {
-    bitmap.close();
+    image.cleanup();
   }
 }
 
