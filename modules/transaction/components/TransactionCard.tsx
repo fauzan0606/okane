@@ -3,7 +3,6 @@ import { formatTransactionType } from "../constants";
 import { getInstallmentNumber } from "../installment";
 import TransactionCardActions from "./TransactionCardActions";
 
-type WalletOption = { id: string; name: string; walletType: "CASH" | "BANK_ACCOUNT" | "CREDIT_CARD" | "DEBIT_CARD" | "E_WALLET" | "FOREIGN_CASH" | "INVESTMENT" };
 type ClientTransaction = Omit<TransactionWithRelations, "installmentPlan" | "splitBill"> & {
   installmentPlan: {
     id: string;
@@ -22,12 +21,9 @@ type ClientTransaction = Omit<TransactionWithRelations, "installmentPlan" | "spl
     status: "DRAFT" | "OPEN" | "SETTLED" | "CANCELLED";
   } | null;
 };
-type CategoryOption = { id: string; name: string; type: "INCOME" | "EXPENSE"; icon: string | null; color: string | null };
-type SubcategoryOption = { id: string; categoryId: string; name: string; isActive?: boolean; sortOrder?: number };
-type PayeeOption = { id: string; name: string; note: string | null };
-type TransactionCardProps = { transaction: TransactionWithRelations; wallets: WalletOption[]; categories: CategoryOption[]; subcategories: SubcategoryOption[]; payees: PayeeOption[]; reviewMode?: boolean; sameMerchantCount?: number };
+type TransactionCardProps = { transaction: TransactionWithRelations; reviewMode?: boolean; sameMerchantCount?: number };
 
-export default function TransactionCard({ transaction, wallets, categories, subcategories, payees, reviewMode = false, sameMerchantCount = 0 }: TransactionCardProps) {
+export default function TransactionCard({ transaction, reviewMode = false, sameMerchantCount = 0 }: TransactionCardProps) {
   const splitBill = transaction.splitBill;
   const amount = splitBill ? Number(splitBill.personalAmount) : Number(transaction.amount);
   const amountColor = transaction.type === "EXPENSE" ? "text-red-400" : "text-emerald-400";
@@ -110,7 +106,7 @@ export default function TransactionCard({ transaction, wallets, categories, subc
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
         <div className="min-w-0 flex-1 md:min-w-[180px]"><div className="flex flex-wrap items-center gap-2">{(transaction.payee || transaction.type === "EXPENSE") && <h3 className="truncate text-sm font-semibold text-white">{transaction.payee?.name ?? "No merchant"}</h3>}<span className="shrink-0 rounded-full bg-[#0B141F] px-2 py-0.5 text-[9px] font-medium text-slate-300">{formatTransactionType(transaction.type)}</span>{splitBill && <span className="shrink-0 rounded-full border border-emerald-400/15 bg-emerald-400/10 px-2 py-0.5 text-[9px] font-medium text-emerald-300">Split Bill</span>}</div><p className="mt-1 truncate text-[11px] text-slate-300">{transaction.category?.name ?? "Uncategorized"}{transaction.subcategory ? ` · ${transaction.subcategory.name}` : ""}</p></div>
         <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-5 gap-y-1 text-[11px] text-slate-400 sm:grid-cols-3"><span className="truncate">Wallet: <span className="text-slate-200">{transaction.wallet.name}</span></span><span className="truncate">Date: <span className="text-slate-200">{dateLabel}</span></span>{splitBill ? <span className="truncate text-emerald-300">personal expense</span> : plan ? <span className="truncate text-emerald-300">Installment {currentInstallment}/{plan.tenorMonths} · {remainingInstallments} left</span> : <span className="truncate text-slate-500">—</span>}</div>
-        <div className="flex shrink-0 items-center justify-between gap-3 md:justify-end"><div className="text-right"><p className={`text-base font-bold tracking-tight ${amountColor}`}>{transaction.wallet.currency.code} {amount.toLocaleString("id-ID")}</p>{splitBill && <p className="mt-0.5 text-[9px] text-slate-400">personal expense</p>}{plan && <p className="mt-0.5 text-[9px] text-slate-400">{transaction.wallet.currency.code} {Number(plan.installmentAmount).toLocaleString("id-ID")}/month</p>}</div><TransactionCardActions transaction={transactionForClient} wallets={wallets} categories={categories} subcategories={subcategories} payees={payees} reviewMode={reviewMode} sameMerchantCount={sameMerchantCount} /></div>
+        <div className="flex shrink-0 items-center justify-between gap-3 md:justify-end"><div className="text-right"><p className={`text-base font-bold tracking-tight ${amountColor}`}>{transaction.wallet.currency.code} {amount.toLocaleString("id-ID")}</p>{splitBill && <p className="mt-0.5 text-[9px] text-slate-400">personal expense</p>}{plan && <p className="mt-0.5 text-[9px] text-slate-400">{transaction.wallet.currency.code} {Number(plan.installmentAmount).toLocaleString("id-ID")}/month</p>}</div><TransactionCardActions transaction={transactionForClient} reviewMode={reviewMode} sameMerchantCount={sameMerchantCount} /></div>
       </div>
     </div>
   );

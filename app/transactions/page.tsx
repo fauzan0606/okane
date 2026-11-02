@@ -99,7 +99,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
 
         {hasFilters && <div className="flex items-center justify-between text-xs text-slate-500"><span>Showing {paged.total === 0 ? 0 : (safePage - 1) * PAGE_SIZE + 1}–{Math.min(safePage * PAGE_SIZE, paged.total)} of {paged.total} transactions</span></div>}
 
-        <TransactionList transactions={paged.transactions} wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} payees={formData.payees} reviewMode={reviewOnly} merchantCounts={merchantCounts} />
+        <TransactionList transactions={paged.transactions} reviewMode={reviewOnly} merchantCounts={merchantCounts} />
         <TransactionPagination page={safePage} pageSize={PAGE_SIZE} total={paged.total} searchParams={paginationParams} />
       </div>
     </AppShell>
