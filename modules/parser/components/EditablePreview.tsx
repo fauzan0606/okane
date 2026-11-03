@@ -55,7 +55,7 @@ export default function EditablePreview({ result, wallets, categories, subcatego
   function handleSave() {
     startTransition(async () => {
       try {
-        await saveParsedTransactionAction({
+        const result = await saveParsedTransactionAction({
           ...parsed,
           tipsEnabled: parsed.type === "EXPENSE" && tipsEnabled,
           tipsAmount: tipsEnabled ? Number(tipsAmount) : undefined,
@@ -63,6 +63,7 @@ export default function EditablePreview({ result, wallets, categories, subcatego
             ? { enabled: true, tenorMonths: Number(installmentTenor), startDate: installmentStartDate, feeAmount: fee }
             : { enabled: false },
         });
+        if (!result.success) throw new Error(result.message);
         alert("Transaction saved successfully.");
         onSaved();
       } catch (error) {
