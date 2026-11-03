@@ -85,7 +85,6 @@ export async function createTransactionService(input: CreateTransactionInput) {
         ...(payee && { payee: { connect: { id: payee.id } } }),
         ...(plan && { installmentPlan: { create: plan } }),
       },
-      include: { wallet: true, payee: true, category: true, subcategory: true, installmentPlan: true },
     });
     if (affectsCurrentBalance(transaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(transaction));
     if (tipsPayee && input.tipsAmount) {
@@ -105,7 +104,7 @@ export async function createTransactionService(input: CreateTransactionInput) {
       if (affectsCurrentBalance(tipsTransaction, wallet)) await applyBalanceDelta(tx, wallet.id, balanceDelta(tipsTransaction));
     }
     return transaction;
-  });
+  }, { maxWait: 10_000, timeout: 15_000 });
 }
 
 export async function listReimbursements() {

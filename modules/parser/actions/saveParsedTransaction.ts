@@ -13,10 +13,20 @@ import type {
 export async function saveParsedTransactionAction(
   parsed: ParsedTransaction
 ) {
-  const transaction =
-    await saveParsedTransaction(
-      parsed
-    );
+  try {
+    await saveParsedTransaction(parsed);
+  } catch (error) {
+    const isTransactionTimeout = typeof error === "object"
+      && error !== null
+      && "code" in error
+      && error.code === "P2028";
+    return {
+      success: false as const,
+      message: isTransactionTimeout
+        ? "Penyimpanan memerlukan waktu lebih lama dari biasanya. Silakan coba lagi."
+        : error instanceof Error ? error.message : "Failed to save transaction.",
+    };
+  }
 
   revalidatePath(
     "/transactions"
@@ -34,5 +44,5 @@ export async function saveParsedTransactionAction(
     "/"
   );
 
-  return transaction;
+  return { success: true as const };
 }
