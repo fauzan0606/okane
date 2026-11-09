@@ -26,7 +26,6 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
   const { summary, budget, aiAssessment, calendar } = data;
   const localHour = Number(new Intl.DateTimeFormat("en-US", { hour: "numeric", hour12: false, timeZone: "Asia/Jakarta" }).format(new Date()));
   const greeting = localHour < 12 ? "Good morning" : localHour < 18 ? "Good afternoon" : "Good evening";
-  const maxCashflow = Math.max(...data.cashflow.flatMap((point) => [point.income, point.expense]), 1);
   const donutSegments = data.spendingByCategory.slice(0, 6).reduce<string[]>((segments, category, index) => {
     const previous = data.spendingByCategory.slice(0, index).reduce((sum, item) => sum + item.percentage, 0);
     segments.push(`${categoryColors[index % categoryColors.length]} ${previous}% ${previous + category.percentage}%`);
@@ -71,7 +70,7 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
         <Suspense fallback={null}><CreditCardSummary /></Suspense>
         <Suspense fallback={null}><ReceivableSummary /></Suspense>
 
-        <section className="mb-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><DarkPanel><PanelHeading eyebrow="Money movement" title="Cashflow Overview"><div className="flex items-center gap-4 text-[11px] text-slate-400"><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-emerald-500" />Income</span><span className="flex items-center gap-1.5"><i className="h-2 w-2 rounded-full bg-orange-400" />Expense</span></div></PanelHeading><div className="mt-6 flex h-[220px] gap-3"><div className="flex flex-col justify-between py-1 text-[9px] text-slate-500"><span>{formatCompactCurrency(maxCashflow, summary.currencyCode)}</span><span>{formatCompactCurrency(maxCashflow * 0.66, summary.currencyCode)}</span><span>{formatCompactCurrency(maxCashflow * 0.33, summary.currencyCode)}</span><span>0</span></div><div className="relative flex flex-1 items-end justify-around gap-1.5 border-b border-white/10 pt-1"><div className="pointer-events-none absolute inset-0 flex flex-col justify-between"><span className="border-t border-dashed border-white/5" /><span className="border-t border-dashed border-white/5" /><span className="border-t border-dashed border-white/5" /><span className="border-t border-dashed border-white/5" /></div>{data.cashflow.map((point) => <div key={point.label} className="relative z-10 flex h-full flex-1 items-end justify-center gap-1"><div className="w-2.5 rounded-t-md bg-emerald-500" style={{ height: `${Math.max((point.income / maxCashflow) * 88, point.income > 0 ? 4 : 0)}%` }} /><div className="w-2.5 rounded-t-md bg-orange-400" style={{ height: `${Math.max((point.expense / maxCashflow) * 88, point.expense > 0 ? 4 : 0)}%` }} /><span className="absolute -bottom-5 whitespace-nowrap text-[9px] text-slate-500">{point.label}</span></div>)}</div></div></DarkPanel><DarkPanel><PanelHeading eyebrow="Where it goes" title="Spending by Category"><MoreHorizontal size={18} className="text-slate-500" /></PanelHeading><div className="mt-5 flex items-center gap-5"><div className="relative h-[142px] w-[142px] shrink-0 rounded-full" style={donutStyle}><div className="absolute inset-[27%] flex flex-col items-center justify-center rounded-full bg-[#111923] text-center"><span className="text-[13px] font-bold text-white">{formatCompactCurrency(summary.expense, summary.currencyCode)}</span><span className="mt-0.5 text-[9px] text-slate-500">Total Expense</span></div></div><div className="min-w-0 flex-1 space-y-3">{data.spendingByCategory.slice(0, 5).map((category, index) => <div key={category.id} className="flex items-center justify-between gap-3 text-[11px]"><span className="flex min-w-0 items-center gap-2 text-slate-300"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} /><span className="truncate">{category.name}</span></span><span className="shrink-0 font-semibold text-slate-200">{category.percentage.toFixed(0)}%</span></div>)}</div></div></DarkPanel></section>
+        <section className="mb-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr]"><MoneyMovementChart calendar={calendar} budget={budget} currencyCode={summary.currencyCode} /><DarkPanel><PanelHeading eyebrow="Where it goes" title="Spending by Category"><MoreHorizontal size={18} className="text-slate-500" /></PanelHeading><div className="mt-5 flex items-center gap-5"><div className="relative h-[142px] w-[142px] shrink-0 rounded-full" style={donutStyle}><div className="absolute inset-[27%] flex flex-col items-center justify-center rounded-full bg-[#111923] text-center"><span className="text-[13px] font-bold text-white">{formatCompactCurrency(summary.expense, summary.currencyCode)}</span><span className="mt-0.5 text-[9px] text-slate-500">Total Expense</span></div></div><div className="min-w-0 flex-1 space-y-3">{data.spendingByCategory.slice(0, 5).map((category, index) => <div key={category.id} className="flex items-center justify-between gap-3 text-[11px]"><span className="flex min-w-0 items-center gap-2 text-slate-300"><i className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoryColors[index % categoryColors.length] }} /><span className="truncate">{category.name}</span></span><span className="shrink-0 font-semibold text-slate-200">{category.percentage.toFixed(0)}%</span></div>)}</div></div></DarkPanel></section>
 
         <section className="grid gap-5 lg:grid-cols-[0.82fr_1.18fr]"><DarkPanel><PanelHeading eyebrow="Accounts" title="Your Wallets"><a href="/wallet" className="text-[11px] font-semibold text-emerald-400">See all →</a></PanelHeading><div className="mt-4 divide-y divide-white/5">{data.wallets.slice(0, 6).map((wallet, index) => <div key={wallet.id} className="flex items-center justify-between gap-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 items-center justify-center rounded-xl ${index % 2 ? "bg-emerald-500/15 text-emerald-400" : "bg-blue-500/15 text-blue-400"}`}>{wallet.walletType.toLowerCase().includes("bank") ? <Landmark size={17} /> : <CreditCard size={17} />}</div><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{wallet.name}</p><p className="truncate text-xs capitalize text-slate-500">{wallet.walletType.replaceAll("_", " ").toLowerCase()}</p></div></div><p className="shrink-0 text-sm font-semibold text-slate-200">{formatCurrency(wallet.balance, wallet.currencyCode)}</p></div>)}</div></DarkPanel><DarkPanel><PanelHeading eyebrow="Latest activity" title="Recent Transactions"><a href="/transactions" className="text-[11px] font-semibold text-emerald-400">See all →</a></PanelHeading><div className="mt-4 divide-y divide-white/5">{data.recentTransactions.slice(0, 7).map((transaction) => <div key={transaction.id} className="flex items-center justify-between gap-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 items-center justify-center rounded-xl ${transaction.type === "INCOME" ? "bg-emerald-500/15 text-emerald-400" : "bg-orange-500/15 text-orange-400"}`}>{transaction.type === "INCOME" ? <ArrowDownRight size={17} /> : <ReceiptText size={17} />}</div><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{transaction.payeeName}</p><p className="truncate text-xs text-slate-500">{transaction.categoryName} · {transaction.walletName}</p></div></div><div className="shrink-0 text-right"><p className={`text-sm font-semibold ${transaction.type === "INCOME" ? "text-emerald-400" : "text-red-400"}`}>{transaction.type === "INCOME" ? "+" : "−"}{formatCurrency(transaction.amount, summary.currencyCode)}</p><p className="text-[10px] text-slate-600">{formatDate(transaction.transactionDate)}</p></div></div>)}</div></DarkPanel></section>
 
@@ -83,6 +82,70 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
   );
 }
 
+function MoneyMovementChart({ calendar, budget, currencyCode }: { calendar: DashboardData["calendar"]; budget: DashboardData["budget"]; currencyCode: string }) {
+  const dayCount = calendar.days.length;
+  const currentDay = calendar.days.find((day) => day.isToday)?.day ?? dayCount;
+  const hasTarget = budget.hasBudget && budget.totalBudget > 0;
+  const points = calendar.days.reduce<Array<{ day: number; target: number | null; actual: number | null }>>((accumulated, day) => {
+    const actual = day.day <= currentDay ? (accumulated[accumulated.length - 1]?.actual ?? 0) + day.expense : null;
+    return [...accumulated, {
+      day: day.day,
+      target: hasTarget ? budget.totalBudget * day.day / dayCount : null,
+      actual,
+    }];
+  }, []);
+  const actualToDate = points.find((point) => point.day === currentDay)?.actual ?? 0;
+  const targetToDate = hasTarget ? budget.totalBudget * currentDay / dayCount : 0;
+  const difference = actualToDate - targetToDate;
+  const maximum = Math.max(hasTarget ? budget.totalBudget : 0, actualToDate, 1);
+  const width = 680;
+  const height = 270;
+  const left = 72;
+  const right = 664;
+  const top = 20;
+  const bottom = 226;
+  const x = (day: number) => left + ((day - 1) / Math.max(dayCount - 1, 1)) * (right - left);
+  const y = (value: number) => bottom - (value / maximum) * (bottom - top);
+  const toPath = (key: "target" | "actual") => points.flatMap((point) => point[key] === null ? [] : [`${x(point.day)},${y(point[key] as number)}`]).join(" ");
+  const xTicks = [...new Set([1, 5, 10, 15, 20, 25, dayCount])].filter((day) => day <= dayCount);
+
+  return (
+    <DarkPanel>
+      <PanelHeading eyebrow={`Money movement · ${calendar.label}`} title="Pengeluaran vs budget">
+        <div className="flex flex-wrap items-center justify-end gap-x-4 gap-y-1 text-[10px] text-slate-400">
+          {hasTarget && <span className="flex items-center gap-1.5"><i className="w-3 border-t-2 border-dashed border-blue-400" />Target rata-rata</span>}
+          <span className="flex items-center gap-1.5"><i className="w-3 border-t-2 border-orange-400" />Aktual kumulatif</span>
+        </div>
+      </PanelHeading>
+      <p className="mt-3 text-[11px] text-slate-400">
+        {hasTarget
+          ? <>Sampai tanggal {currentDay}: aktual <span className="font-semibold text-orange-300">{formatCurrency(actualToDate, currencyCode)}</span>, target rata-rata {formatCurrency(targetToDate, currencyCode)}. <span className={`font-semibold ${difference > 0 ? "text-red-300" : "text-emerald-300"}`}>{difference > 0 ? `${formatCurrency(difference, currencyCode)} di atas target` : `${formatCurrency(Math.abs(difference), currencyCode)} di bawah target`}</span>.</>
+          : <>Belum ada budget untuk {calendar.label}; grafik menampilkan akumulasi pengeluaran aktual.</>}
+      </p>
+      <div className="mt-3 w-full overflow-hidden">
+        {dayCount > 0 ? <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-labelledby="money-movement-title money-movement-description" className="h-auto w-full overflow-visible">
+          <title id="money-movement-title">Pengeluaran kumulatif dibanding target budget {calendar.label}</title>
+          <desc id="money-movement-description">Garis biru putus-putus adalah target budget yang naik rata sampai akhir bulan. Garis oranye adalah pengeluaran aktual yang terakumulasi sampai hari ini.</desc>
+          {[0, 0.25, 0.5, 0.75, 1].map((fraction) => {
+            const value = maximum * fraction;
+            const yPosition = y(value);
+            return <g key={fraction}>
+              <line x1={left} y1={yPosition} x2={right} y2={yPosition} stroke="rgba(148,163,184,0.14)" strokeWidth="1" />
+              <text x={left - 8} y={yPosition + 4} textAnchor="end" className="fill-slate-500 text-[10px]">{formatCompactCurrency(value, currencyCode)}</text>
+            </g>;
+          })}
+          <line x1={x(currentDay)} y1={top} x2={x(currentDay)} y2={bottom} stroke="rgba(148,163,184,0.3)" strokeWidth="1" strokeDasharray="3 5" />
+          {hasTarget && <polyline points={toPath("target")} fill="none" stroke="#60a5fa" strokeWidth="2.5" strokeDasharray="7 6" strokeLinecap="round" strokeLinejoin="round" />}
+          <polyline points={toPath("actual")} fill="none" stroke="#fb923c" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+          {points.filter((point) => point.actual !== null).map((point) => <circle key={`actual-${point.day}`} cx={x(point.day)} cy={y(point.actual as number)} r={point.day === currentDay ? 4 : 2.5} fill="#fb923c"><title>{`Tanggal ${point.day}: pengeluaran kumulatif ${formatCurrency(point.actual as number, currencyCode)}`}</title></circle>)}
+          {xTicks.map((day) => <text key={`tick-${day}`} x={x(day)} y={bottom + 22} textAnchor="middle" className="fill-slate-500 text-[10px]">{day}</text>)}
+          <text x={x(currentDay)} y={top - 4} textAnchor="middle" className="fill-slate-400 text-[9px]">Hari ini</text>
+        </svg> : <p className="py-12 text-center text-sm text-slate-500">Tidak ada data harian.</p>}
+      </div>
+      <div className="mt-1 flex justify-between pl-[72px] text-[9px] text-slate-600"><span>Tanggal</span><span>{calendar.label}</span></div>
+    </DarkPanel>
+  );
+}
 function PanelHeading({ eyebrow, title, children }: { eyebrow: string; title: string; children?: React.ReactNode }) { return <div className="flex items-center justify-between gap-4"><div><p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">{eyebrow}</p><h2 className="mt-1 text-lg font-semibold tracking-tight text-white">{title}</h2></div>{children}</div>; }
 function DarkPanel({ children }: { children: React.ReactNode }) { return <section className="rounded-[20px] border border-white/10 bg-[#0d151e] p-5 md:p-6">{children}</section>; }
 function EmptyState({ message }: { message: string }) { return <p className="py-8 text-center text-sm text-slate-500">{message}</p>; }
