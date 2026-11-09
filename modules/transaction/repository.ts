@@ -184,8 +184,8 @@ export async function getTransactions() {
     },
     select: transactionSelect,
     orderBy: [
-      { createdAt: "desc" },
       { transactionDate: "desc" },
+      { createdAt: "desc" },
       { id: "desc" },
     ],
   });
@@ -202,8 +202,8 @@ export async function getTransactionsPage(filters: TransactionListFilters & { pa
       where,
       select: transactionSelect,
       orderBy: [
-        { createdAt: "desc" },
         { transactionDate: "desc" },
+        { createdAt: "desc" },
         { id: "desc" },
       ],
       skip: (page - 1) * pageSize,
