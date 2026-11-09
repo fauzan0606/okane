@@ -3,6 +3,7 @@ import Image from "next/image";
 import { ArrowDownRight, ArrowUpRight, Bell, CalendarDays, ChevronDown, CreditCard, Landmark, MoreHorizontal, ReceiptText, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import type { DashboardData, DashboardPeriod } from "../types";
 import CreditCardSummary from "./CreditCardSummary";
+import DashboardMonthlyCalendar from "./DashboardMonthlyCalendar";
 import ReceivableSummary from "@/modules/receivable/components/ReceivableSummary";
 
 const periods: Array<{ value: DashboardPeriod; label: string }> = [
@@ -11,7 +12,6 @@ const periods: Array<{ value: DashboardPeriod; label: string }> = [
   { value: "THIS_YEAR", label: "This Year" },
 ];
 const categoryColors = ["#F5A623", "#43B96D", "#28A9C5", "#8B62D9", "#A8AFB8", "#F97316"];
-const weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 function formatCurrency(value: number, currencyCode: string) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: currencyCode, maximumFractionDigits: currencyCode === "IDR" || currencyCode === "JPY" || currencyCode === "KRW" ? 0 : 2 }).format(value);
@@ -33,7 +33,6 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
     return segments;
   }, []);
   const donutStyle = { background: donutSegments.length > 0 ? `conic-gradient(${donutSegments.join(", ")})` : "conic-gradient(#273244 0 100%)" };
-  const calendarCells = [...Array(calendar.firstWeekday).fill(null), ...calendar.days];
 
   return (
     <div className="min-h-screen bg-[#070c12] text-slate-100">
@@ -66,7 +65,7 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
 
         <section className="mb-5 grid gap-5 lg:grid-cols-[1.05fr_0.95fr]">
           <DarkPanel><PanelHeading eyebrow="AI financial assessment" title="How is my financial condition?"><Sparkles size={18} className="text-emerald-400" /></PanelHeading><div className="mt-5 flex items-center gap-5"><div className="flex h-24 w-24 shrink-0 items-center justify-center rounded-full border-8 border-white/5" style={{ background: `conic-gradient(#34d399 ${aiAssessment.score * 3.6}deg, #172231 0)` }}><div className="flex h-16 w-16 items-center justify-center rounded-full bg-[#111923]"><span className="text-xl font-bold text-white">{aiAssessment.score}</span></div></div><div><p className={`text-sm font-semibold ${aiAssessment.status === "HEALTHY" ? "text-emerald-300" : aiAssessment.status === "WATCH" ? "text-amber-300" : "text-red-300"}`}>{aiAssessment.status === "HEALTHY" ? "Healthy" : aiAssessment.status === "WATCH" ? "Watch" : "At risk"}</p><p className="mt-1 text-sm text-slate-300">{aiAssessment.headline}</p></div></div><div className="mt-4 space-y-2">{aiAssessment.insights.map((insight) => <div key={insight} className="rounded-xl border border-white/5 bg-[#0d151e] px-3 py-2.5 text-xs text-slate-400">{insight}</div>)}</div><p className="mt-3 text-[10px] text-slate-600">Assessment is calculated from recorded income, spending, budget usage and unbudgeted spending.</p></DarkPanel>
-          <DarkPanel><PanelHeading eyebrow="Monthly calendar" title={calendar.label}><CalendarDays size={18} className="text-slate-500" /></PanelHeading><div className="mt-4 grid grid-cols-7 gap-1.5">{weekdays.map((day) => <div key={day} className="py-1 text-center text-[9px] font-semibold uppercase tracking-wide text-slate-600">{day}</div>)}{calendarCells.map((cell, index) => cell ? <div key={cell.day} className={`min-h-[62px] rounded-lg border px-1.5 py-1.5 ${cell.isToday ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/5 bg-[#0d151e]"}`}><div className="text-[10px] font-semibold text-slate-400">{cell.day}</div>{cell.income > 0 && <div className="mt-1 truncate text-[9px] font-semibold text-emerald-300">+{formatCompactCurrency(cell.income, summary.currencyCode)}</div>}{cell.expense > 0 && <div className="truncate text-[9px] font-semibold text-red-300">−{formatCompactCurrency(cell.expense, summary.currencyCode)}</div>}</div> : <div key={`blank-${index}`} className="min-h-[62px]" />)}</div></DarkPanel>
+          <DashboardMonthlyCalendar calendar={calendar} currencyCode={summary.currencyCode} />
         </section>
 
         <Suspense fallback={null}><CreditCardSummary /></Suspense>
