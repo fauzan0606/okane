@@ -37,7 +37,7 @@ export async function getDashboardCashflow(period: DashboardPeriod, currencyCode
 }
 
 export async function getDashboardRecentTransactions(currencyCode: string) {
-  return prisma.transaction.findMany({ where: { kind: "STANDARD", wallet: { currency: { code: currencyCode } } }, take: 10, orderBy: { transactionDate: "desc" }, select: { id: true, transactionDate: true, type: true, amount: true, wallet: { select: { name: true } }, category: { select: { name: true } }, payee: { select: { name: true } } } });
+  return prisma.transaction.findMany({ where: { kind: "STANDARD", wallet: { currency: { code: currencyCode } } }, take: 10, orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }], select: { id: true, transactionDate: true, type: true, amount: true, wallet: { select: { name: true } }, category: { select: { name: true } }, payee: { select: { name: true } } } });
 }
 
 export async function getActiveCurrencies() { return prisma.currency.findMany({ where: { isActive: true }, select: { code: true, symbol: true, name: true }, orderBy: { code: "asc" } }); }
