@@ -304,6 +304,74 @@ export async function updateSplitBillPaymentWallet(splitBillId: string, walletId
   });
 }
 
+export async function updateFinalizedSplitBillTransaction(splitBillId: string, input: {
+  transactionDate: Date;
+  walletId: string;
+  categoryId: string;
+  subcategoryId?: string;
+  note?: string;
+}) {
+  if (!(input.transactionDate instanceof Date) || Number.isNaN(input.transactionDate.getTime())) throw new Error("Payment date is required.");
+  return prisma.$transaction(async (tx) => {
+    const splitBill = await tx.splitBill.findUnique({
+      where: { id: splitBillId },
+      include: {
+        transaction: { include: { wallet: { select: { id: true, currencyId: true, balanceAsOf: true } } } },
+        participants: { select: { id: true } },
+      },
+    });
+    if (!splitBill) throw new Error("Split Bill not found.");
+    if (splitBill.status === SplitBillStatus.DRAFT || splitBill.status === SplitBillStatus.CANCELLED || !splitBill.transaction) {
+      throw new Error("Only a finalized Split Bill with a recorded expense can be edited.");
+    }
+
+    const transaction = splitBill.transaction;
+    const oldWallet = transaction.wallet;
+    const newWallet = await tx.wallet.findUnique({
+      where: { id: input.walletId },
+      select: { id: true, currencyId: true, balanceAsOf: true, isActive: true },
+    });
+    if (!newWallet || !newWallet.isActive) throw new Error("Select an active payment wallet.");
+    if (newWallet.currencyId !== oldWallet.currencyId) throw new Error("Payment wallet must use the same currency.");
+
+    const category = await tx.category.findUnique({ where: { id: input.categoryId }, select: { id: true, type: true } });
+    if (!category || category.type !== "EXPENSE") throw new Error("Select an expense category.");
+    if (input.subcategoryId) {
+      const subcategory = await tx.subcategory.findUnique({ where: { id: input.subcategoryId }, select: { id: true, categoryId: true } });
+      if (!subcategory || subcategory.categoryId !== input.categoryId) throw new Error("Subcategory does not belong to the selected category.");
+    }
+
+    const nextTransaction = { transactionDate: input.transactionDate, createdAt: transaction.createdAt };
+    if (transactionAffectedBalance(transaction, oldWallet.balanceAsOf)) {
+      await applyBalanceDelta(tx, oldWallet.id, balanceDelta("EXPENSE", transaction.amount).negated());
+    }
+    if (transactionAffectedBalance(nextTransaction, newWallet.balanceAsOf)) {
+      await applyBalanceDelta(tx, newWallet.id, balanceDelta("EXPENSE", transaction.amount));
+    }
+
+    await tx.transaction.update({
+      where: { id: transaction.id },
+      data: {
+        transactionDate: input.transactionDate,
+        walletId: newWallet.id,
+        categoryId: input.categoryId,
+        subcategoryId: input.subcategoryId || null,
+        note: input.note?.trim() || null,
+      },
+    });
+    await tx.splitBill.update({ where: { id: splitBill.id }, data: { paymentDate: input.transactionDate } });
+    const participantIds = splitBill.participants.map((participant) => participant.id);
+    if (participantIds.length > 0) {
+      await tx.receivable.updateMany({
+        where: { splitBillParticipantId: { in: participantIds } },
+        data: { sourceWalletId: newWallet.id, loanDate: input.transactionDate },
+      });
+    }
+
+    return { transactionId: transaction.id };
+  });
+}
+
 export async function updateSplitBillPayablePaymentWallet(splitBillId: string, paymentId: string, walletId: string) {
   return prisma.$transaction(async (tx) => {
     const payment = await tx.payablePayment.findUnique({
