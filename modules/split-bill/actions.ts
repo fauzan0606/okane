@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createSplitBill, deleteSplitBill, finalizeSplitBill, updateSplitBillPaymentWallet, updateSplitBillPayablePaymentWallet } from "./service";
+import { createSplitBill, deleteSplitBill, finalizeSplitBill, updateFinalizedSplitBillTransaction, updateSplitBillPaymentWallet, updateSplitBillPayablePaymentWallet } from "./service";
 import { updateSplitBillItemAllocation } from "./item-edit-service";
 import { recordPayablePayment } from "@/modules/payable/service";
 
@@ -100,6 +100,28 @@ export async function updateSplitBillItemAction(formData: FormData) {
   let parsed: { participantId: string; units: number }[];
   try { parsed = JSON.parse(allocations); } catch { throw new Error("Invalid item allocation data."); }
   await updateSplitBillItemAllocation({ splitBillId, itemId, splitMethod, allocations: parsed });
+  refreshAll();
+}
+
+export async function updateFinalizedSplitBillTransactionAction(formData: FormData) {
+  const splitBillId = formData.get("splitBillId");
+  const transactionDate = formData.get("transactionDate");
+  const walletId = formData.get("walletId");
+  const categoryId = formData.get("categoryId");
+  const subcategoryId = formData.get("subcategoryId");
+  const note = formData.get("note");
+  if (typeof splitBillId !== "string" || !splitBillId) throw new Error("Split Bill not found.");
+  if (typeof transactionDate !== "string" || !transactionDate) throw new Error("Payment date is required.");
+  if (typeof walletId !== "string" || !walletId) throw new Error("Payment wallet is required.");
+  if (typeof categoryId !== "string" || !categoryId) throw new Error("Expense category is required.");
+
+  await updateFinalizedSplitBillTransaction(splitBillId, {
+    transactionDate: new Date(`${transactionDate}T00:00:00.000Z`),
+    walletId,
+    categoryId,
+    subcategoryId: typeof subcategoryId === "string" && subcategoryId ? subcategoryId : undefined,
+    note: typeof note === "string" ? note : undefined,
+  });
   refreshAll();
 }
 

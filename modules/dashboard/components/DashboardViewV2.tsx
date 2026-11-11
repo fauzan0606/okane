@@ -1,10 +1,11 @@
 import { Suspense } from "react";
-import { ArrowDownRight, ArrowUpRight, Bell, CalendarDays, ChevronDown, CreditCard, Landmark, MoreHorizontal, ReceiptText, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
+import { ArrowDownRight, ArrowUpRight, Bell, CalendarDays, ChevronDown, MoreHorizontal, ReceiptText, Sparkles, TrendingDown, TrendingUp, WalletCards } from "lucide-react";
 import type { DashboardData, DashboardPeriod } from "../types";
 import CreditCardSummary from "./CreditCardSummary";
 import DashboardMonthlyCalendar from "./DashboardMonthlyCalendar";
 import ReceivableSummary from "@/modules/receivable/components/ReceivableSummary";
 import DashboardMobileLayout, { type DashboardMobileSection } from "./DashboardMobileLayout";
+import DashboardWalletSummary from "./DashboardWalletSummary";
 
 const periods: Array<{ value: DashboardPeriod; label: string }> = [
   { value: "THIS_MONTH", label: "This Month" },
@@ -63,7 +64,7 @@ export default function DashboardViewV2({ data }: { data: DashboardData }) {
       id: "wallets",
       label: "Wallets",
       desktopClassName: "md:col-span-12 lg:col-span-6",
-      content: <DarkPanel><PanelHeading eyebrow="Accounts" title="Your Wallets"><a href="/wallet" className="text-[11px] font-semibold text-emerald-400">See all →</a></PanelHeading><div className="mt-4 divide-y divide-white/5">{data.wallets.slice(0, 6).map((wallet, index) => <div key={wallet.id} className="flex items-center justify-between gap-4 py-3.5"><div className="flex min-w-0 items-center gap-3"><div className={`flex h-9 w-9 items-center justify-center rounded-xl ${index % 2 ? "bg-emerald-500/15 text-emerald-400" : "bg-blue-500/15 text-blue-400"}`}>{wallet.walletType.toLowerCase().includes("bank") ? <Landmark size={17} /> : <CreditCard size={17} />}</div><div className="min-w-0"><p className="truncate text-sm font-semibold text-slate-200">{wallet.name}</p><p className="truncate text-xs capitalize text-slate-500">{wallet.walletType.replaceAll("_", " ").toLowerCase()}</p></div></div><p className="shrink-0 text-sm font-semibold text-slate-200">{formatCurrency(wallet.balance, wallet.currencyCode)}</p></div>)}</div></DarkPanel>,
+      content: <DashboardWalletSummary wallets={data.wallets} />,
     },
     {
       id: "transactions",
