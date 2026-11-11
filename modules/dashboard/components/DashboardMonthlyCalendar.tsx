@@ -64,11 +64,11 @@ export default function DashboardMonthlyCalendar({
         <div className="mt-4 grid grid-cols-7 gap-1.5" style={{ height: contentHeight, gridTemplateRows: `24px repeat(${weekCount}, minmax(62px, 1fr))` }}>
           {weekdays.map((day) => <div key={day} className="py-1 text-center text-[9px] font-semibold uppercase tracking-wide text-slate-600">{day}</div>)}
           {calendarCells.map((cell, index) => cell ? (
-            <div key={cell.day} className={`min-h-0 rounded-lg border px-1.5 py-1.5 ${cell.isToday ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/5 bg-[#0a1119]"}`}>
+            <a key={cell.day} href={`/transactions?from=${calendar.month}-${String(cell.day).padStart(2, "0")}&to=${calendar.month}-${String(cell.day).padStart(2, "0")}`} aria-label={`Lihat transaksi tanggal ${cell.day} ${calendar.label}`} className={`min-h-0 rounded-lg border px-1.5 py-1.5 transition hover:border-emerald-400/50 hover:bg-emerald-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${cell.isToday ? "border-emerald-400/40 bg-emerald-500/10" : "border-white/5 bg-[#0a1119]"}`}>
               <div className="text-[10px] font-semibold text-slate-400">{cell.day}</div>
               {cell.income > 0 && <div className="mt-1 truncate text-[9px] font-semibold text-emerald-300">+{formatCompactCurrency(cell.income, currencyCode)}</div>}
               {cell.expense > 0 && <div className="truncate text-[9px] font-semibold text-red-300">−{formatCompactCurrency(cell.expense, currencyCode)}</div>}
-            </div>
+            </a>
           ) : <div key={`blank-${index}`} />)}
         </div>
       ) : (
@@ -77,7 +77,7 @@ export default function DashboardMonthlyCalendar({
             const date = new Date(Date.UTC(year, month - 1, day.day));
             const dateLabel = dailyDateFormatter.format(date);
             return (
-              <div key={day.day} className={`flex min-h-[52px] items-center justify-between gap-3 border-b border-white/5 px-2.5 ${day.isToday ? "rounded-lg bg-emerald-500/10" : ""}`}>
+              <a key={day.day} href={`/transactions?from=${calendar.month}-${String(day.day).padStart(2, "0")}&to=${calendar.month}-${String(day.day).padStart(2, "0")}`} aria-label={`Lihat transaksi tanggal ${dateLabel}`} className={`flex min-h-[52px] items-center justify-between gap-3 border-b border-white/5 px-2.5 transition hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 ${day.isToday ? "rounded-lg bg-emerald-500/10" : ""}`}>
                 <div className="flex min-w-0 items-center gap-2.5">
                   <span className={`w-[22px] shrink-0 text-center text-xs font-bold ${day.isToday ? "text-emerald-300" : "text-slate-400"}`}>{day.day}</span>
                   <span className="truncate text-xs font-medium text-slate-300">{dateLabel}{day.isToday ? <span className="ml-1.5 text-[9px] font-semibold uppercase text-emerald-400">Hari ini</span> : null}</span>
@@ -86,7 +86,7 @@ export default function DashboardMonthlyCalendar({
                   <p className="text-xs font-semibold text-red-300">−{formatCompactCurrency(day.expense, currencyCode)}</p>
                   {day.income > 0 && <p className="mt-0.5 text-[10px] font-medium text-emerald-300">+{formatCompactCurrency(day.income, currencyCode)} income</p>}
                 </div>
-              </div>
+              </a>
             );
           })}
         </div>
