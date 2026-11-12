@@ -33,7 +33,7 @@ export async function getDashboardCategories() { return prisma.category.findMany
 
 export async function getDashboardCashflow(period: DashboardPeriod, currencyCode: string) {
   const { start, end } = getPeriodRange(period);
-  return prisma.transaction.findMany({ where: { kind: "STANDARD", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } }, type: { in: ["INCOME", "EXPENSE"] } }, select: { transactionDate: true, type: true, amount: true }, orderBy: { transactionDate: "asc" } });
+  return prisma.transaction.findMany({ where: { kind: "STANDARD", transactionDate: { gte: start, lt: end }, wallet: { currency: { code: currencyCode } }, type: { in: ["INCOME", "EXPENSE"] } }, select: { transactionDate: true, type: true, amount: true, splitBill: { select: { personalAmount: true } } }, orderBy: { transactionDate: "asc" } });
 }
 
 export async function getDashboardRecentTransactions(currencyCode: string) {

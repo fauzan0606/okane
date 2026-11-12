@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getPersonalExpenseGroups } from "./personal-spending";
 import type { BudgetSuggestion } from "./types";
 
 function monthBounds(month: string) {
@@ -27,17 +28,7 @@ function roundBudget(value: number) {
 async function monthExpenseStats(month: string, currencyId: string) {
   const { start, end } = monthBounds(month);
   const [expenses, income] = await Promise.all([
-    prisma.transaction.groupBy({
-      by: ["categoryId"],
-      where: {
-        kind: "STANDARD",
-        type: "EXPENSE",
-        transactionDate: { gte: start, lt: end },
-        wallet: { currencyId },
-      },
-      _sum: { amount: true },
-      _count: { _all: true },
-    }),
+    getPersonalExpenseGroups(start, end, currencyId),
     prisma.transaction.aggregate({
       where: {
         kind: "STANDARD",
@@ -123,6 +114,6 @@ export async function getBudgetSuggestionV2(month: string, currencyCode: string)
     previousBudget: roundBudget(item.previousBudget),
   }));
 
-  const coverage = history.filter((item) => item.expenses.length > 0).length;
+  const coverage = history.filter((item) => item.expenses.some((group) => group._count._all > 0)).length;
   return { month, currencyCode, incomeEstimate: roundBudget(incomeEstimate), historicalExpenseAverage: roundBudget(historicalExpenseAverage), previousBudgetTotal: roundBudget(previousBudgetTotal), recommendedTotalBudget, confidence: coverage >= 5 ? "HIGH" : coverage >= 3 ? "MEDIUM" : "LOW", items };
 }

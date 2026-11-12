@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { personalExpenseAmount } from "@/modules/transaction/personal-expense";
+import { getPersonalExpenseGroups } from "./personal-spending";
 import type { BudgetOverview, BudgetSuggestion } from "./types";
 
 function monthBounds(month: string) {
@@ -23,11 +25,7 @@ export async function getBudgetOverview(month = currentMonthKey(), currencyCode 
       where: { currencyId_periodStart_periodEnd: { currencyId: currency.id, periodStart: start, periodEnd: end } },
       include: { items: { include: { category: true, subcategory: true }, orderBy: [{ createdAt: "asc" }] } },
     }),
-    prisma.transaction.groupBy({
-      by: ["categoryId", "subcategoryId"],
-      where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } },
-      _sum: { amount: true },
-    }),
+    getPersonalExpenseGroups(start, end, currency.id),
     prisma.transaction.aggregate({ where: { kind: "STANDARD", type: "INCOME", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } }, _sum: { amount: true } }),
   ]);
   const totalActual = expenseGroups.reduce((sum, group) => sum.plus(group._sum.amount ?? 0), new Prisma.Decimal(0));
@@ -60,11 +58,7 @@ export async function getDashboardBudgetSummary(month = currentMonthKey(), curre
       where: { currencyId_periodStart_periodEnd: { currencyId: currency.id, periodStart: start, periodEnd: end } },
       select: { totalAmount: true, items: { select: { amount: true, categoryId: true, subcategoryId: true } } },
     }),
-    prisma.transaction.groupBy({
-      by: ["categoryId", "subcategoryId"],
-      where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId: currency.id } },
-      _sum: { amount: true },
-    }),
+    getPersonalExpenseGroups(start, end, currency.id),
   ]);
 
   const totalActual = expenseGroups.reduce((sum, group) => sum.plus(group._sum.amount ?? 0), new Prisma.Decimal(0));
@@ -139,10 +133,10 @@ async function historicalMonths(month: string, count = 6) { return Array.from({ 
 async function monthExpenseStats(month: string, currencyId: string) {
   const { start, end } = monthBounds(month);
   const [expenses, income] = await Promise.all([
-    prisma.transaction.findMany({ where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId } }, select: { amount: true, categoryId: true, subcategoryId: true } }),
+    prisma.transaction.findMany({ where: { kind: "STANDARD", type: "EXPENSE", transactionDate: { gte: start, lt: end }, wallet: { currencyId } }, select: { amount: true, categoryId: true, subcategoryId: true, splitBill: { select: { personalAmount: true } } } }),
     prisma.transaction.aggregate({ where: { kind: "STANDARD", type: "INCOME", transactionDate: { gte: start, lt: end }, wallet: { currencyId } }, _sum: { amount: true } }),
   ]);
-  return { expenses, income: Number(income._sum.amount ?? 0) };
+  return { expenses: expenses.map((transaction) => ({ ...transaction, personalAmount: personalExpenseAmount(transaction) })), income: Number(income._sum.amount ?? 0) };
 }
 function roundBudget(value: number) { return Math.max(Math.round(value / 1000) * 1000, 0); }
 
@@ -154,12 +148,12 @@ export async function getBudgetSuggestion(month: string, currencyCode: string): 
     (async () => { const previousMonth = shiftMonth(month, -1); const bounds = monthBounds(previousMonth); return prisma.budget.findUnique({ where: { currencyId_periodStart_periodEnd: { currencyId: currency.id, periodStart: bounds.start, periodEnd: bounds.end } }, include: { items: true } }); })(),
   ]);
   const incomeValues = [...history.map((item) => item.income), current.income].filter((value) => value > 0);
-  const expenseValues = [...history.map((item) => item.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0)), current.expenses.reduce((sum, tx) => sum + Number(tx.amount), 0)].filter((value) => value > 0);
+  const expenseValues = [...history.map((item) => item.expenses.reduce((sum, tx) => sum + tx.personalAmount, 0)), current.expenses.reduce((sum, tx) => sum + tx.personalAmount, 0)].filter((value) => value > 0);
   const incomeEstimate = incomeValues.length ? incomeValues.reduce((a, b) => a + b, 0) / incomeValues.length : 0; const historicalExpenseAverage = expenseValues.length ? expenseValues.reduce((a, b) => a + b, 0) / expenseValues.length : 0;
   const previousBudgetTotal = previousBudget?.totalAmount?.toNumber() ?? previousBudget?.items.reduce((sum, item) => sum + item.amount.toNumber(), 0) ?? 0;
   const recommendedTotalBudget = roundBudget(Math.min(incomeEstimate > 0 ? incomeEstimate * 0.8 : historicalExpenseAverage * 1.05, Math.max(historicalExpenseAverage * 1.03, previousBudgetTotal * 0.98)));
   const categoryMap = new Map<string, { amounts: number[]; previous: number }>();
-  for (const stats of history) for (const tx of stats.expenses) if (tx.categoryId) { const entry = categoryMap.get(tx.categoryId) ?? { amounts: [], previous: 0 }; entry.amounts.push(Number(tx.amount)); categoryMap.set(tx.categoryId, entry); }
+  for (const stats of history) for (const tx of stats.expenses) if (tx.categoryId) { const entry = categoryMap.get(tx.categoryId) ?? { amounts: [], previous: 0 }; entry.amounts.push(tx.personalAmount); categoryMap.set(tx.categoryId, entry); }
   const categoryIds = [...categoryMap.keys()];
   const categories = await prisma.category.findMany({ where: { id: { in: categoryIds } }, select: { id: true, name: true } });
   for (const entry of categoryMap.values()) entry.previous = 0;

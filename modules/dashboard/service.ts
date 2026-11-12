@@ -10,6 +10,7 @@ import {
   getPeriodRange,
 } from "./repository";
 import { getDashboardBudgetSummary } from "@/modules/budget/service";
+import { personalExpenseAmount } from "@/modules/transaction/personal-expense";
 import type { DashboardAiAssessment, DashboardCalendar, DashboardCashflowPoint, DashboardData, DashboardFilters, DashboardPeriod } from "./types";
 
 const DEFAULT_PERIOD: DashboardPeriod = "THIS_MONTH";
@@ -23,7 +24,7 @@ const PERIOD_LABELS: Record<DashboardPeriod, string> = {
 
 function buildCashflowPoints(
   period: DashboardPeriod,
-  transactions: Array<{ transactionDate: Date; type: "INCOME" | "EXPENSE"; amount: unknown }>
+  transactions: Array<{ transactionDate: Date; type: "INCOME" | "EXPENSE"; amount: unknown; splitBill?: { personalAmount: unknown } | null }>
 ): DashboardCashflowPoint[] {
   const pointCount = period === "THIS_YEAR" ? 12 : 5;
   const now = new Date();
@@ -40,13 +41,13 @@ function buildCashflowPoints(
       : Math.min(Math.floor((date.getDate() - 1) / 7), pointCount - 1);
 
     if (transaction.type === "INCOME") points[index].income += Number(transaction.amount);
-    if (transaction.type === "EXPENSE") points[index].expense += Number(transaction.amount);
+    if (transaction.type === "EXPENSE") points[index].expense += personalExpenseAmount(transaction);
   }
 
   return points;
 }
 
-function buildCalendar(now = new Date(), transactions: Array<{ transactionDate: Date; type: "INCOME" | "EXPENSE"; amount: unknown }>): DashboardCalendar {
+function buildCalendar(now = new Date(), transactions: Array<{ transactionDate: Date; type: "INCOME" | "EXPENSE"; amount: unknown; splitBill?: { personalAmount: unknown } | null }>): DashboardCalendar {
   const year = now.getFullYear();
   const monthIndex = now.getMonth();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
@@ -65,7 +66,7 @@ function buildCalendar(now = new Date(), transactions: Array<{ transactionDate: 
     if (!target) continue;
     target.transactionCount += 1;
     if (transaction.type === "INCOME") target.income += Number(transaction.amount);
-    if (transaction.type === "EXPENSE") target.expense += Number(transaction.amount);
+    if (transaction.type === "EXPENSE") target.expense += personalExpenseAmount(transaction);
   }
 
   return {
@@ -135,14 +136,14 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
   const calendarEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
   const calendarTransactionsPromise = prisma.transaction.findMany({
     where: { kind: "STANDARD", type: { in: ["INCOME", "EXPENSE"] }, transactionDate: { gte: calendarStart, lt: calendarEnd }, wallet: { currency: { code: currencyCode } } },
-    select: { transactionDate: true, type: true, amount: true },
+    select: { transactionDate: true, type: true, amount: true, splitBill: { select: { personalAmount: true } } },
     orderBy: { transactionDate: "asc" },
   });
   const cashflowTransactionsPromise = period === "THIS_MONTH"
     ? calendarTransactionsPromise
     : getDashboardCashflow(period, currencyCode);
 
-  const [summary, wallets, spending, recentTransactions, cashflowTransactions, splitTransactions, budgetSummary, calendarTransactions, categories] = await Promise.all([
+  const [summary, wallets, spending, recentTransactions, cashflowTransactions, splitTransactions, budgetSummary, calendarTransactions, categories, receivables] = await Promise.all([
     getDashboardSummary(period, currencyCode),
     getDashboardWallets(currencyCode),
     getDashboardSpending(period, currencyCode),
@@ -155,6 +156,7 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
     getDashboardBudgetSummary(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`, currencyCode),
     calendarTransactionsPromise,
     getDashboardCategories(),
+    prisma.receivable.findMany({ where: { status: { in: ["OUTSTANDING", "PARTIALLY_RECEIVED", "OVERDUE"] }, currency: { code: currencyCode } }, select: { amount: true, receivedAmount: true } }),
   ]);
 
   const splitFullAmount = splitTransactions.reduce((sum, transaction) => sum + Number(transaction.amount), 0);
@@ -188,7 +190,7 @@ export async function getDashboard(filters: DashboardFilters = {}): Promise<Dash
     summary: {
       currencyCode,
       currencySymbol: summary.currency?.symbol ?? currencyCode,
-      netWorth: wallets.reduce((sum, wallet) => sum + Number(wallet.currentBalance), 0),
+      netWorth: wallets.reduce((sum, wallet) => sum + Number(wallet.currentBalance), 0) + receivables.reduce((sum, receivable) => sum + Math.max(Number(receivable.amount) - Number(receivable.receivedAmount), 0), 0),
       income: summary.income,
       expense: personalExpense,
       netCashFlow: summary.income - personalExpense,
