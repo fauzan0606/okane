@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { parseTransactionAction } from "../actions";
 import EditablePreview from "./EditablePreview";
@@ -32,10 +34,15 @@ export default function SmartTransactionPage({ wallets, categories }: SmartTrans
 
   return (
     <div className="mx-auto max-w-4xl space-y-8 px-6 py-10">
-      <div>
-        <p className="text-sm font-medium text-blue-300">SMART TRANSACTION</p>
-        <h1 className="mt-1 text-3xl font-bold text-white">Smart Transaction</h1>
-        <p className="mt-2 text-slate-400">Tulis transaksi dengan bahasa natural, lalu periksa sebelum menyimpan.</p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-blue-300">SMART TRANSACTION</p>
+          <h1 className="mt-1 text-3xl font-bold text-white">Smart Transaction</h1>
+          <p className="mt-2 text-slate-400">Tulis transaksi dengan bahasa natural, lalu periksa sebelum menyimpan.</p>
+        </div>
+        <Link href="/transactions" className="inline-flex min-h-10 items-center justify-center gap-2 self-start rounded-xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08]">
+          <ArrowLeft size={16} /> Lihat transaksi
+        </Link>
       </div>
       <div className="space-y-3 rounded-3xl border border-white/10 bg-[#182335] p-5 shadow-xl">
         <label className="text-sm font-medium text-slate-200" htmlFor="transaction-input">Deskripsi transaksi</label>
