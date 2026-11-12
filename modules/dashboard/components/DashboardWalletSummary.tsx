@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { CreditCard, Landmark, MoreHorizontal } from "lucide-react";
+import { HIDE_CREDIT_CARDS_IN_WALLETS_KEY } from "@/modules/wallet/constants";
 import type { DashboardWallet } from "../types";
-
-const HIDE_CREDIT_CARDS_KEY = "okane.dashboard.hide-credit-cards-in-wallets.v1";
 
 function formatCurrency(value: number, currencyCode: string) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: currencyCode, maximumFractionDigits: currencyCode === "IDR" || currencyCode === "JPY" || currencyCode === "KRW" ? 0 : 2 }).format(value);
@@ -14,7 +13,7 @@ export default function DashboardWalletSummary({ wallets }: { wallets: Dashboard
   const [hideCreditCards, setHideCreditCards] = useState(true);
 
   useEffect(() => {
-    const preference = window.localStorage.getItem(HIDE_CREDIT_CARDS_KEY);
+    const preference = window.localStorage.getItem(HIDE_CREDIT_CARDS_IN_WALLETS_KEY);
     if (preference !== null) setHideCreditCards(preference === "true");
   }, []);
 
@@ -24,7 +23,7 @@ export default function DashboardWalletSummary({ wallets }: { wallets: Dashboard
   function toggleCreditCards() {
     const nextValue = !hideCreditCards;
     setHideCreditCards(nextValue);
-    window.localStorage.setItem(HIDE_CREDIT_CARDS_KEY, String(nextValue));
+    window.localStorage.setItem(HIDE_CREDIT_CARDS_IN_WALLETS_KEY, String(nextValue));
   }
 
   return (
