@@ -100,8 +100,14 @@ export default function SplitBillFinalizeForm({
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Payment wallet</label>
               <select name="walletId" required className={inputClass()}><option value="">Select wallet</option>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</option>)}</select>
             </div>
-            <div>\n              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>\n              <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select expense category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>\n            </div>
-            <div>\n              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>\n              <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>\n            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>
+              <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select expense category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>
+              <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
+            </div>
             <div className="lg:col-span-4">
               <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Note</label>
               <input name="note" placeholder={`Repayment to ${payerName}`} className={inputClass()} />
@@ -110,8 +116,14 @@ export default function SplitBillFinalizeForm({
         )}
         {payerIsMe && (
           <>
-            <div>\n              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>\n              <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>\n            </div>
-            <div>\n              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>\n              <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.filter((subcategory) => subcategory.categoryId === categoryId).map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>\n            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>
+              <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>
+              <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.filter((subcategory) => subcategory.categoryId === categoryId).map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
+            </div>
           </>
         )}
       </div>
