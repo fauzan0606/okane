@@ -71,61 +71,46 @@ export default function SplitBillFinalizeForm({
   );
 
   return (
-    <form onSubmit={handleSubmit} aria-busy={isFinalizing} className="mt-4 space-y-3">
+    <form onSubmit={handleSubmit} aria-busy={isFinalizing} className="space-y-3">
       <input type="hidden" name="splitBillId" value={splitBillId} />
+      <div className={`grid gap-3 ${payerIsMe ? "" : "lg:grid-cols-[minmax(0,1fr)_minmax(34rem,1.25fr)] lg:items-center"}`}>
+        <div>
+          <p className="text-sm font-semibold text-white">Add to financial records</p>
+          <p className="mt-1 text-[10px] text-slate-500">{payerIsMe ? "Choose the actual payment date, wallet, category and subcategory. OKANE can prefill category and subcategory from your Smart Transaction merchant history." : `Record when the bill was paid by ${payerName}. Your share will remain as an amount you owe them.`}</p>
+        </div>
+        {!payerIsMe && <div className="grid gap-2 rounded-xl border border-amber-400/10 bg-amber-400/[0.03] p-2 sm:grid-cols-2">
+          <div className="rounded-lg border border-amber-400/10 bg-[#0A1119]/50 px-3 py-2">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Paid by {payerName}</p>
+            <p className="mt-1 text-[10px] leading-4 text-slate-500">Your share is {money(personalAmount, symbol)}. Record the amount you actually transfer to {payerName}; rounding or an extra amount is allowed.</p>
+          </div>
+          <div>
+            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Amount transferred</label>
+            <input name="amountTransferred" value={amountTransferred} onChange={(event) => setAmountTransferred(event.target.value)} inputMode="decimal" min="0.01" step="0.01" required className={inputClass()} />
+            <p className="mt-1 text-[10px] text-slate-600">{Number(amountTransferred) > personalAmount ? `Overpayment: ${money(Number(amountTransferred) - personalAmount, symbol)}` : "This is the actual amount that will leave your wallet."}</p>
+          </div>
+        </div>}
+      </div>
       <div className="grid gap-2 lg:grid-cols-4">
         <div>
           <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Paid on</label>
           <input type="date" name="transactionDate" defaultValue={today} required className={inputClass()} />
         </div>
-        {payerIsMe ? (
-          <div>
-            <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Payment wallet</label>
-            <select name="walletId" required className={inputClass()}><option value="">Select wallet</option>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</option>)}</select>
-          </div>
-        ) : (
-          <>
-            <div className="rounded-xl border border-amber-400/10 bg-amber-400/[0.03] px-3 py-2">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Paid by {payerName}</p>
-              <p className="mt-1 text-[10px] leading-4 text-slate-500">Your share is {money(personalAmount, symbol)}. Record the amount you actually transfer to {payerName}; rounding or an extra amount is allowed.</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-300">Amount transferred</label>
-              <input name="amountTransferred" value={amountTransferred} onChange={(event) => setAmountTransferred(event.target.value)} inputMode="decimal" min="0.01" step="0.01" required className={inputClass()} />
-              <p className="mt-1 text-[10px] text-slate-600">
-                {Number(amountTransferred) > personalAmount ? `Overpayment: ${money(Number(amountTransferred) - personalAmount, symbol)}` : "This is the actual amount that will leave your wallet."}
-              </p>
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Payment wallet</label>
-              <select name="walletId" required className={inputClass()}><option value="">Select wallet</option>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</option>)}</select>
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>
-              <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select expense category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>
-              <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
-            </div>
-            <div className="lg:col-span-4">
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Note</label>
-              <input name="note" placeholder={`Repayment to ${payerName}`} className={inputClass()} />
-            </div>
-          </>
-        )}
-        {payerIsMe && (
-          <>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>
-              <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
-            </div>
-            <div>
-              <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>
-              <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.filter((subcategory) => subcategory.categoryId === categoryId).map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
-            </div>
-          </>
-        )}
+        <div>
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Payment wallet</label>
+          <select name="walletId" required className={inputClass()}><option value="">Select wallet</option>{wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name} · {wallet.currency.code}</option>)}</select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Category</label>
+          <select name="categoryId" required value={categoryId} onChange={(event) => setCategoryId(event.target.value)} className={inputClass()}><option value="">Select category</option>{categories.map((category) => <option key={category.id} value={category.id}>{category.name}{category.id === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
+        </div>
+        <div>
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Subcategory</label>
+          <select name="subcategoryId" value={subcategoryId} onChange={(event) => setSubcategoryId(event.target.value)} disabled={!categoryId} className={inputClass()}><option value="">{categoryId ? "Select subcategory" : "Select category first"}</option>{visibleSubcategories.map((subcategory) => <option key={subcategory.id} value={subcategory.id}>{subcategory.name}{subcategory.id === recommendedSubcategoryId && categoryId === recommendedCategoryId ? " · Recommended" : ""}</option>)}</select>
+        </div>
+        {!payerIsMe && <div className="lg:col-span-4">
+          <label className="mb-1 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">Note</label>
+          <input name="note" placeholder={`Repayment to ${payerName}`} className={inputClass()} />
+        </div>}
       </div>
       {payerIsMe && recommendationConfidence !== "NONE" && Boolean(recommendedCategoryId) && <p className="text-[10px] text-emerald-300/80">Category suggestion is based on your Smart Transaction learning for this merchant. You can change it before saving.</p>}
       <button type="submit" disabled={isFinalizing} className="inline-flex items-center gap-2 rounded-xl bg-emerald-500 px-4 py-2 text-xs font-bold text-[#07110b] disabled:cursor-not-allowed disabled:opacity-60">{isFinalizing && <LoaderCircle size={14} className="animate-spin" />}{isFinalizing ? "Finalizing & Saving…" : payerIsMe ? "Finalize & Add to Finance" : "Finalize & Record Payment"}</button>
