@@ -27,7 +27,7 @@ export default function DashboardWalletSummary({ wallets }: { wallets: Dashboard
   }
 
   return (
-    <section className="rounded-[20px] border border-white/10 bg-[#0d151e] p-5">
+    <section className="h-full rounded-[20px] border border-white/10 bg-[#0d151e] p-5">
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-slate-500">Accounts</p>
