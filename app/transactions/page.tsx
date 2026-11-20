@@ -71,16 +71,16 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
-            <a href="/transactions/smart" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/[0.12]">
+            <a href="/transactions/smart" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-md border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/[0.12]">
               <Sparkles size={16} /> Smart Transaction
             </a>
             {incompleteCount > 0 && (
-              <a href="/transactions?review=1" className="inline-flex items-center rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-4 py-2.5 text-sm font-semibold text-amber-200 hover:bg-amber-400/[0.1]">
+              <a href="/transactions?review=1" className="inline-flex min-h-11 items-center rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-4 py-2 text-sm font-semibold text-amber-200 hover:bg-amber-400/[0.1]">
                 Review incomplete ({incompleteCount})
               </a>
             )}
             <TransactionImport wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} />
-            <TransactionForm mode="create" wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} payees={formData.payees} trigger={<Button size="lg">+ Add Transaction</Button>} />
+            <TransactionForm mode="create" wallets={formData.wallets} categories={formData.categories} subcategories={formData.subcategories} payees={formData.payees} trigger={<Button size="lg" className="h-11">+ Add Transaction</Button>} />
           </div>
         </div>
 
@@ -92,12 +92,12 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         )}
 
         <section className="w-full rounded-[18px] border border-white/10 bg-[#0d141e] p-4">
-          <form method="get" className="grid w-full gap-3 md:grid-cols-[1fr_1fr_1fr_1fr_auto] md:items-end">
-            <label className="block min-w-0"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Category</span><select name="category" defaultValue={categoryId} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none"><option value="">All categories</option>{formData.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
-            <label className="block min-w-0"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Wallet</span><select name="wallet" defaultValue={walletId} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none"><option value="">All wallets</option>{formData.wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select></label>
-            <label className="block min-w-0"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">From date</span><input name="from" type="date" defaultValue={from} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none" /></label>
-            <label className="block min-w-0"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">To date</span><input name="to" type="date" defaultValue={to} className="w-full rounded-xl border border-white/10 bg-[#070c12] px-3 py-2.5 text-sm text-slate-300 outline-none" /></label>
-            <div className="flex gap-2"><Button type="submit" className="w-full md:w-auto">Filter</Button>{hasFilters && <a href="/transactions" className="inline-flex items-center justify-center rounded-md border border-white/10 px-4 py-2 text-sm text-slate-300 hover:bg-white/[0.04]">Clear</a>}</div>
+          <form method="get" className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end">
+            <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Category</span><select name="category" defaultValue={categoryId} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none"><option value="">All categories</option>{formData.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
+            <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Wallet</span><select name="wallet" defaultValue={walletId} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none"><option value="">All wallets</option>{formData.wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select></label>
+            <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">From date</span><input name="from" type="date" defaultValue={from} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none" /></label>
+            <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">To date</span><input name="to" type="date" defaultValue={to} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none" /></label>
+            <div className="flex items-end gap-2"><Button type="submit" className="h-11 w-full xl:w-auto">Filter</Button>{hasFilters && <a href="/transactions" className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-white/10 px-4 text-sm text-slate-300 hover:bg-white/[0.04]">Clear</a>}</div>
           </form>
         </section>
 

@@ -142,7 +142,7 @@ export default function TransactionImport({ wallets, categories, subcategories }
 
   return (
     <Dialog open={open} onOpenChange={(isOpen) => { if (!isOpen && !loading && !importing) resetImportState(); setOpen(isOpen); }}>
-      <DialogTrigger render={<Button variant="outline" size="lg"><Upload size={16} /> Import File</Button>} />
+      <DialogTrigger render={<Button variant="outline" size="lg" className="h-11"><Upload size={16} /> Import File</Button>} />
       <DialogContent showCloseButton className="!w-[calc(100vw-1.5rem)] !max-w-[1180px] max-h-[92vh] overflow-y-auto rounded-[26px] border border-[#30465D] bg-[#0E1925] p-0 text-white">
         <div className="p-5 sm:p-7">
           <DialogHeader><DialogTitle className="text-xl font-semibold text-white sm:text-2xl">Import Transactions</DialogTitle><DialogDescription className="mt-1.5 text-xs leading-5 text-slate-500 sm:text-sm">Upload an Excel workbook, image, PDF, CSV or TXT file. Excel files are read directly; OKANE reviews the rows and recommendations before anything is written to the database.</DialogDescription></DialogHeader>
