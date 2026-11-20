@@ -36,6 +36,22 @@ async function validateCategorySelection(tx: Prisma.TransactionClient, categoryI
   if (!subcategory) throw new Error("Subcategory does not belong to the selected category.");
 }
 
+async function getTipsCategory(tx: Prisma.TransactionClient) {
+  const category = await tx.category.findFirst({
+    where: { name: "Social", type: "EXPENSE", isActive: true },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (!category) throw new Error("The Social expense category is unavailable.");
+
+  const subcategory = await tx.subcategory.findFirst({
+    where: { categoryId: category.id, name: "Tips & Tipping", isActive: true },
+    select: { id: true },
+  });
+  if (!subcategory) throw new Error("The Tips & Tipping subcategory under Social is unavailable.");
+  return { categoryId: category.id, subcategoryId: subcategory.id };
+}
+
 async function buildInstallmentPlan(tx: Prisma.TransactionClient, walletId: string, input: CreateTransactionInput) {
   const installment = input.installment;
   if (!installment?.enabled) return null;
@@ -71,6 +87,7 @@ export async function createTransactionService(input: CreateTransactionInput) {
     const wallet = await tx.wallet.findUnique({ where: { id: input.walletId }, select: { id: true, balanceAsOf: true, note: true } });
     if (!wallet) throw new Error("Wallet not found.");
     await validateCategorySelection(tx, input.categoryId, input.subcategoryId);
+    const tipsCategory = tipsPayee && input.tipsAmount ? await getTipsCategory(tx) : null;
     const plan = await buildInstallmentPlan(tx, input.walletId, input);
     const transaction = await tx.transaction.create({
       data: {
@@ -96,8 +113,8 @@ export async function createTransactionService(input: CreateTransactionInput) {
           amount: input.tipsAmount,
           note: `Tips for ${tipDescription}`,
           wallet: { connect: { id: input.walletId } },
-          ...(input.categoryId && { category: { connect: { id: input.categoryId } } }),
-          ...(input.subcategoryId && { subcategory: { connect: { id: input.subcategoryId } } }),
+          ...(tipsCategory && { category: { connect: { id: tipsCategory.categoryId } } }),
+          ...(tipsCategory && { subcategory: { connect: { id: tipsCategory.subcategoryId } } }),
           payee: { connect: { id: tipsPayee.id } },
         },
       });
