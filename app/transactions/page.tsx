@@ -1,6 +1,7 @@
 import AppShell from "@/components/layout/AppShell";
 import Header from "@/components/layout/Header";
 import Sidebar from "@/components/layout/Sidebar";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import TransactionForm from "@/modules/transaction/components/TransactionForm";
 import DeleteIncompleteTransactionsButton from "@/modules/transaction/components/DeleteIncompleteTransactionsButton";
@@ -70,6 +71,9 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
           </div>
 
           <div className="flex w-full flex-wrap items-center gap-2 md:w-auto">
+            <a href="/transactions/smart" className="inline-flex min-h-10 items-center justify-center gap-2 rounded-md border border-emerald-400/20 bg-emerald-400/[0.06] px-3 py-2 text-sm font-semibold text-emerald-200 transition hover:bg-emerald-400/[0.12]">
+              <Sparkles size={16} /> Smart Transaction
+            </a>
             {incompleteCount > 0 && (
               <a href="/transactions?review=1" className="inline-flex items-center rounded-md border border-amber-400/20 bg-amber-400/[0.06] px-4 py-2.5 text-sm font-semibold text-amber-200 hover:bg-amber-400/[0.1]">
                 Review incomplete ({incompleteCount})

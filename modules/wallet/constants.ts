@@ -1,5 +1,7 @@
 import { WalletType } from "@prisma/client";
 
+export const HIDE_CREDIT_CARDS_IN_WALLETS_KEY = "okane.dashboard.hide-credit-cards-in-wallets.v1";
+
 export const WALLET_TYPES = [
   WalletType.CASH,
   WalletType.BANK_ACCOUNT,

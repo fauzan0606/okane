@@ -19,7 +19,7 @@ export default function Header() {
         </button>
         <Link href="/transactions/smart" className="flex items-center gap-2 rounded-2xl bg-blue-600 px-5 py-3 font-semibold text-white transition hover:bg-blue-500">
           <Plus size={18} />
-          Transaksi
+          Smart Transaction
         </Link>
       </div>
     </header>

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { Currency } from "@prisma/client";
 
 import type { WalletClientData, WalletHistoryEntry } from "../repository";
-import { formatWalletType } from "../constants";
+import { formatWalletType, HIDE_CREDIT_CARDS_IN_WALLETS_KEY } from "../constants";
 import WalletCard from "./WalletCard";
 import WalletCardActions from "./WalletCardActions";
 import WalletHistory from "./WalletHistory";
@@ -28,16 +28,21 @@ type WalletHistoryResponse = {
 
 export default function WalletList({ wallets, currencies, initialHistory, initialWalletId, pageSize = 20 }: WalletListProps) {
   const [walletView, setWalletView] = useState<"cards" | "table">("cards");
+  const [hideCreditCards, setHideCreditCards] = useState(true);
 
   useEffect(() => {
     const saved = window.localStorage.getItem("okane.walletView");
     if (saved === "cards" || saved === "table") setWalletView(saved);
+    const hidePreference = window.localStorage.getItem(HIDE_CREDIT_CARDS_IN_WALLETS_KEY);
+    if (hidePreference !== null) setHideCreditCards(hidePreference === "true");
   }, []);
 
   const sortedWallets = useMemo(
     () => [...wallets].sort((a, b) => a.name.localeCompare(b.name, "id", { sensitivity: "base" })),
     [wallets],
   );
+  const hasCreditCards = sortedWallets.some((wallet) => wallet.walletType === "CREDIT_CARD");
+  const visibleWallets = sortedWallets.filter((wallet) => !hideCreditCards || wallet.walletType !== "CREDIT_CARD");
 
   const [selectedWalletId, setSelectedWalletId] = useState(initialWalletId);
   const [history, setHistory] = useState<WalletHistoryEntry[]>(initialWalletId ? initialHistory.slice(0, pageSize) : []);
@@ -96,28 +101,42 @@ export default function WalletList({ wallets, currencies, initialHistory, initia
     return <CrudEmptyState title="No wallet yet" description="Start by creating your first wallet." />;
   }
 
-  const selectedWallet = selectedWalletId ? sortedWallets.find((wallet) => wallet.id === selectedWalletId) : null;
+  const selectedWallet = selectedWalletId ? visibleWallets.find((wallet) => wallet.id === selectedWalletId) : null;
+
+  function toggleCreditCards() {
+    const nextValue = !hideCreditCards;
+    setHideCreditCards(nextValue);
+    window.localStorage.setItem(HIDE_CREDIT_CARDS_IN_WALLETS_KEY, String(nextValue));
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h2 className="text-lg font-semibold text-white">Wallets</h2>
-          <p className="text-xs text-slate-600">{sortedWallets.length} wallets · sorted A–Z</p>
+          <p className="text-xs text-slate-600">{visibleWallets.length} of {sortedWallets.length} wallets shown · sorted A–Z</p>
         </div>
-        <div className="flex rounded-lg border border-white/10 bg-white/[.02] p-1">
-          <button type="button" onClick={() => { setWalletView("cards"); window.localStorage.setItem("okane.walletView", "cards"); }} className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "cards" ? "bg-white/[.08] text-white" : "text-slate-500"}`}>
-            ▦ Cards
-          </button>
-          <button type="button" onClick={() => { setWalletView("table"); window.localStorage.setItem("okane.walletView", "table"); }} className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "table" ? "bg-white/[.08] text-white" : "text-slate-500"}`}>
-            ☷ Table
-          </button>
+        <div className="flex flex-wrap items-center gap-2">
+          {hasCreditCards && <label className="flex cursor-pointer items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-[10px] font-medium text-slate-300"><input type="checkbox" checked={hideCreditCards} onChange={toggleCreditCards} className="accent-emerald-500" />Hide credit cards</label>}
+          <div className="flex rounded-lg border border-white/10 bg-white/[.02] p-1">
+            <button type="button" onClick={() => { setWalletView("cards"); window.localStorage.setItem("okane.walletView", "cards"); }} className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "cards" ? "bg-white/[.08] text-white" : "text-slate-500"}`}>
+              ▦ Cards
+            </button>
+            <button type="button" onClick={() => { setWalletView("table"); window.localStorage.setItem("okane.walletView", "table"); }} className={`rounded-md px-3 py-1.5 text-[10px] font-bold ${walletView === "table" ? "bg-white/[.08] text-white" : "text-slate-500"}`}>
+              ☷ Table
+            </button>
+          </div>
         </div>
       </div>
 
-      {walletView === "cards" ? (
+      {visibleWallets.length === 0 ? (
+        <section className="rounded-[20px] border border-dashed border-white/10 bg-[#0E1925] px-5 py-8 text-center">
+          <p className="text-sm font-semibold text-white">Credit cards are hidden</p>
+          <p className="mt-1 text-xs text-slate-500">Turn off “Hide credit cards” to show them in your wallet list.</p>
+        </section>
+      ) : walletView === "cards" ? (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {sortedWallets.map((wallet) => (
+          {visibleWallets.map((wallet) => (
             <WalletCard key={wallet.id} wallet={wallet} currencies={currencies} selected={wallet.id === selectedWalletId} onSelect={() => selectWallet(wallet.id)} />
           ))}
         </div>
@@ -128,7 +147,7 @@ export default function WalletList({ wallets, currencies, initialHistory, initia
               <tr><th className="px-4 py-3">Wallet</th><th>Type</th><th>Currency</th><th>Balance</th><th>Bank</th><th className="text-right">Action</th></tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {sortedWallets.map((wallet) => {
+              {visibleWallets.map((wallet) => {
                 const isCreditCard = wallet.walletType === "CREDIT_CARD" && Boolean(wallet.creditCard);
                 const balance = isCreditCard ? Math.max(-Number(wallet.currentBalance), 0) : Number(wallet.currentBalance);
                 const formatter = new Intl.NumberFormat("id-ID", { minimumFractionDigits: wallet.currency.decimalPlaces, maximumFractionDigits: wallet.currency.decimalPlaces });
