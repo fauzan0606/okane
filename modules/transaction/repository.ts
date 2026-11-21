@@ -135,13 +135,32 @@ function serializeTransaction(transaction: RawTransaction): TransactionWithRelat
   };
 }
 
+export type TransactionSort = "date-desc" | "date-asc" | "amount-desc" | "amount-asc" | "name-asc";
+
 type TransactionListFilters = {
   categoryId?: string;
   walletId?: string;
   from?: string;
   to?: string;
   reviewOnly?: boolean;
+  sort?: TransactionSort;
 };
+
+function transactionOrderBy(sort: TransactionSort = "date-desc"): Prisma.TransactionOrderByWithRelationInput[] {
+  switch (sort) {
+    case "date-asc":
+      return [{ transactionDate: "asc" }, { createdAt: "asc" }, { id: "asc" }];
+    case "amount-desc":
+      return [{ amount: "desc" }, { transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }];
+    case "amount-asc":
+      return [{ amount: "asc" }, { transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }];
+    case "name-asc":
+      return [{ payee: { name: "asc" } }, { transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }];
+    case "date-desc":
+    default:
+      return [{ transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }];
+  }
+}
 
 function buildTransactionWhere(filters: TransactionListFilters): Prisma.TransactionWhereInput {
   const where: Prisma.TransactionWhereInput = {
@@ -201,11 +220,7 @@ export async function getTransactionsPage(filters: TransactionListFilters & { pa
     prisma.transaction.findMany({
       where,
       select: transactionSelect,
-      orderBy: [
-        { transactionDate: "desc" },
-        { createdAt: "desc" },
-        { id: "desc" },
-      ],
+      orderBy: transactionOrderBy(filters.sort),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

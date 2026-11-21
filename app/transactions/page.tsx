@@ -9,6 +9,7 @@ import TransactionImport from "@/modules/transaction/components/TransactionImpor
 import TransactionList from "@/modules/transaction/components/TransactionList";
 import TransactionPagination from "@/modules/transaction/components/TransactionPagination";
 import { countIncompleteTransactions, listTransactionsPage, transactionCountsByPayeeIds, transactionFormData } from "@/modules/transaction/service";
+import type { TransactionSort } from "@/modules/transaction/repository";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -22,7 +23,10 @@ type SearchParams = {
   to?: string;
   review?: string;
   page?: string;
+  sort?: string;
 };
+
+const TRANSACTION_SORTS: TransactionSort[] = ["date-desc", "date-asc", "amount-desc", "amount-asc", "name-asc"];
 
 export default async function TransactionsPage({ searchParams }: { searchParams: Promise<SearchParams> }) {
   const params = await searchParams;
@@ -33,9 +37,12 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const from = params.from ?? "";
   const to = params.to ?? "";
   const reviewOnly = params.review === "1";
+  const sort: TransactionSort = TRANSACTION_SORTS.includes(params.sort as TransactionSort)
+    ? params.sort as TransactionSort
+    : "date-desc";
 
   const [paged, rawFormData, reviewCount] = await Promise.all([
-    listTransactionsPage({ page, pageSize: PAGE_SIZE, categoryId: categoryId || undefined, walletId: walletId || undefined, from: from || undefined, to: to || undefined, reviewOnly }),
+    listTransactionsPage({ page, pageSize: PAGE_SIZE, categoryId: categoryId || undefined, walletId: walletId || undefined, from: from || undefined, to: to || undefined, reviewOnly, sort }),
     transactionFormData(),
     reviewOnly ? Promise.resolve(null) : countIncompleteTransactions(),
   ]);
@@ -50,7 +57,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   const merchantCounts = reviewOnly
     ? await transactionCountsByPayeeIds(paged.transactions.map((transaction) => transaction.payeeId ? String(transaction.payeeId) : ""))
     : {};
-  const hasFilters = Boolean(categoryId || walletId || from || to || reviewOnly);
+  const hasFilters = Boolean(categoryId || walletId || from || to || reviewOnly || sort !== "date-desc");
   const incompleteCount = reviewOnly ? paged.total : reviewCount ?? 0;
   const totalPages = Math.max(1, Math.ceil(paged.total / PAGE_SIZE));
   const safePage = Math.min(paged.page, totalPages);
@@ -60,6 +67,7 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
   if (from) paginationParams.from = from;
   if (to) paginationParams.to = to;
   if (reviewOnly) paginationParams.review = "1";
+  if (sort !== "date-desc") paginationParams.sort = sort;
 
   return (
     <AppShell sidebar={<Sidebar />} header={<Header />}>
@@ -92,11 +100,12 @@ export default async function TransactionsPage({ searchParams }: { searchParams:
         )}
 
         <section className="w-full rounded-[18px] border border-white/10 bg-[#0d141e] p-4">
-          <form method="get" className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(4,minmax(0,1fr))_auto] xl:items-end">
+          <form method="get" className="grid w-full grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-[repeat(5,minmax(0,1fr))_auto] xl:items-end">
             <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Category</span><select name="category" defaultValue={categoryId} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none"><option value="">All categories</option>{formData.categories.map((category) => <option key={category.id} value={category.id}>{category.name}</option>)}</select></label>
             <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Wallet</span><select name="wallet" defaultValue={walletId} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none"><option value="">All wallets</option>{formData.wallets.map((wallet) => <option key={wallet.id} value={wallet.id}>{wallet.name}</option>)}</select></label>
             <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">From date</span><input name="from" type="date" defaultValue={from} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none" /></label>
             <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">To date</span><input name="to" type="date" defaultValue={to} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none" /></label>
+            <label className="flex min-w-0 flex-col"><span className="mb-1.5 block text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-500">Sort by</span><select name="sort" defaultValue={sort} className="h-11 w-full box-border rounded-xl border border-white/10 bg-[#070c12] px-3 text-sm text-slate-300 outline-none"><option value="date-desc">Date: newest first</option><option value="date-asc">Date: oldest first</option><option value="amount-desc">Amount: largest first</option><option value="amount-asc">Amount: smallest first</option><option value="name-asc">Name: A–Z</option></select></label>
             <div className="flex items-end gap-2"><Button type="submit" className="h-11 w-full xl:w-auto">Filter</Button>{hasFilters && <a href="/transactions" className="inline-flex h-11 shrink-0 items-center justify-center rounded-md border border-white/10 px-4 text-sm text-slate-300 hover:bg-white/[0.04]">Clear</a>}</div>
           </form>
         </section>
